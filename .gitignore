@@ -1,0 +1,52 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Python bytecode
+*.pyc
+*.pyo
+__pycache__/
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Cache files - only track compressed version
+property_cache.json
+# Note: property_cache.json.gz is tracked (compressed version of cache)
