@@ -48,5 +48,5 @@ htmlcov/
 *.log
 
 # Cache files - only track compressed version
-property_cache.json
+**/property_cache.json
 # Note: property_cache.json.gz is tracked (compressed version of cache)
