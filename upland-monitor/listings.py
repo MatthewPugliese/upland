@@ -131,11 +131,11 @@ def api_get_properties(city_id, page=1, page_size=100, text_search=None, retries
     """Get properties for a city, optionally filtered by text search"""
     page_size = max(10, page_size)  # API minimum is 10
     url = f"{UPLAND_API_URL}/properties?cityId={city_id}&currentPage={page}&pageSize={page_size}"
-    
+
     if text_search:
         encoded_search = quote(text_search, safe='')
         url += f"&textSearch={encoded_search}"
-    
+
     for attempt in range(retries):
         try:
             r = requests.get(url, headers=get_api_auth())
@@ -151,8 +151,29 @@ def api_get_properties(city_id, page=1, page_size=100, text_search=None, retries
                 time.sleep((attempt + 1) * 2)
             else:
                 raise e
-    
+
     return {"results": [], "totalResults": 0}
+
+def api_get_property_by_id(property_id, retries=3):
+    """Get a specific property by ID"""
+    url = f"{UPLAND_API_URL}/properties/{property_id}"
+
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, headers=get_api_auth())
+            if r.status_code == 409:
+                wait = (attempt + 1) * 2
+                time.sleep(wait)
+                continue
+            r.raise_for_status()
+            return r.json()
+        except requests.exceptions.RequestException as e:
+            if attempt < retries - 1:
+                time.sleep((attempt + 1) * 2)
+            else:
+                return None
+
+    return None
 
 def fetch_properties_with_search(city_id, city_name, text_search=None, label=None, quiet=False):
     """Fetch all properties for a search query, respecting pagination limits"""
@@ -597,12 +618,12 @@ def decode_listing(action):
     act = action.get("act", {})
     name = act.get("name", "")
     data = act.get("data", {})
-    
+
     decoded = {PARAM_MAP.get(k, k): v for k, v in data.items()}
-    
+
     event_type = LISTING_ACTIONS.get(name, name.upper())
     property_id = decoded.get("property_id")
-    
+
     result = {
         "event": event_type,
         "time": action.get("@timestamp", "")[:19].replace("T", " "),
@@ -611,11 +632,54 @@ def decode_listing(action):
         "property_id": property_id,
         "address": get_address(property_id),
     }
-    
+
     if name == "n2":
         result["seller"] = decoded.get("seller")
         result["upx_price"] = decoded.get("upx_price")
         result["fiat_price"] = decoded.get("fiat_price")
+
+        # Fetch mint price and calculate percentage
+        if property_id and check_api_credentials():
+            try:
+                prop_data = api_get_property_by_id(property_id)
+                if prop_data:
+                    mint_price = prop_data.get("mintPrice", 0)
+                    result["mint_price"] = mint_price
+
+                    # Calculate listing price in UPX
+                    # Conversion: 1 USD = 1,000 UPX
+                    listing_price_upx = 0
+                    upx_price_str = result.get("upx_price", "")
+                    fiat_price_str = result.get("fiat_price", "")
+
+                    # Try UPX price first
+                    if upx_price_str and upx_price_str != "0.00 UPX" and upx_price_str != "0 UPX":
+                        # Parse UPX price (format: "123456 UPX")
+                        try:
+                            price_val = float(upx_price_str.replace(" UPX", "").replace(",", ""))
+                            if price_val > 0:
+                                listing_price_upx = price_val
+                        except:
+                            pass
+
+                    # If no valid UPX price, try FIAT/USD price
+                    if listing_price_upx == 0 and fiat_price_str and fiat_price_str != "0.00 FIAT":
+                        # Parse USD/FIAT price and convert to UPX
+                        try:
+                            fiat_amount = float(fiat_price_str.replace(" FIAT", "").replace(",", ""))
+                            if fiat_amount > 0:
+                                listing_price_upx = fiat_amount * 1000  # 1 USD = 1,000 UPX
+                        except:
+                            pass
+
+                    # Calculate listing price as percentage of mint
+                    if mint_price > 0 and listing_price_upx > 0:
+                        percentage = (listing_price_upx / mint_price) * 100
+                        result["mint_percentage"] = percentage
+                        result["listing_price_upx"] = listing_price_upx
+            except Exception as e:
+                # Silently fail if API call fails, just won't have mint data
+                pass
     elif name == "n4":
         result["owner"] = decoded.get("seller")
     elif name == "n5":
@@ -627,13 +691,45 @@ def decode_listing(action):
             cache_property(property_id, address)
             result["address"] = address
             save_cache()
-    
+
+        # Fetch mint price and calculate percentage for sales
+        if property_id and check_api_credentials():
+            try:
+                prop_data = api_get_property_by_id(property_id)
+                if prop_data:
+                    mint_price = prop_data.get("mintPrice", 0)
+                    result["mint_price"] = mint_price
+
+                    # Parse sale price (format: "123456 UPX" or "123.45 FIAT")
+                    sale_price_str = result.get("sale_price", "")
+                    sale_price_upx = 0
+
+                    if "UPX" in sale_price_str:
+                        try:
+                            sale_price_upx = float(sale_price_str.replace(" UPX", "").replace(",", ""))
+                        except:
+                            pass
+                    elif "FIAT" in sale_price_str:
+                        try:
+                            fiat_amount = float(sale_price_str.replace(" FIAT", "").replace(",", ""))
+                            sale_price_upx = fiat_amount * 1000  # 1 USD = 1,000 UPX
+                        except:
+                            pass
+
+                    # Calculate sale price as percentage of mint
+                    if mint_price > 0 and sale_price_upx > 0:
+                        percentage = (sale_price_upx / mint_price) * 100
+                        result["mint_percentage"] = percentage
+                        result["sale_price_upx"] = sale_price_upx
+            except Exception as e:
+                pass
+
     return result
 
 def print_listing(listing):
     """Pretty print a listing event"""
     event = listing["event"]
-    
+
     colors = {
         "LISTED_FOR_SALE": ("\033[92m", "🏷️ "),
         "UNLISTED": ("\033[93m", "❌ "),
@@ -641,25 +737,68 @@ def print_listing(listing):
     }
     color, icon = colors.get(event, ("\033[0m", "📋 "))
     reset = "\033[0m"
-    
+
     print(f"{color}┌─ {icon}{event} ─────────────────────────{reset}")
     print(f"│ Time:       {listing['time']}")
     print(f"│ Property:   {listing['property_id']}")
-    
+
     if listing.get('address'):
         print(f"│ Address:    {listing['address']}")
-    
+
     if event == "LISTED_FOR_SALE":
         print(f"│ Seller:     {listing.get('seller')}")
-        print(f"│ UPX Price:  {listing.get('upx_price')}")
-        if listing.get('fiat_price') and listing['fiat_price'] != "0.00 FIAT":
-            print(f"│ USD Price:  {listing.get('fiat_price')}")
+
+        # Only show the actual currency used for listing
+        upx_price = listing.get('upx_price', '')
+        fiat_price = listing.get('fiat_price', '')
+
+        # Check which currency was actually used (non-zero)
+        if fiat_price and fiat_price != "0.00 FIAT":
+            # Convert FIAT to USD for display
+            usd_price = fiat_price.replace(" FIAT", " USD")
+            print(f"│ USD Price:  {usd_price}")
+        elif upx_price:
+            print(f"│ UPX Price:  {upx_price}")
+
+        # Display mint price and percentage if available
+        mint_price = listing.get('mint_price')
+        if mint_price is not None and mint_price > 0:
+            print(f"│ Mint Price: {mint_price:,} UPX")
+
+            mint_pct = listing.get('mint_percentage')
+            if mint_pct is not None:
+                # Color code based on percentage
+                # For USD listings, only show green if under 50% of mint
+                is_usd_listing = fiat_price and fiat_price != "0.00 FIAT"
+
+                if is_usd_listing:
+                    # USD listing: green only if < 50%
+                    if mint_pct < 50:
+                        pct_color = "\033[92m"  # Green for under 50%
+                    elif mint_pct == 100:
+                        pct_color = "\033[93m"  # Yellow for at mint
+                    else:
+                        pct_color = "\033[91m"  # Red for 50%+ or above mint
+                else:
+                    # UPX listing: green if < 100%
+                    if mint_pct > 100:
+                        pct_color = "\033[91m"  # Red for above mint
+                    elif mint_pct < 100:
+                        pct_color = "\033[92m"  # Green for below mint
+                    else:
+                        pct_color = "\033[93m"  # Yellow for at mint
+
+                print(f"│ vs Mint:    {pct_color}{mint_pct:.1f}% of mint{reset}")
     elif event == "UNLISTED":
         print(f"│ Owner:      {listing.get('owner')}")
     elif event == "SALE_COMPLETE":
         print(f"│ Buyer:      {listing.get('buyer')}")
-        print(f"│ Price:      {listing.get('sale_price')}")
-    
+        sale_price = listing.get('sale_price', '')
+        # Convert FIAT to USD for display
+        if 'FIAT' in sale_price:
+            sale_price = sale_price.replace(" FIAT", " USD")
+        print(f"│ Price:      {sale_price}")
+
     print(f"└─ trx: {listing['trx_id'][:40]}...")
     print()
 
