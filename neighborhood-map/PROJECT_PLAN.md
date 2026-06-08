@@ -2,19 +2,71 @@
 
 **Last updated:** 2026-06-08  
 **Primary working dir:** `/Users/matt.pugliese/projects/local/upland/neighborhood-map/`  
-**Ultimate goal:** A web app where any Upland player inputs a neighborhood + optional username and gets a fully personalized, shape-aware building recommendation breakdown for maximizing their Resident Score.
+**Ultimate goal:** A web app where any Upland player inputs a neighborhood + optional username and gets a fully personalized, shape-aware building recommendation breakdown for maximizing their **Neighborhood Score** (Resident Score + Commerce Score + Influence Score).
 
 ---
 
 ## What We're Building
 
-An Upland neighborhood optimizer that:
-1. Takes a **neighborhood name** and optional **username/EOS account** as input
-2. Fetches all properties in the neighborhood from the Upland API
-3. For each property the user owns: pulls its **actual in-game lot dimensions** (from the Upland API `boundaries` field), computes shape-adjusted effective width, and determines the best structures that physically fit
-4. Assigns properties to **zones** (commercial, residential, public services, industrial, green/STEM) based on street
-5. Recommends the highest-SU structure per lot, respecting zone priority and confirmed physical fit constraints
-6. Renders an **interactive HTML map** + a **recommendation table** breaking down actions (KEEP / BUILD / DEMOLISH → BUILD) with SU impact
+A web app that:
+1. Takes a **neighborhood name + city** as input, plus an optional **username/EOS account**
+2. Fetches **all properties** in the neighborhood (not just owned ones)
+   - If no username: analyze every property as if planning the ideal neighborhood
+   - If username provided: highlight owned properties, show what's built vs missing, personalize recommendations
+3. For every property: pulls its **actual in-game lot dimensions** from the Upland API `boundaries` field, computes shape-adjusted effective width, determines what structures physically fit
+4. Assigns properties to **zones** by street type
+5. Recommends the best structures per lot across all scoring dimensions: service SU, variety, living units, greenery, commerce, employment
+6. Renders an **interactive HTML map** + a **recommendation breakdown table** sorted by score impact
+
+---
+
+## The Scoring System (Updated Understanding)
+
+### What "Neighborhood Score" Actually Is
+
+The old "Neighborhood Score" was retired in late 2025. The current primary metric is **Resident Score**, which has 16 documented parameters:
+
+**Service Units (per Living Unit ratios — 5 metrics):**
+- Essential SU / Living Unit
+- Entertainment SU / Living Unit
+- Public SU / Living Unit
+- Transportation SU / Living Unit
+- Employment SU / Living Unit (factories, showrooms, MetaVentures)
+
+**Service Structure Variety (3 metrics):**
+- Essential variety — number of *different* essential structure types
+- Entertainment variety — number of different entertainment types
+- Public variety — number of different public types
+- ⚠️ **Variety matters as much as raw SU count** — two Farmers Markets ≠ one Farmers Market + one Classic Hotel
+
+**Resident Activity (2 metrics):**
+- Active Home Addresses (players actively using home addresses here)
+- All Home Addresses
+
+**Aesthetics (4 metrics, per Living Unit):**
+- Greenery / Living Unit — STEM plants, maintained with Protem/STEM feeding + petting
+- Landmarks / Living Unit
+- Ornaments / Living Unit — seasonal ornaments get scoring bonuses
+- Decorations / Living Unit
+
+**Infrastructure (2 metrics):**
+- Residential Space / Living Unit
+- Density Score — how much of minted space is developed
+
+**Secondary scores that feed into Resident Score:**
+- **Commerce Score** — Office Units from office buildings + Bonds (cross-neighborhood office placements) + Trade Routes (mid-2026). Feeds into Resident Score over time.
+- **Influence Score** — service structures, employment, vehicles on lots, map assets, ornaments. Affects resident distribution.
+
+**Farming:** Currently a separate mechanic (crop production, farm capacity). NOT documented as contributing to Resident Score yet. Status TBD for 2026.
+
+### Key Implications for Optimization
+
+1. **Ratios, not totals** — "SU per Living Unit" means you can't just pile on service structures. You need enough living units to keep ratios healthy.
+2. **Variety bonuses** — Build different structure types within each category, not duplicates.
+3. **Balanced categories** — Essential + Entertainment + Public + Transportation + Employment. Don't over-index one.
+4. **Greenery is an explicit metric** — STEM plants on residential properties count. NYC = cold zone (Maple, Pine, Weeping Willow, Roses, Tulips).
+5. **Weights are intentionally hidden** — Upland hasn't published exact weightings to prevent gaming.
+6. **Commerce Score** — Office buildings still matter even though their direct SU = 0. Place them on industrial/commercial lots.
 
 ---
 
@@ -25,195 +77,237 @@ An Upland neighborhood optimizer that:
 | File | Purpose |
 |---|---|
 | `neighborhood_map.py` | General-purpose neighborhood map generator (HTML + PNG). Works for any city. |
-| `dongan_hills_zone_map.py` | Dongan Hills-specific zone optimization map. Generates `Dongan_Hills_Zones.html`. |
-| `structure_fitter.py` | Structure database (min_up2, min_width, min_depth, SU values) + fitting logic. |
-| `cache/` | Per-run caches: props, structures, pluto parcels, geocode, blockchain, API dims. |
-| `dongan_hills_zone_map.py` | Zone map — currently the closest thing to the final product. |
+| `dongan_hills_zone_map.py` | Dongan Hills zone optimization map. Generates `Dongan_Hills_Zones.html`. |
+| `structure_fitter.py` | Structure database (min_up2, min_width, min_depth, SU, variety category) + fitting logic. |
+| `cache/` | Per-run caches: props, structures, pluto, geocode, blockchain, API dims. |
+| `PROJECT_PLAN.md` | This file. |
+| `DONGAN_HILLS_OPTIMIZATION.md` | Legacy zone plan + build priority reference. |
 
 ### Architecture (current)
 
 ```
 Upland API (/properties, /neighborhoods, /cities)
-    → props_cache.json (property list + status)
+    → props_cache.json (property list + status for whole neighborhood)
 
-api.upland.me/properties/{id}  (public API, no auth)
+api.upland.me/properties/{id}  (public, no auth)
     → structures_cache.json   (buildings on each property)
     → api_dims_cache.json     (lot boundaries → width/depth/fill%)
+      *** Currently fetches only USER-OWNED props — needs to cover ALL props ***
 
 MapPLUTO (NYC ArcGIS)
-    → pluto_cache.json        (parcel polygons for OSM building outline matching)
+    → pluto_cache.json        (parcel polygons for OSM building outline drawing only)
 
 structure_fitter.py
     → STRUCTURES dict         (min_up2, min_width, min_depth per structure)
     → structures_that_fit()   (filters by area + width + depth)
-    → best_service_for_zone() (picks highest-SU structure for zone priority)
-    → effective_width()       (discounts width for irregular lot shapes using MBR fill %)
+    → best_service_for_zone() (highest-SU structure matching zone priority)
+    → effective_width()       (MBR_width × sqrt(fill_pct) for irregular lots)
 
 dongan_hills_zone_map.py
-    → STREET_ZONES            (street → zone assignment, Dongan Hills only)
-    → MANUAL_OVERRIDES        (6 special-case property IDs, DH only)
-    → auto_recommend()        (dynamic: uses actual dims + structure DB)
-    → fetch_api_dims()        (fetches Upland API boundaries for all user props, cached 7 days)
-    → popup_html()            (shows: address, zone, size w/ eff_width, structures, recommendation)
+    → STREET_ZONES            (street → zone, DH-specific)
+    → MANUAL_OVERRIDES        (6 special-case property IDs, DH-specific)
+    → auto_recommend()        (dynamic: actual dims + structure DB)
+    → fetch_api_dims()        (fetches Upland API boundaries, cached 7 days)
+      *** Currently: user-owned props only → needs: ALL props ***
+    → popup_html()            (address, zone, size w/ eff_width, structures, recommendation)
 ```
-
-### Dimension System
-
-- **Source of truth:** Upland API `boundaries` field (GeoJSON polygon per property). This IS the in-game lot.
-- **UP² area:** API `area` field directly. Close to MapPLUTO but more accurate.
-- **Width/depth:** Minimum Rotated Bounding Rectangle of the lot polygon, converted from meters to UP units (1 UP = 3m).
-- **Effective width:** `MBR_width × sqrt(fill_pct)` — discounts irregular/jagged lots. Example: 224 Stobe Ave measures 4.2^ MBR width but only 53% rectangular → 3.1^ effective.
-- **MapPLUTO:** Still used for drawing lot outlines on the map (polygon shapes). NOT used for dimension recommendations anymore.
 
 ### Structure Database Calibration Status
 
-- **69 structures** have `min_width` entries.
-- **22 confirmed** from either Playground tests or observed in-neighborhood builds.
-- **47 estimated** — need Playground verification.
+**69 structures** with `min_width`. **22 confirmed** from Playground. **47 estimated.**
 
-Key confirmed data points (from Playground testing on pugs08's Dongan Hills properties):
-- Apartment Building: ≥ 6.0^ ✓ (13 observed instances)
-- Day Care Center: fits at 6.0^ ✓ (door faces wrong way but counts)
-- Ice Rink: fits at 8.1^, fails at 6.0^ → est. 7.0^
-- Large Court House, Natural History Museum, Large Assisted Living, Public Pool, Large Day Care, DMV: all fail at 8.1^ → min_width set to 8.2^ (effectively ruled out for this neighborhood)
-- Large Sports Bar, Modern Hotel, Live Theatre, Farmers Market, Brewery, Bank HQ: fail at 8.1^ → 8.2^ min
-- Car Rental, Auto Repair, Try Harder Gym, Police Detention Center: barely fail at 6.0^ → 6.1^ min
-- Dollar Store: fails at 4.9^ → 5.0^ min
-- Funeral Home: fits at 3.2^ (675 N Railroad, anomalous lot shape) but fails at 4.2^ (224 Stobe) → 4.5^ min
-- Family Home: Wonderland Season 2024 limited blueprint, expired Jan 15 2025 — removed from DB
-- Small Office: confirmed fits at 4.9^ but fills most of lot
-
-Structures NOT YET TESTED that are actively being recommended:
-- Bodega (est. 4.0^), Coffee Stand (est. 4.0^), Art Gallery (est. 4.5^), Arcade (est. 4.5^), Bakery (est. 4.5^), Pool Hall (est. 5.0^), Wheel Alignment (est. 5.0^), Bike Shop (est. 4.0^), Pizzeria (est. 4.5^), Musical Instrument Store (est. 4.5^), Tire Shop (est. 4.5^), Antique Store (est. 4.0^), Town House (est. 3.9^), Apartment Building narrower limit (est. 6.0^ from observation but not Playground tested)
+**Confirmed from Playground testing (pugs08, Dongan Hills):**
+| Structure | min_width | Confirmed |
+|---|---|---|
+| Apartment Building | 6.0^ | ✓ observed 13 instances |
+| Day Care Center | 6.0^ | ✓ fits (door orientation awkward) |
+| Ice Rink | 7.0^ (est) | fits 8.1^, fails 6.0^ |
+| Fire Station | 7.0^ (est) | ✓ observed 7.4^ |
+| Small Office | 4.9^ | ✓ confirmed fits 4.9^, fills most of lot |
+| Dollar Store | 5.0^ | confirmed fails 4.9^ |
+| Funeral Home | 4.5^ | fits 3.2^ lot (anomalous shape), fails 4.2^ |
+| Family Home | removed | Wonderland Season 2024, expired Jan 15 2025 |
+| Large Court House, Natural History Museum, Large Assisted Living, Public Pool, Large Day Care, DMV, Farmers Market, Modern Hotel, Live Theatre, Large Sports Bar, Brewery, Bank HQ | 8.2^ | **all confirmed fail at 8.1^** — ruled out for DH |
+| Car Rental, Auto Repair, Try Harder Gym, Police Detention Center | 6.1^ | confirmed barely fail 6.0^ |
 
 ---
 
 ## TODO List
 
-### 🤖 Claude-only (code work, no user input needed)
+---
 
-#### High Priority
-- [ ] **Generalize zone assignment** — `STREET_ZONES` is currently hardcoded for Dongan Hills. Build a general zone-assignment system:
-  - Fetch OSM street classifications (commercial, residential, industrial) via Overpass
-  - Auto-assign zones based on street type + property density
-  - Fall back to a single "General" zone with balanced SU priority
-- [ ] **Extract `dongan_hills_zone_map.py` into a general `zone_map.py`** — Remove all DH-specific hardcoding (STREET_ZONES, MANUAL_OVERRIDES). Accept neighborhood name as input.
-- [ ] **Build recommendation report** — In addition to the HTML map, generate a sortable HTML table:
-  - Columns: Address | Zone | UP² | Width | Action | Recommended Structure | SU Gained | Current SU | Notes
-  - Sorted by SU gain descending (highest impact first)
-  - Filter controls: zone, action type, minimum SU gain
-- [ ] **Cache the full Upland API property response** — Currently `api_dims_cache.json` only stores dimensions. Store the full response so we can also get `area`, `status`, `yield_per_hour`, and `building` without extra fetches.
-- [ ] **Fetch API dims for ALL neighborhood properties** (not just user-owned) — Needed for the general web app. Rate-limit to ~10 req/sec.
-- [ ] **Add `min_depth` checking to `best_service_for_zone()`** — Currently `structures_that_fit()` checks it but `best_service_for_zone()` calls `structures_that_fit()` correctly. Verify depth is threaded through.
-- [ ] **Handle non-NYC cities** — MapPLUTO only covers NYC boroughs. For other cities, fall back to OSM building footprints for outline drawing (already exists in `neighborhood_map.py`). Dimension lookup should still use Upland API `boundaries`.
-- [ ] **Phase scoring** — Calculate the total SU gain from each action phase so the report can show "Phase 1: +X SU, Phase 2: +Y SU"
-- [ ] **Save memory** — Update memory files with key project insights (structure calibration status, web app goal, etc.)
+### 🤖 Claude-only (code work)
 
-#### Medium Priority
-- [ ] **Web app backend (Flask/FastAPI)** — Endpoints:
-  - `POST /analyze` — takes `{neighborhood, city, username, eos_account}`, returns JSON recommendation
-  - `GET /map/{neighborhood}` — returns rendered HTML map
-  - Serve the generated HTML map file
-- [ ] **Web app frontend** — Simple form:
-  - Neighborhood name input + city hint
-  - Optional username + EOS account
-  - Output: embedded interactive map + recommendation table
-  - "Refresh cache" checkbox
-- [ ] **Structure DB versioning** — Add a `source` field to each STRUCTURES entry: `"observed"`, `"playground_tested"`, `"estimated"`. Show source confidence in the popup.
-- [ ] **Detect already-optimal properties** — If a property already has the best structure that fits, show it as "✓ OPTIMAL" instead of generic KEEP.
-- [ ] **Multi-structure lot handling** — Some lots have multiple structures (e.g., Bodega + Bus Stop + Micro House). The demolish logic needs to handle partial demolition (some structures worth keeping).
+#### Critical Path — Web App
 
-#### Lower Priority
-- [ ] **Dockerize** — A `Dockerfile` + `docker-compose.yml` already exists in the project root. Wire it up to the web app.
-- [ ] **Auto-update structure cache on start** — If structures cache > 24h old, silently refresh in background.
-- [ ] **Collection boost display** — The API returns `collection_boost`. Show in popup if > 1.
-- [ ] **Yield per hour display** — Show `yield_per_hour` in popup for owned properties.
+- [ ] **`fetch_api_dims()` should cover ALL neighborhood properties, not just user-owned**
+  - File: `dongan_hills_zone_map.py` → `fetch_api_dims(props, user_ids)`
+  - Change: remove the `if str(p["id"]) in user_ids` filter, fetch for all 874 props
+  - Rate-limit: 10 concurrent threads is fine, add `time.sleep(0.05)` between batches
+  - Cache key: already keyed by address, just needs more entries
+  - Impact: enables recommendations for any property in the neighborhood, not just pugs08's
+
+- [ ] **Generalize zone assignment beyond Dongan Hills**
+  - Current: `STREET_ZONES` is a hardcoded dict of DH street names
+  - Target: query Overpass API for street classifications (highway type, landuse) within the neighborhood boundary, auto-assign zones:
+    - `highway=primary/secondary` + commercial landuse → Zone 1 (Commercial)
+    - Residential landuse → Zone 2 (Residential)
+    - `amenity=*` density clusters → Zone 3 (Public Services)
+    - Mixed use → Zone 4 (Mixed)
+    - `landuse=industrial` or railway proximity → Zone 5 (Industrial)
+    - Parks/green space → Zone 6 (Green/STEM)
+  - Fallback: single zone "General" with balanced priority
+
+- [ ] **Extract `dongan_hills_zone_map.py` → `zone_map.py`**
+  - Accept: `neighborhood_name`, `city`, `username` (optional), `eos_account` (optional)
+  - Remove: all hardcoded DH prop IDs from `MANUAL_OVERRIDES`
+  - Replace `MANUAL_OVERRIDES` with rule-based detection:
+    - Properties with Showrooms → KEEP (metaventure)
+    - Properties with unique event structures (e.g., Speedway, seasonal) → KEEP
+    - Properties already at maximum possible SU for their lot → KEEP + OPTIMAL tag
+
+- [ ] **Add variety tracking to recommendations**
+  - Track which structure types are already present in the neighborhood
+  - Penalize recommending a type already well-represented; prefer new types
+  - Show: "3 Farmers Markets already in neighborhood — recommend Modern Hotel for variety instead"
+
+- [ ] **Add living unit balance check**
+  - Compute current total SU and total LU for all user-owned properties
+  - Warn if SU/LU ratio is very high or very low
+  - Factor into recommendations: if LU is very low relative to SU, prefer residential structures
+
+- [ ] **Build recommendation report (HTML table)**
+  - Separate from the map: a sortable/filterable breakdown table
+  - Columns: Address | Zone | UP² | Eff Width | Action | Recommended Structure | SU Type | SU Gain | Current Structures | Notes
+  - Sort by SU gain descending (biggest wins first)
+  - Filter by: zone, action type (BUILD / DEMOLISH), minimum SU gain
+  - Summary row: total current SU | total potential SU | total SU gain
+  - Phase breakdown: Phase 1 (highest impact) / Phase 2 / Phase 3
+
+- [ ] **Web app backend (Flask or FastAPI)**
+  - `POST /analyze` — accepts `{neighborhood, city, username?, eos_account?}`, returns map HTML + report HTML + JSON summary
+  - `GET /structures` — returns the full structure DB as JSON (for frontend display)
+  - Serve generated files statically
+  - Input validation: neighborhood name must exist in Upland API
+
+- [ ] **Web app frontend**
+  - Simple form: neighborhood name + city hint + optional username/EOS
+  - Checkbox: "Show all properties" (default ON) vs "My properties only"
+  - **Zone filter toggles** — enable/disable zones independently:
+    - ☑ Commercial (Zone 1) ☑ Residential (Zone 2) ☑ Public Services (Zone 3)
+    - ☑ Mixed (Zone 4) ☑ Industrial (Zone 5) ☑ Green/STEM (Zone 6)
+    - Deselecting a zone hides it from the map and excludes it from the report table
+    - Example: disable all except Industrial → see only factory/employment recommendations
+    - "Focus mode": selecting one zone highlights it, dims all others
+  - Output tabs: Interactive Map | Recommendation Table | Score Breakdown
+  - Mobile-friendly
+
+- [ ] **Commerce Score layer**
+  - Track office structures separately from service structures
+  - Show a "Commerce" section in the recommendation report
+  - Recommend: best office building that fits on industrial/commercial zone lots
+  - Note: Commerce Score feeds Resident Score over time (not direct SU)
+
+- [ ] **Greenery recommendations**
+  - After residential structure is placed, recommend STEM plants based on city climate zone
+  - NYC = cold zone: Maple, Pine, Weeping Willow, Roses, Tulips
+  - Flag residential properties with 0 greenery
+
+- [ ] **Cache full Upland API response per property**
+  - Currently `api_dims_cache.json` stores only dimensions
+  - Store full response: add `area`, `status`, `yield_per_hour`, `building`, `labels` fields
+  - Saves re-fetching for structure + dimension data in one shot
+
+- [ ] **Fix technical debt**
+  - `_RESIDENTIAL_ZONES` threshold (`best_su < 5`) for preferring residential is arbitrary — tune
+  - Demolish threshold (su_gain >= 8) is a heuristic — should factor in demolish cost
+  - `_LOW_VALUE_TYPES` only covers Micro House + Small Town House; should auto-detect any structure whose SU is much less than what could fit
+  - Zone hull computation uses user-owned props only — use all props for better zone boundaries
 
 ---
 
 ### 👤 User-only (Playground testing at ugc.upland.me)
 
-The structure `min_width` database has 47 unconfirmed estimates. Test in order of how frequently they appear in recommendations.
+#### Unconfirmed structures — test in priority order
 
-#### Test protocol
-1. Go to `ugc.upland.me`
-2. Navigate to a property with the target width (see table below)
-3. Try placing the structure — note FITS or FAILS
-4. Report back: structure name, result, which property you tested on
+**Group A — test on a ~4.0–4.5^ wide lot (307 Seaver Ave ~2.4^, 304 Seaver Ave ~2.3^, or 129 Zoe St ~2.5^ — these are very narrow, use 83 Stobe Ave at 4.8^ or 85 Stobe Ave at 4.8^)**
 
-#### Unconfirmed structures — test these (priority order)
-
-**On a ~4.0–4.5^ wide lot (try 307 Seaver Ave, 304 Seaver Ave, or 129 Zoe St):**
-| Structure | Est. min_width | SU | Notes |
+| Structure | Est. min_width | SU | Category |
 |---|---|---|---|
-| Bodega | 4.0^ | 2 ess | Most common small essential |
-| Bike Shop | 4.0^ | 4 ess | Frequently recommended |
-| Coffee Stand | 4.0^ | 3 ent | Very common |
-| Antique Store | 4.0^ | 3 ess | Common on small lots |
-| Toy Store | 4.0^ | 3 ess | Common on small lots |
-| Pizzeria | 4.5^ | 4 ent | Common entertainment |
-| Art Gallery | 4.5^ | 5 ent | High-value for width |
-| Musical Instrument Store | 4.5^ | 4 ess | Frequently recommended |
+| Bodega | 4.0^ | 2 | essential |
+| Coffee Stand | 4.0^ | 3 | entertainment |
+| Bike Shop | 4.0^ | 4 | essential |
+| Antique Store | 4.0^ | 3 | essential |
+| Toy Store | 4.0^ | 3 | essential |
+| Bakery | 4.5^ | 3 | entertainment |
+| Arcade | 4.5^ | 3 | entertainment |
+| Pizzeria | 4.5^ | 4 | entertainment |
+| Art Gallery | 4.5^ | 5 | entertainment |
+| Musical Instrument Store | 4.5^ | 4 | essential |
 
-**On a ~5.0–5.5^ wide lot (try 15 Stobe Ave at 5.4^ or 302 Buel at 5.6^):**
-| Structure | Est. min_width | SU | Notes |
+**Group B — test on a ~5.0–5.5^ wide lot (15 Stobe Ave at 5.4^)**
+
+| Structure | Est. min_width | SU | Category |
 |---|---|---|---|
-| Pool Hall | 5.0^ | 5 ent | Common entertainment |
-| Wheel Alignment | 5.0^ | 5 ess | Common essential |
-| Tire Shop | 4.5^ | 3 ess | Common essential |
-| Arcade | 4.5^ | 3 ent | Already on a 4.8^ lot — likely fits |
-| Bakery | 4.5^ | 3 ent | Already on a 4.8^ lot — likely fits |
+| Tire Shop | 4.5^ | 3 | essential |
+| Pool Hall | 5.0^ | 5 | entertainment |
+| Wheel Alignment Center | 5.0^ | 5 | essential |
 
-**On a ~6.0–7.0^ wide lot (241 Buel at 5.9^, or 5 Vera St at 6.0^):**
-| Structure | Est. min_width | SU | Notes |
-|---|---|---|---|
-| Town House | 3.9^ | res | Already observed on narrow lots |
-| Micro Factory | 4.0^ | emp | Zone 5 key structure |
-| Fire Station | 7.0^ | 5 pub | Already in neighborhood at 7.4^ |
+**Group C — test on a ~4.8–5.0^ wide lot (114 Seaview at 4.9^)**
 
-**Structures known to fail (DO NOT TEST — already confirmed):**
-- Large Court House, Natural History Museum, Large Assisted Living, Public Pool, Large Day Care, DMV, Farmers Market, Modern Hotel, Live Theatre, Large Sports Bar, Brewery, Bank HQ: all fail at 8.1^ wide
+| Structure | Est. min_width | Notes |
+|---|---|---|
+| Micro Factory | 4.0^ | Key for Zone 5 employment |
+| Office Tower | 5.0^ | Commerce Score |
+| Town House | 3.9^ | Already observed at this width |
 
-#### Other user-only tasks
-- [ ] **Confirm what Brewery SU value actually is** — We have it as 17 SU (same as old "Local Brewery") but the in-game name is just "Brewery". Check the store listing.
+#### Other user tasks
+
+- [ ] **Confirm Brewery SU value** — We have 17 SU. Check in-game store listing.
 - [ ] **Confirm Small Brewery SU** — We estimated 9 SU. Check in-game.
-- [ ] **Check if Day Care Center door orientation affects SU scoring** — It fit at 6.0^ but the entrance faced away from the street. Does this affect Resident Score?
-- [ ] **Check if Office Units contribute to Resident Score** — Research confirms they contribute to Commerce Score. But does Commerce Score feed into the overall Resident Score or are they independent metrics?
-- [ ] **Check if Farm structures require special lot designation** — Can any property host farm structures or does it need to be a "farm" property type?
-- [ ] **List any seasonal/event structures you own** — Family Home (Wonderland 2024) was caught. Are there others on your properties from past events?
+- [ ] **Confirm Day Care Center door orientation** — Does facing away from street affect SU scoring?
+- [ ] **Check if Office Units appear in Resident Score breakdown** — Log in, check your current score components in the Upland UI.
+- [ ] **Check if farm structures require special lot designation** — Can any property host farm structures?
+- [ ] **Check Greenery scoring** — Is there an in-game display showing your current Greenery score per neighborhood?
+- [ ] **Check Transportation SU** — Does placing a vehicle (car, bus) on a property generate Transportation SU? What vehicle types generate the most?
+- [ ] **List any other event/limited structures you own** — Check all DH properties for structures not in our DB.
 
 ---
 
 ### 🤝 Together (requires both)
 
-- [ ] **Test the general map on a second neighborhood** — Run `python3 neighborhood_map.py "Rosebank" --city "Staten Island"` (cache already exists). Does it produce a sensible map? Does `auto_recommend` generalize?
-- [ ] **Calibrate 3–4 more structure widths per session** — Each session, pick a lot from the table above and run through the test protocol. We'll converge on the full structure DB over ~5 sessions.
-- [ ] **Validate recommendation quality on Dongan Hills** — Open the current `Dongan_Hills_Zones.html` and click through 10 properties. Do the recommendations feel right? Flag any that seem wrong.
-- [ ] **Design the web app UI** — Decide: simple form + generated HTML output, or a more interactive React-style UI? Decide before Claude builds the backend.
-- [ ] **Test on another player's neighborhood** — Have a friend run it on their neighborhood to find generalization bugs before we build the web app.
+- [ ] **Calibrate Group A structures** — Pick one session, test all Group A structures on 83 or 85 Stobe Ave. Report pass/fail for each.
+- [ ] **Test general map on Rosebank** — Run `python3 neighborhood_map.py "Rosebank" --city "Staten Island"`. Cache exists. Does `auto_recommend` generalize reasonably?
+- [ ] **Validate recommendation quality** — Open `Dongan_Hills_Zones.html`, click through 15 properties. Flag any recommendations that look wrong. We'll fix them.
+- [ ] **Design the scoring dashboard** — Before Claude builds the report HTML, decide: what's the single most useful output? Ranked action list? Summary table? Score projection?
+- [ ] **Test the all-properties mode** — Once `fetch_api_dims` covers all 874 DH props, check the map shows recommendations for non-owned properties too.
+- [ ] **Test on another neighborhood entirely** — Try a Chicago or SF neighborhood to find generalization bugs before web app launch.
 
 ---
 
-## Key Constraints & Decisions Made
+## Key Decisions Made
 
 | Decision | Rationale |
 |---|---|
-| Use Upland API `boundaries` for dimensions, not MapPLUTO | MapPLUTO dimensions match but API is authoritative and covers non-NYC |
-| Use effective_width = MBR_width × sqrt(fill_pct) | Irregular lots overstate usable width; 224 Stobe Ave (53% fill) confirmed this |
-| Large structures (Court House, NHM, etc.) all require > 8.1^ wide | Confirmed by exhaustive Playground testing on widest normal lot in DH |
-| Zones assigned by street name | Simple, transparent, easy to generalize |
-| Dynamic auto_recommend() instead of static RECOMMENDATIONS dict | Static dict had 76 incorrect recommendations due to ignored width constraints |
-| 6 manual overrides only | Crown jewel (45 Vera St), Pharmacy, Arcade/Bakery (variety), Apartment+Bus (anchor), Funeral Home |
-| Family Home excluded from DB | Wonderland Season 2024 limited blueprint, expired Jan 15 2025 |
+| Upland API `boundaries` for dimensions, not MapPLUTO | API is authoritative and covers non-NYC cities |
+| effective_width = MBR_width × sqrt(fill_pct) | Irregular lots (224 Stobe, 53% fill) overstate usable width |
+| Large structures (Court House, NHM, etc.) ruled out at 8.1^ | Confirmed by exhaustive Playground testing |
+| Dynamic auto_recommend(), not static table | Static table had 76 incorrect recommendations |
+| Default: all neighborhood properties, not just user-owned | Useful for planning purchases; username makes it personal |
+| Variety is a Resident Score metric, not just total SU | Official Upland docs confirm variety scoring is explicit |
+| Farms not yet integrated into scoring | Not documented as contributing to Resident Score as of June 2026 |
+| Weights intentionally hidden by Upland | Cannot perfectly optimize; aim for balanced coverage of all 16 parameters |
 
 ## Known Technical Debt
 
-1. `auto_recommend()` logic for demolish threshold (current_su + 8 gap) is a heuristic — needs tuning
-2. `_RESIDENTIAL_ZONES` threshold (`best_su < 5`) for preferring residential is arbitrary — needs validation
-3. Zone boundary convex hulls are computed from user-owned properties only — looks odd for sparse zones
-4. `MANUAL_OVERRIDES` are Dongan Hills prop IDs — won't generalize to other neighborhoods (needs to become rule-based)
-5. `_LOW_VALUE_TYPES` hardcoded as {Micro House, Small Town House} — should include other low-SU structures
-6. Classic Hotel has `min_depth=15.0` but depth is not prominently shown in the popup (only width/eff_width shown)
+1. `fetch_api_dims()` currently filters to user-owned props only — must cover all props
+2. `auto_recommend()` demolish threshold (su_gain >= 8) and residential preference threshold (best_su < 5) are heuristics
+3. Zone boundaries computed from user props only — sparse zones look small
+4. `MANUAL_OVERRIDES` are DH prop IDs — not portable to other neighborhoods
+5. No variety tracking — could recommend 5 identical structure types
+6. No living unit balance check — SU/LU ratio not monitored
+7. `min_depth` exists in STRUCTURES for Classic Hotel but depth display in popup is secondary
+8. Commerce Score (offices) treated as add-on, not first-class recommendation
 
 ## Running the Project
 
@@ -226,23 +320,21 @@ python3 dongan_hills_zone_map.py
 # Regenerate with fresh property/structure data:
 python3 neighborhood_map.py "Dongan Hills" --city "Staten Island" --refresh-cache --html-only
 
-# General neighborhood map (any city):
+# General map for any neighborhood:
 python3 neighborhood_map.py "Rosebank" --city "Staten Island"
-python3 neighborhood_map.py "Inner Richmond" --city "San Francisco"
 
-# Structure fitter report for Dongan Hills:
+# Structure fitter:
 python3 structure_fitter.py
-python3 structure_fitter.py --structure "Ice Rink"     # which lots fit this structure?
-python3 structure_fitter.py --property "242 LIBERTY"  # what fits on this lot?
+python3 structure_fitter.py --structure "Ice Rink"
+python3 structure_fitter.py --property "242 LIBERTY"
 
-# Playground URL for manual testing:
-# ugc.upland.me
+# Playground: ugc.upland.me
 ```
 
 ## Environment
 
 - Python 3.14, macOS Darwin 25.5.0
 - Deps: `requests`, `folium`, `shapely`, `contextily` (optional PNG tiles)
-- Upland developer API: `api.prod.upland.me/developers-api` — credentials in `upland-monitor/.env`
-- Public Upland API: `api.upland.me/properties/{id}` — no auth needed
-- Chain history: `chain-history.upland.me` — used for blockchain property ownership lookup
+- Upland dev API: `api.prod.upland.me/developers-api` — credentials in `upland-monitor/.env`
+- Public API: `api.upland.me/properties/{id}` — no auth
+- Chain history: `chain-history.upland.me` — blockchain ownership lookup
