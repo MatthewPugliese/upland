@@ -193,12 +193,13 @@ dongan_hills_zone_map.py
 - [ ] **Web app frontend**
   - Simple form: neighborhood name + city hint + optional username/EOS
   - Checkbox: "Show all properties" (default ON) vs "My properties only"
-  - **Zone filter toggles** — enable/disable zones independently:
-    - ☑ Commercial (Zone 1) ☑ Residential (Zone 2) ☑ Public Services (Zone 3)
-    - ☑ Mixed (Zone 4) ☑ Industrial (Zone 5) ☑ Green/STEM (Zone 6)
-    - Deselecting a zone hides it from the map and excludes it from the report table
-    - Example: disable all except Industrial → see only factory/employment recommendations
-    - "Focus mode": selecting one zone highlights it, dims all others
+  - **Zone filter toggles** — fully flexible, any combination:
+    - ☑ Commercial ☑ Residential ☑ Public Services ☑ Mixed ☑ Industrial ☑ Green/STEM
+    - Any single zone or any combination can be active simultaneously
+    - Active zones: shown on map + included in report table
+    - Inactive zones: hidden from map, excluded from report
+    - One-click shortcuts: "All", "None", and a quick-select per zone ("Commercial only", "Industrial only", "Residential only", etc.)
+    - Map and report update live as toggles change (no page reload)
   - Output tabs: Interactive Map | Recommendation Table | Score Breakdown
   - Mobile-friendly
 
