@@ -1,0 +1,10 @@
+# Generated HTML maps — large, regenerated on demand
+*.html
+
+# Cache files — regenerated from APIs
+cache/
+*_cache.json
+
+# Python
+__pycache__/
+*.pyc
