@@ -86,14 +86,14 @@ MAIN_CACHE_CANDIDATES = [
 
 # Color scheme for Upland property statuses
 STATUS_COLORS = {
-    "For sale":      "#2ECC71",  # green
-    "Initial Offer": "#27AE60",  # dark green
-    "Locked":        "#95A5A6",  # gray
-    "Owned":         "#5A8DB9",  # soft medium blue — owned by others
-    "Unlocked":      "#BDC3C7",  # light gray
+    "For sale":      "#F39C12",  # orange
+    "Initial Offer": "#E67E22",  # dark orange
+    "Locked":        "#CCCCCC",  # light gray
+    "Owned":         "#E8E8E8",  # very light gray — faded, not your properties
+    "Unlocked":      "#F0F0F0",  # near-white
 }
 DEFAULT_COLOR  = "#BDC3C7"
-USER_COLOR     = "#D4A017"  # gold — properties owned by the tracked username
+USER_COLOR     = "#2980B9"  # blue — properties owned by the tracked username
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 CHAIN_URL = "https://chain-history.upland.me"
@@ -347,18 +347,26 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
     """
     import time as _time
 
-    # Load existing cache
+    # Load existing cache (7-day TTL; stale cache used as fallback on API failure)
+    _stale_ids = set()
     if cache_path.exists():
-        age = _time.time() - cache_path.stat().st_mtime
-        if age < 3600:  # 1-hour TTL
+        try:
             with open(cache_path) as f:
                 data = json.load(f)
-            ids = {str(i) for i in data.get("owned", [])}
-            if ids:
-                print(f"[+] Blockchain cache: {len(ids)} properties for '{username}' (cached)")
-                return ids
+            _stale_ids = {str(i) for i in data.get("owned", [])}
+            age = _time.time() - cache_path.stat().st_mtime
+            if age < 604800:  # 7-day TTL
+                if _stale_ids:
+                    freshness = "cached" if age < 3600 else f"cached, {age/3600:.0f}h old"
+                    print(f"[+] Blockchain cache: {len(_stale_ids)} properties for '{username}' ({freshness})")
+                    return _stale_ids
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     if not eos_account:
+        if _stale_ids:
+            print(f"[~] No EOS account — using stale cache ({len(_stale_ids)} properties)")
+            return _stale_ids
         print(f"[~] No EOS account provided — cannot look up '{username}' on blockchain")
         print(f"    Pass --eos-account <your_eos_account> to enable gold highlighting")
         return set()
@@ -376,6 +384,9 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
         recent = r.json().get("actions", [])
     except Exception as e:
         print(f"[!] Blockchain query error: {e}")
+        if _stale_ids:
+            print(f"    Using stale cache ({len(_stale_ids)} properties)")
+            return _stale_ids
         return set()
 
     if not recent:
@@ -392,9 +403,15 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
             tzinfo=timezone.utc)
     latest_epoch = latest_dt.timestamp()
 
-    # ── Step 2: pull all n31 actions within 120 s of the latest one ─────────
-    # (a single collection round fires all batches within a few seconds)
-    owned: set[str] = set()
+    # ── Step 2: pull n31 actions and find the most complete collection round ──
+    # Collection rounds fire many n31 actions within seconds, each with up to
+    # 50 property IDs.  Sometimes a round is incomplete (fewer actions).  We
+    # scan through recent rounds and pick the one with the most properties.
+    from collections import defaultdict as _defaultdict
+
+    all_rounds: list[set] = []
+    current_round: set[str] = set()
+    last_action_ts = None
     skip = 0
     total_seen = 0
 
@@ -414,7 +431,6 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
         if not actions:
             break
 
-        stop = False
         for action in actions:
             ts = action.get("@timestamp", "")
             try:
@@ -422,23 +438,45 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
             except ValueError:
                 dt = datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S").replace(
                     tzinfo=timezone.utc)
-            if (latest_epoch - dt.timestamp()) > 120:
-                stop = True
-                break
+            action_epoch = dt.timestamp()
+
+            # New round if gap > 300 seconds from previous action
+            if last_action_ts is not None and (last_action_ts - action_epoch) > 300:
+                if current_round:
+                    all_rounds.append(current_round)
+                current_round = set()
+                # Stop after finding 5 rounds (enough to find the best one)
+                if len(all_rounds) >= 5:
+                    break
+
             data_raw = action.get("act", {}).get("data", {})
             p55 = data_raw.get("p55", [])
-            owned.update(str(x) for x in p55)
+            current_round.update(str(x) for x in p55)
+            last_action_ts = action_epoch
 
         total_seen += len(actions)
-        print(f"    blockchain n31: {len(owned)} properties found so far …", end="\r")
+        print(f"    blockchain n31: scanning round {len(all_rounds)+1}, "
+              f"{len(current_round)} in current …", end="\r")
 
-        if stop or len(actions) < 100:
+        if len(all_rounds) >= 5 or len(actions) < 100:
             break
         skip += 100
         _time.sleep(0.1)
 
+    # Don't forget the last round being built
+    if current_round:
+        all_rounds.append(current_round)
+
+    # Pick the round with the most properties (most complete snapshot)
+    owned: set[str] = max(all_rounds, key=len) if all_rounds else set()
+
     print()  # newline after \r progress
     print(f"[+] Blockchain: {len(owned)} currently owned properties for '{username}'")
+
+    # Don't overwrite a better cache with fewer results (partial chain query)
+    if _stale_ids and len(owned) < len(_stale_ids) * 0.8:
+        print(f"[!] New result ({len(owned)}) is much smaller than cache ({len(_stale_ids)}) — keeping cache")
+        return _stale_ids
 
     # Save cache
     with open(cache_path, "w") as f:
@@ -690,7 +728,11 @@ def get_neighborhood_properties(
     cached_props = _properties_from_main_cache(neighborhood_name)
     if cached_props:
         print(f"[+] Found {len(cached_props)} properties in shared cache")
-        props = _enrich_from_api(cached_props, city_id, neighborhood_id)
+        try:
+            props = _enrich_from_api(cached_props, city_id, neighborhood_id)
+        except Exception as e:
+            print(f"[!] API enrichment failed ({e}) — using cache with Unknown status")
+            props = [{**p, "status": p.get("status") or "Unknown"} for p in cached_props]
     else:
         # ── 3 & 4: API-only paths ─────────────────────────────────────────────
         print("[*] Shared cache miss — fetching from Upland API...")
@@ -1142,13 +1184,55 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
     if cache_path.exists():
         age = time.time() - cache_path.stat().st_mtime
         if age < 86400:
-            with open(cache_path) as f:
-                cache = json.load(f)
-            has_structs = sum(1 for v in cache.values() if v)
-            print(f"[+] Structure cache: {len(cache)} properties, {has_structs} with structures")
-            return cache
+            try:
+                with open(cache_path) as f:
+                    cache = json.load(f)
+                has_structs = sum(1 for v in cache.values() if v)
+                print(f"[+] Structure cache: {len(cache)} properties, {has_structs} with structures")
+                return cache
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"[!] Corrupt structure cache ({e}) — will re-fetch")
+                cache_path.unlink(missing_ok=True)
 
     print(f"[*] Fetching Upland structure data for {len(props)} properties …")
+
+    # Probe a few properties first to check if the API is up
+    probe_ok = 0
+    probe_fail = 0
+    for test_prop in props[:5]:
+        try:
+            r = requests.get(f"https://api.upland.me/properties/{test_prop['id']}",
+                             headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            if r.status_code == 200:
+                probe_ok += 1
+            else:
+                probe_fail += 1
+        except Exception:
+            probe_fail += 1
+
+    if probe_ok == 0 and probe_fail > 0:
+        print(f"[!] Upland API appears to be down ({probe_fail}/{probe_fail + probe_ok} probes failed)")
+        print(f"    Skipping structure fetch — will use empty cache")
+        cache = {str(p["id"]): [] for p in props}
+        # Don't save this empty cache — fall through to the save-guard below
+        has_structs = 0
+        print(f"[+] Structures: {has_structs}/{len(props)} properties have game structures")
+
+        if has_structs == 0 and cache_path.exists():
+            try:
+                with open(cache_path) as f:
+                    old_cache = json.load(f)
+                old_has = sum(1 for v in old_cache.values() if v)
+                if old_has > 0:
+                    print(f"[!] API returned 0 structures — keeping previous cache ({old_has} structures)")
+                    return old_cache
+            except Exception:
+                pass
+
+        with open(cache_path, "w") as f:
+            json.dump(cache, f)
+        return cache
+
     lock = threading.Lock()
     done = [0]
 
@@ -1170,7 +1254,7 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
             pass
         return pid, []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(fetch_one, p): p for p in props}
         for future in concurrent.futures.as_completed(futures):
             pid, structs = future.result()
@@ -1184,6 +1268,18 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
     print()
     has_structs = sum(1 for v in cache.values() if v)
     print(f"[+] Structures: {has_structs}/{len(props)} properties have game structures")
+
+    # Don't overwrite a good cache with empty results (e.g. during maintenance)
+    if has_structs == 0 and cache_path.exists():
+        try:
+            with open(cache_path) as f:
+                old_cache = json.load(f)
+            old_has = sum(1 for v in old_cache.values() if v)
+            if old_has > 0:
+                print(f"[!] API returned 0 structures — keeping previous cache ({old_has} structures)")
+                return old_cache
+        except Exception:
+            pass
 
     with open(cache_path, "w") as f:
         json.dump(cache, f)
@@ -1772,11 +1868,14 @@ Examples:
         c if c.isalnum() or c in " -_" else "_" for c in args.neighborhood
     ).strip().replace(" ", "_")
 
+    cache_subdir = output_dir / "cache"
+    cache_subdir.mkdir(parents=True, exist_ok=True)
+
     html_path      = output_dir / f"{safe_name}.html"
     png_path       = output_dir / f"{safe_name}.png"
-    cache_path     = output_dir / f"{safe_name}_props_cache.json"
-    geocode_cache  = output_dir / f"{safe_name}_geocode_cache.json"
-    pluto_cache    = output_dir / f"{safe_name}_pluto_cache.json"
+    cache_path     = cache_subdir / f"{safe_name}_props_cache.json"
+    geocode_cache  = cache_subdir / f"{safe_name}_geocode_cache.json"
+    pluto_cache    = cache_subdir / f"{safe_name}_pluto_cache.json"
 
     if args.refresh_cache and cache_path.exists():
         cache_path.unlink()
@@ -1856,14 +1955,14 @@ Examples:
         matched, unmatched_props = {}, props
 
     # ── Step 5: Upland game structures ───────────────────────────────────────
-    struct_cache = output_dir / f"{safe_name}_structures_cache.json"
+    struct_cache = cache_subdir / f"{safe_name}_structures_cache.json"
     structure_data: dict = get_upland_property_structures(props, struct_cache)
 
     # ── Step 6: Username / user-owned properties ──────────────────────────────
     username = "" if args.no_username else args.username
     user_prop_ids: set = set()
     if username:
-        bc_cache = _SCRIPT_DIR / f"{username}_blockchain_cache.json"
+        bc_cache = cache_subdir / f"{username}_blockchain_cache.json"
         eos_account = "" if args.no_username else args.eos_account
         user_prop_ids = get_user_property_ids(
             hood["city_id"], username,
