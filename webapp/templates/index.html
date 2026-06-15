@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}UplandScope — Neighborhood Maps{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Generate a Neighborhood Map</h2>
+
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
+
+    <form action="/generate" method="POST" id="mapForm">
+        <div class="form-group">
+            <label for="neighborhood">Neighborhood</label>
+            <input type="text" id="neighborhood" name="neighborhood"
+                   placeholder="e.g. Dongan Hills, Chelsea, Tenderloin..."
+                   autocomplete="off" required>
+            <input type="hidden" id="city_hint" name="city_hint">
+            <div id="autocomplete-list" class="autocomplete-items"></div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="username">Upland Username <span class="optional">(for display)</span></label>
+                <input type="text" id="username" name="username"
+                       placeholder="e.g. pugs08">
+            </div>
+            <div class="form-group">
+                <label for="eos_account">
+                    EOS Account
+                    <span class="optional">(required for ownership)</span>
+                    <span class="help-tip" title="Your blockchain account ID. Find it at chain-history.upland.me by searching your recent actions.">?</span>
+                </label>
+                <input type="text" id="eos_account" name="eos_account"
+                       placeholder="e.g. vo1dsqp3qmce">
+            </div>
+        </div>
+        <p class="field-note">The EOS account is needed to highlight your properties. Username alone is just a label.</p>
+
+        <div class="form-group">
+            <label>Map Mode</label>
+            <div class="mode-toggle">
+                <label class="mode-option">
+                    <input type="radio" name="mode" value="simple" checked>
+                    <span class="mode-label">
+                        <strong>Property Map</strong>
+                        <small>Owned, for sale, locked/unlocked status</small>
+                    </span>
+                </label>
+                <label class="mode-option">
+                    <input type="radio" name="mode" value="optimize">
+                    <span class="mode-label">
+                        <strong>Optimization</strong>
+                        <small>Structure recommendations for your properties</small>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="submitBtn">Generate Map</button>
+    </form>
+</div>
+
+<div class="info-section">
+    <h3>How it works</h3>
+    <div class="info-grid">
+        <div class="info-item">
+            <strong>Property Map</strong>
+            <p>See every property in a neighborhood colored by status. Your properties highlighted in gold if you provide your username and EOS account.</p>
+        </div>
+        <div class="info-item">
+            <strong>Optimization Mode</strong>
+            <p>Get structure recommendations for your empty lots based on estimated property sizes. Shows the best service structures that fit each property.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

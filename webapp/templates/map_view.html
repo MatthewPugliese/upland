@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Map — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { padding: 0; max-width: none; }
+    .map-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 8px 20px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e0e0e0;
+        font-size: 14px;
+    }
+    .map-toolbar a { color: #4a90d9; text-decoration: none; }
+    .map-toolbar a:hover { text-decoration: underline; }
+    .map-frame {
+        width: 100%;
+        height: calc(100vh - 110px);
+        border: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="map-toolbar">
+    <a href="/">&larr; New Map</a>
+    <span style="color:#999">|</span>
+    <span>Click any property on the map for details</span>
+</div>
+<iframe class="map-frame" src="/maps/{{ key }}.html"></iframe>
+{% endblock %}

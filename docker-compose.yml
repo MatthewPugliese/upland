@@ -1,0 +1,14 @@
+services:
+  uplandscope:
+    build: .
+    ports:
+      - "8080:5000"
+    volumes:
+      - ./data/cache:/app/webapp/cache
+      - ./data/maps:/app/webapp/maps
+    env_file:
+      - upland-monitor/.env
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-uplandscope-change-this-in-prod}
+    restart: unless-stopped
+    mem_limit: 512m

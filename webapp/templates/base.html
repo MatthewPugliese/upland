@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}UplandScope{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header>
+        <a href="/" class="logo">UplandScope</a>
+        <nav class="header-nav">
+            <a href="/">Maps</a>
+            <a href="/optimizer">Collections</a>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>UplandScope is a community tool — not affiliated with Upland.me</p>
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

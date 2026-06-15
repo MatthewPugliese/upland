@@ -50,3 +50,14 @@ htmlcov/
 # Cache files - only track compressed version
 **/property_cache.json
 # Note: property_cache.json.gz is tracked (compressed version of cache)
+
+# Webapp caches and generated maps
+webapp/cache/
+webapp/maps/
+data/
+
+# Generated HTML maps
+neighborhood-map/*.html
+
+# Claude Code local settings
+.claude/settings.local.json
