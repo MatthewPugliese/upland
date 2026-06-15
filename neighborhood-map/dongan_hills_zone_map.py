@@ -416,9 +416,9 @@ _API_DIMS_CACHE = CACHE_DIR / "Dongan_Hills_api_dims_cache.json"
 _API_DIMS_TTL = 7 * 24 * 3600  # 7 days in seconds
 
 
-def fetch_api_dims(props: list, user_ids: set) -> dict:
+def fetch_api_dims(props: list) -> dict:
     """
-    Fetch lot dimensions for user-owned properties from the Upland API.
+    Fetch lot dimensions for ALL neighborhood properties from the Upland API.
 
     Returns a dict keyed by uppercased/stripped address:
         { "101 LIBERTY AVE": {"up2": int, "width_up": float, "depth_up": float,
@@ -439,7 +439,7 @@ def fetch_api_dims(props: list, user_ids: set) -> dict:
         except Exception:
             pass  # stale or corrupt — re-fetch
 
-    my_props = [p for p in props if str(p["id"]) in user_ids]
+    my_props = props
     total = len(my_props)
     print(f"[*] Fetching lot dimensions from Upland API ({total} properties)...")
 
@@ -517,7 +517,7 @@ def generate_zone_map(output_path: Path) -> None:
     print(f"[+] {sum(1 for v in structures.values() if v)} with structures")
 
     # Fetch lot dimensions from the Upland API (keyed by uppercased address)
-    api_dims = fetch_api_dims(props, user_ids)
+    api_dims = fetch_api_dims(props)
 
     def _get_dims(prop: dict) -> dict | None:
         addr = prop.get("address", "").upper().strip()
@@ -534,21 +534,17 @@ def generate_zone_map(output_path: Path) -> None:
         zone = get_zone(p.get("address", ""))
         prop_zones[pid] = zone
 
-    # Compute centroids for zone hulls (user properties only)
+    # Compute centroids for zone hulls (all properties for accurate boundaries)
     zone_centroids = defaultdict(list)
     for pid, info in matched.items():
-        if str(info["prop"].get("id", "")) not in user_ids:
-            continue
         coords = info["coords"]
         cx = sum(pt[0] for pt in coords) / len(coords)
         cy = sum(pt[1] for pt in coords) / len(coords)
         zone = prop_zones.get(str(info["prop"]["id"]), "Zone 6")
         zone_centroids[zone].append((cx, cy))
 
-    # Also add geocoded unmatched user props to zone centroids
+    # Also add geocoded unmatched props to zone centroids
     for p in unmatched:
-        if str(p["id"]) not in user_ids:
-            continue
         key = p["address"].upper().strip()
         coords = geocode_map.get(key)
         if coords:
@@ -628,16 +624,13 @@ def generate_zone_map(output_path: Path) -> None:
         structs = structures.get(prop_id, [])
         dims = _get_dims(prop)
 
-        # Compute recommendation dynamically from actual dimensions
-        if is_mine:
-            d = dims or {}
-            rec = auto_recommend(
-                prop_id,
-                d.get("up2"), d.get("eff_width", d.get("width_up")), d.get("depth_up"),
-                structs, zone,
-            )
-        else:
-            rec = None
+        # Compute recommendation for all properties (dims may be None for un-fetched)
+        d = dims or {}
+        rec = auto_recommend(
+            prop_id,
+            d.get("up2"), d.get("eff_width", d.get("width_up")), d.get("depth_up"),
+            structs, zone,
+        ) if dims else None
 
         coords_latlon = [[pt[1], pt[0]] for pt in info["coords"]]
 
@@ -712,15 +705,12 @@ def generate_zone_map(output_path: Path) -> None:
         zone_color = ZONE_COLORS.get(zone, "#999")
         structs = structures.get(prop_id, [])
         dims = _get_dims(prop)
-        if is_mine:
-            d = dims or {}
-            rec = auto_recommend(
-                prop_id,
-                d.get("up2"), d.get("eff_width", d.get("width_up")), d.get("depth_up"),
-                structs, zone,
-            )
-        else:
-            rec = None
+        d = dims or {}
+        rec = auto_recommend(
+            prop_id,
+            d.get("up2"), d.get("eff_width", d.get("width_up")), d.get("depth_up"),
+            structs, zone,
+        ) if dims else None
 
         if is_mine:
             color = zone_color

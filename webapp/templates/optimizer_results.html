@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}Optimizer Results — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .results-header {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-align: center;
+    }
+    .stat-card .value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #1a1a2e;
+    }
+    .stat-card .label {
+        font-size: 11px;
+        color: #888;
+        margin-top: 2px;
+    }
+    .stat-card.highlight {
+        background: #EBF5FB;
+        border: 1px solid #AED6F1;
+    }
+    .stat-card.highlight .value { color: #1B4F72; }
+
+    .collection-list { margin-top: 16px; }
+    .coll-item {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 10px;
+        transition: box-shadow 0.2s;
+    }
+    .coll-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .coll-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .coll-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1a1a2e;
+    }
+    .coll-badge {
+        font-size: 11px;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+    .badge-standard { background: #D6EAF8; color: #1B4F72; }
+    .badge-limited { background: #E8DAEF; color: #6C3483; }
+    .badge-exclusive { background: #FDEBD0; color: #CA6F1E; }
+    .badge-rare { background: #FADBD8; color: #C0392B; }
+    .badge-ultra-rare { background: #FEF9E7; color: #B7950B; }
+
+    .coll-stats {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 6px;
+    }
+    .coll-stats span { white-space: nowrap; }
+    .coll-props {
+        font-size: 12px;
+        color: #999;
+        line-height: 1.6;
+    }
+    .coll-props .addr {
+        display: inline-block;
+        background: #f4f5f7;
+        padding: 1px 8px;
+        border-radius: 4px;
+        margin: 2px 4px 2px 0;
+    }
+    .coll-boost {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1B4F72;
+    }
+    .city-section { margin-bottom: 28px; }
+    .city-heading {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin: 20px 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+    .city-count {
+        font-size: 13px;
+        font-weight: 400;
+        color: #999;
+    }
+    .back-link {
+        display: inline-block;
+        color: #4a90d9;
+        text-decoration: none;
+        font-size: 14px;
+    }
+    .back-link:hover { text-decoration: underline; }
+    .btn-download {
+        padding: 8px 16px;
+        background: #1a1a2e;
+        color: #D4A017;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .btn-download:hover { background: #2a2a4e; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <a href="/optimizer" class="back-link" style="margin:0">&larr; Run again</a>
+    <button onclick="downloadResults()" class="btn-download">Download Results</button>
+</div>
+
+<h2>Collection Optimizer — {{ username }} <span style="font-size:13px;font-weight:400;color:#999">({{ result.annual_rate_pct }}% annual rate)</span></h2>
+
+<div class="results-header">
+    <div class="stat-card">
+        <div class="value">{{ result.total_properties }}</div>
+        <div class="label">Properties</div>
+    </div>
+    <div class="stat-card highlight">
+        <div class="value">{{ result.collections_filled }}</div>
+        <div class="label">Collections filled</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ result.assigned_count }}</div>
+        <div class="label">Props assigned</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ result.unassigned_count }}</div>
+        <div class="label">Unassigned</div>
+    </div>
+    <div class="stat-card highlight">
+        <div class="value">{{ "{:,}".format(result.one_time_rewards_total) }}</div>
+        <div class="label">One-time UPX rewards</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ "{:,}".format(result.total_mint_all) }}</div>
+        <div class="label">Total mint value</div>
+    </div>
+</div>
+
+{% if result.total_mint_all > 0 %}
+<div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+            <div style="font-size:13px;color:#888">Without collections</div>
+            <div style="font-size:20px;font-weight:600">{{ "{:,}".format(result.base_monthly_yield) }} UPX/mo</div>
+        </div>
+        <div style="font-size:24px;color:#ccc">&rarr;</div>
+        <div>
+            <div style="font-size:13px;color:#888">With optimized collections</div>
+            <div style="font-size:20px;font-weight:600;color:#1B4F72">{{ "{:,}".format(result.boosted_monthly_yield) }} UPX/mo</div>
+        </div>
+        <div>
+            <div style="font-size:13px;color:#888">Collection boost</div>
+            <div style="font-size:20px;font-weight:600;color:#27AE60">+{{ "{:,}".format(result.monthly_gain) }} UPX/mo</div>
+        </div>
+        <div>
+            <div style="font-size:13px;color:#888">Improvement</div>
+            <div style="font-size:20px;font-weight:600;color:#27AE60">+{{ result.improvement_pct }}%</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<h3 style="margin: 20px 0 12px; font-size: 16px; color: #555;">
+    Recommended Collection Assignments ({{ result.collections_filled }})
+</h3>
+
+{% set city_order = [] %}
+{% if "Multi-City" in result.by_city %}{% set _ = city_order.append("Multi-City") %}{% endif %}
+{% for c in result.by_city.keys()|sort %}{% if c != "Multi-City" %}{% set _ = city_order.append(c) %}{% endif %}{% endfor %}
+{% for city in city_order %}
+<div class="city-section">
+    <h4 class="city-heading">
+        {{ city }} <span class="city-count">({{ result.by_city[city]|length }} collections)</span>
+    </h4>
+    <div class="collection-list">
+    {% for a in result.by_city[city] %}
+        <div class="coll-item">
+            <div class="coll-header">
+                <span class="coll-name">{{ a.collection_name }}</span>
+                <div>
+                    <span class="coll-badge badge-{{ a.rarity|lower|replace(' ', '-') }}">{{ a.rarity }}</span>
+                    <span class="coll-boost">{{ a.yield_boost }}x</span>
+                </div>
+            </div>
+            <div class="coll-stats">
+                <span>{{ a.required }} props</span>
+                {% if a.one_time_reward > 0 %}
+                <span>{{ "{:,}".format(a.one_time_reward) }} UPX reward</span>
+                {% endif %}
+                {% if a.total_mint > 0 %}
+                <span>{{ "{:,}".format(a.total_mint) }} mint value</span>
+                {% endif %}
+                {% if a.yield_gain > 0 %}
+                <span style="color:#27AE60;font-weight:600">+{{ "{:,}".format(a.yield_gain|int) }} UPX/mo</span>
+                {% endif %}
+            </div>
+            <div class="coll-props">
+                {% for p in a.properties %}
+                <span class="addr">{{ p.address }}{% if p.city and city == "Multi-City" %} <span style="color:#4a90d9;font-size:10px">[{{ p.city }}]</span>{% endif %}{% if p.mintPrice %} <span style="color:#999">({{ "{:,}".format(p.mintPrice) }})</span>{% endif %}</span>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+<script>
+function downloadResults() {
+    var lines = [];
+    lines.push("UplandScope Collection Optimizer — {{ username }}");
+    lines.push("Generated: " + new Date().toLocaleString());
+    lines.push("=".repeat(60));
+    lines.push("");
+    lines.push("Properties: {{ result.total_properties }}");
+    lines.push("Collections filled: {{ result.collections_filled }}");
+    lines.push("Properties assigned: {{ result.assigned_count }}");
+    lines.push("Unassigned: {{ result.unassigned_count }}");
+    lines.push("Total mint value: {{ '{:,}'.format(result.total_mint_all) }} UPX");
+    lines.push("");
+    lines.push("Without collections: {{ '{:,}'.format(result.base_monthly_yield) }} UPX/mo");
+    lines.push("With optimized collections: {{ '{:,}'.format(result.boosted_monthly_yield) }} UPX/mo");
+    lines.push("Collection boost: +{{ '{:,}'.format(result.monthly_gain) }} UPX/mo");
+    lines.push("One-time rewards: {{ '{:,}'.format(result.one_time_rewards_total) }} UPX");
+    lines.push("");
+    lines.push("=".repeat(60));
+    lines.push("COLLECTION ASSIGNMENTS");
+    lines.push("=".repeat(60));
+
+    {% for city in city_order %}
+    lines.push("");
+    lines.push("--- {{ city }} ---");
+    {% for a in result.by_city[city] %}
+    lines.push("");
+    lines.push("{{ a.collection_name }} [{{ a.rarity }}] {{ a.yield_boost }}x boost");
+    lines.push("  {{ a.required }} props | {{ '{:,}'.format(a.total_mint) }} mint | +{{ '{:,}'.format(a.yield_gain|int) }} UPX/mo{% if a.one_time_reward > 0 %} | {{ '{:,}'.format(a.one_time_reward) }} UPX reward{% endif %}");
+    {% for p in a.properties %}
+    lines.push("  - {{ p.address }}{% if p.city and city == 'Multi-City' %} [{{ p.city }}]{% endif %}{% if p.mintPrice %} ({{ '{:,}'.format(p.mintPrice) }} UPX){% endif %}");
+    {% endfor %}
+    {% endfor %}
+    {% endfor %}
+
+    var blob = new Blob([lines.join("\n")], {type: "text/plain"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "uplandscope_collections_{{ username }}.txt";
+    a.click();
+}
+</script>
+{% endblock %}
