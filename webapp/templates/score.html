@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Neighborhood Score — {% if score %}{{ score.neighborhood }}{% else %}UplandScope{% endif %}{% endblock %}
+
+{% block head %}
+<style>
+    .hood-tabs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .hood-tab {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        text-decoration: none;
+        background: #f0f0f0;
+        color: #555;
+        transition: all 0.15s;
+        border: 1px solid transparent;
+    }
+    .hood-tab:hover { background: #e0e0e0; color: #333; }
+    .hood-tab.active { background: #1a1a2e; color: #D4A017; border-color: #1a1a2e; }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .stat-card { background: #f8f9fa; border-radius: 10px; padding: 14px 16px; text-align: center; }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 2px; }
+    .stat-card.highlight { background: #EBF5FB; border: 1px solid #AED6F1; }
+    .stat-card.highlight .value { color: #1B4F72; }
+
+    .section-heading {
+        font-size: 16px; font-weight: 700; color: #1a1a2e;
+        margin: 24px 0 12px; padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .score-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+    .score-card {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        padding: 14px 16px;
+        border-left: 5px solid #ccc;
+    }
+    .score-card.green { border-left-color: #27AE60; }
+    .score-card.yellow { border-left-color: #F39C12; }
+    .score-card.red { border-left-color: #E74C3C; }
+
+    .score-card-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 8px;
+    }
+    .score-cat-label { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+    .score-pct {
+        font-size: 18px; font-weight: 700;
+    }
+    .score-pct.green { color: #27AE60; }
+    .score-pct.yellow { color: #F39C12; }
+    .score-pct.red { color: #E74C3C; }
+
+    .progress-wrap { background: #f0f0f0; border-radius: 4px; height: 8px; margin-bottom: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .progress-fill.green { background: #27AE60; }
+    .progress-fill.yellow { background: #F39C12; }
+    .progress-fill.red { background: #E74C3C; }
+
+    .score-detail { font-size: 12px; color: #888; }
+    .score-variety { font-size: 11px; color: #aaa; margin-top: 4px; }
+    .score-variety span {
+        display: inline-block; background: #f4f5f7;
+        padding: 1px 7px; border-radius: 4px; margin: 2px 3px 0 0;
+        color: #666;
+    }
+
+    .gap-item {
+        background: white; border: 1px solid #eee; border-radius: 10px;
+        padding: 12px 16px; margin-bottom: 8px;
+        display: flex; align-items: center; gap: 12px;
+    }
+    .gap-badge {
+        width: 36px; height: 36px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 13px; flex-shrink: 0;
+        color: white;
+    }
+    .gap-badge.red { background: #E74C3C; }
+    .gap-badge.yellow { background: #F39C12; }
+    .gap-text h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .gap-text p { font-size: 12px; color: #888; }
+
+    .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .inv-table th { text-align: left; padding: 7px 10px; border-bottom: 2px solid #e0e0e0; color: #555; font-weight: 600; }
+    .inv-table td { padding: 6px 10px; border-bottom: 1px solid #f5f5f5; }
+    .inv-table tr:last-child td { border-bottom: none; }
+    .inv-table tr:hover td { background: #fafafa; }
+    .btype-residential { color: #27AE60; }
+    .btype-service { color: #1B4F72; }
+    .btype-factory { color: #E67E22; }
+    .btype-commerce { color: #8E44AD; }
+    .btype-special { color: #7F8C8D; }
+
+    .no-data {
+        text-align: center; padding: 40px 20px; color: #aaa;
+        font-size: 15px;
+    }
+    .stale-note { font-size: 12px; color: #aaa; margin-bottom: 16px; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 12px;">Neighborhood Score Dashboard</h2>
+<p class="stale-note">Computed from the structures cache built during the last map generation for each neighborhood. Generate a new map to refresh.</p>
+
+<div class="hood-tabs">
+    {% for hood in cached %}
+    <a href="/score?neighborhood={{ hood }}" class="hood-tab {% if hood == neighborhood %}active{% endif %}">{{ hood }}</a>
+    {% endfor %}
+</div>
+
+{% if not score %}
+<div class="card no-data">
+    No structures cache for <strong>{{ neighborhood }}</strong>.<br>
+    Generate a neighborhood map first to populate the cache.
+</div>
+{% else %}
+
+<div class="summary-grid">
+    <div class="stat-card highlight">
+        <div class="value">{{ score.total_lu }}</div>
+        <div class="label">Living Units</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ "%.1f"|format(score.total_su) }}</div>
+        <div class="label">Service Units</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ "%.2f"|format(score.su_per_lu) }}</div>
+        <div class="label">SU / LU ratio</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ score.props_with_structs }}</div>
+        <div class="label">Developed props</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ score.density_pct }}%</div>
+        <div class="label">Density</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ score.employment_buildings }}</div>
+        <div class="label">Employment buildings</div>
+    </div>
+</div>
+
+<h3 class="section-heading">Service Unit Breakdown</h3>
+<div class="score-grid">
+{% for cat in score.categories %}
+<div class="score-card {{ cat.health }}">
+    <div class="score-card-header">
+        <span class="score-cat-label">{{ cat.label }}</span>
+        <span class="score-pct {{ cat.health }}">{{ cat.pct_of_target }}%</span>
+    </div>
+    <div class="progress-wrap">
+        <div class="progress-fill {{ cat.health }}" style="width: {{ cat.pct_of_target }}%"></div>
+    </div>
+    <div class="score-detail">
+        <strong>{{ "%.1f"|format(cat.su) }}</strong> SU &nbsp;·&nbsp;
+        <strong>{{ "%.3f"|format(cat.ratio) }}</strong>/LU &nbsp;·&nbsp;
+        target {{ cat.target }}/LU &nbsp;·&nbsp;
+        {{ cat.variety }} type{{ "s" if cat.variety != 1 else "" }}
+    </div>
+    {% if cat.variety_names %}
+    <div class="score-variety">
+        {% for name in cat.variety_names %}
+        <span>{{ name }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+</div>
+
+<h3 class="section-heading">Biggest Gaps</h3>
+{% for gap in score.gaps %}
+<div class="gap-item">
+    <div class="gap-badge {{ gap.health }}">{{ gap.pct_of_target }}%</div>
+    <div class="gap-text">
+        <h4>{{ gap.label }}</h4>
+        <p>
+            {% if gap.pct_of_target == 0 %}
+            No {{ gap.label|lower }} structures built yet.
+            {% elif gap.ratio < gap.target * 0.5 %}
+            Only {{ "%.3f"|format(gap.ratio) }}/LU — need {{ "%.1f"|format((gap.target - gap.ratio) * score.total_lu) }} more SU to reach target.
+            {% else %}
+            {{ "%.3f"|format(gap.ratio) }}/LU — {{ "%.1f"|format((gap.target - gap.ratio) * score.total_lu) }} SU short of target.
+            {% endif %}
+            {% if gap.variety < 2 %}Also only {{ gap.variety }} structure type{{ "s" if gap.variety != 1 else "" }} — add variety for a bonus.{% endif %}
+        </p>
+    </div>
+</div>
+{% endfor %}
+
+<h3 class="section-heading">Building Inventory ({{ score.inventory|length }} types)</h3>
+<div class="card" style="padding: 0; overflow: hidden;">
+<table class="inv-table">
+    <thead>
+        <tr>
+            <th>Building</th>
+            <th>#</th>
+            <th>Type</th>
+            <th>SU ea.</th>
+            <th>Category</th>
+            <th>LU ea.</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for b in score.inventory %}
+    <tr>
+        <td><strong>{{ b.name }}</strong></td>
+        <td>{{ b.count }}</td>
+        <td class="btype-{{ b.type }}">{{ b.type }}</td>
+        <td>{% if b.su %}{{ b.su }}{% else %}—{% endif %}</td>
+        <td>{{ b.su_cat or "—" }}</td>
+        <td>{% if b.lu %}{{ b.lu }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% endif %}
+{% endblock %}
