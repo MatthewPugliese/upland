@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}Collection Tracker — {{ username }} — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .results-header {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-align: center;
+    }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 2px; }
+    .stat-card.highlight { background: #EBF5FB; border: 1px solid #AED6F1; }
+    .stat-card.highlight .value { color: #1B4F72; }
+    .stat-card.green { background: #EAFAF1; border: 1px solid #A9DFBF; }
+    .stat-card.green .value { color: #1E8449; }
+    .stat-card.amber { background: #FEF9E7; border: 1px solid #F9E79F; }
+    .stat-card.amber .value { color: #9A7D0A; }
+
+    .section-heading {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin: 24px 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .section-count { font-size: 13px; font-weight: 400; color: #999; }
+
+    .coll-item {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 8px;
+        transition: box-shadow 0.2s;
+    }
+    .coll-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .coll-item.almost-1 { border-left: 4px solid #F39C12; }
+    .coll-item.almost-2 { border-left: 4px solid #AEB6BF; }
+    .coll-item.completable { border-left: 4px solid #27AE60; }
+
+    .coll-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .coll-name { font-size: 15px; font-weight: 600; color: #1a1a2e; }
+
+    .coll-badge {
+        font-size: 11px;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+    .badge-standard { background: #D6EAF8; color: #1B4F72; }
+    .badge-limited { background: #E8DAEF; color: #6C3483; }
+    .badge-exclusive { background: #FDEBD0; color: #CA6F1E; }
+    .badge-rare { background: #FADBD8; color: #C0392B; }
+    .badge-ultra-rare { background: #FEF9E7; color: #B7950B; }
+
+    .coll-meta {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+    }
+    .coll-boost { font-weight: 600; color: #1B4F72; }
+    .coll-gap-text { font-weight: 600; }
+    .gap-1 { color: #E67E22; }
+    .gap-2 { color: #999; }
+    .gap-done { color: #27AE60; }
+
+    .progress-bar-wrap {
+        background: #f0f0f0;
+        border-radius: 4px;
+        height: 6px;
+        margin-bottom: 8px;
+        overflow: hidden;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        background: #4a90d9;
+    }
+    .progress-bar-fill.full { background: #27AE60; }
+
+    .coll-props {
+        font-size: 12px;
+        color: #999;
+        line-height: 1.7;
+    }
+    .coll-props .addr {
+        display: inline-block;
+        background: #f4f5f7;
+        padding: 1px 8px;
+        border-radius: 4px;
+        margin: 2px 4px 2px 0;
+        color: #555;
+    }
+    .coll-need {
+        font-size: 12px;
+        color: #E67E22;
+        margin-top: 4px;
+        font-style: italic;
+    }
+
+    .full-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+    .full-table th {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 2px solid #e0e0e0;
+        color: #555;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .full-table th:hover { color: #1a1a2e; }
+    .full-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid #f0f0f0;
+        vertical-align: middle;
+    }
+    .full-table tr:last-child td { border-bottom: none; }
+    .full-table tr:hover td { background: #fafafa; }
+
+    .pct-cell { font-weight: 600; }
+    .pct-high { color: #27AE60; }
+    .pct-mid  { color: #E67E22; }
+    .pct-low  { color: #999; }
+
+    .back-link {
+        display: inline-block;
+        color: #4a90d9;
+        text-decoration: none;
+        font-size: 14px;
+        margin-bottom: 16px;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    .collapsible-toggle {
+        background: none;
+        border: none;
+        color: #4a90d9;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 4px 0;
+        margin-top: 4px;
+    }
+    .collapsible-toggle:hover { text-decoration: underline; }
+
+    .filter-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+    .filter-row input {
+        flex: 1;
+        min-width: 180px;
+        padding: 7px 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/collections" class="back-link">&larr; Run again</a>
+
+<h2 style="margin-bottom: 16px;">Collection Tracker — {{ username }}</h2>
+
+<div class="results-header">
+    <div class="stat-card">
+        <div class="value">{{ result.total_properties }}</div>
+        <div class="label">Properties</div>
+    </div>
+    <div class="stat-card highlight">
+        <div class="value">{{ result.total_contributing }}</div>
+        <div class="label">Collections contributing</div>
+    </div>
+    <div class="stat-card green">
+        <div class="value">{{ result.completable|length }}</div>
+        <div class="label">Completable now</div>
+    </div>
+    <div class="stat-card amber">
+        <div class="value">{{ result.almost|selectattr("gap", "eq", 1)|list|length }}</div>
+        <div class="label">1 property away</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ result.almost|selectattr("gap", "eq", 2)|list|length }}</div>
+        <div class="label">2 properties away</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ result.contributing|length }}</div>
+        <div class="label">In progress</div>
+    </div>
+</div>
+
+{% if result.completable %}
+<div class="section-heading">
+    ✅ Completable Now
+    <span class="section-count">({{ result.completable|length }})</span>
+</div>
+{% for c in result.completable %}
+<div class="coll-item completable">
+    <div class="coll-header">
+        <span class="coll-name">{{ c.name }}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+            <span class="coll-badge badge-{{ c.rarity|lower|replace(' ', '-') }}">{{ c.rarity }}</span>
+            <span class="coll-boost">{{ c.boost }}x</span>
+        </div>
+    </div>
+    <div class="coll-meta">
+        <span>{{ c.owned }}/{{ c.required }} props</span>
+        <span class="coll-gap-text gap-done">Complete</span>
+        {% if c.reward > 0 %}<span>{{ "{:,}".format(c.reward) }} UPX reward</span>{% endif %}
+        <span style="color:#888;font-size:12px">{{ c.requirements_text }}</span>
+    </div>
+    <div class="progress-bar-wrap">
+        <div class="progress-bar-fill full" style="width:100%"></div>
+    </div>
+    <div class="coll-props">
+        {% for p in c.owned_props %}
+        <span class="addr">{{ p.address }}{% if p.city %} <span style="color:#aaa;font-size:10px">{{ p.city }}</span>{% endif %}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if result.almost %}
+<div class="section-heading">
+    🔶 Almost Complete (1–2 away)
+    <span class="section-count">({{ result.almost|length }})</span>
+</div>
+{% for c in result.almost %}
+<div class="coll-item almost-{{ c.gap }}">
+    <div class="coll-header">
+        <span class="coll-name">{{ c.name }}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+            <span class="coll-badge badge-{{ c.rarity|lower|replace(' ', '-') }}">{{ c.rarity }}</span>
+            <span class="coll-boost">{{ c.boost }}x</span>
+        </div>
+    </div>
+    <div class="coll-meta">
+        <span>{{ c.owned }}/{{ c.required }} props</span>
+        <span class="coll-gap-text gap-{{ c.gap }}">{{ c.gap }} more needed</span>
+        {% if c.reward > 0 %}<span>{{ "{:,}".format(c.reward) }} UPX reward</span>{% endif %}
+    </div>
+    <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" style="width:{{ c.pct }}%"></div>
+    </div>
+    <div class="coll-props">
+        {% for p in c.owned_props %}
+        <span class="addr">{{ p.address }}{% if p.city %} <span style="color:#aaa;font-size:10px">{{ p.city }}</span>{% endif %}</span>
+        {% endfor %}
+    </div>
+    <div class="coll-need">Need {{ c.gap }} more: {{ c.requirements_text }}</div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if result.contributing %}
+<div class="section-heading">
+    In Progress
+    <span class="section-count">({{ result.contributing|length }})</span>
+</div>
+
+<div class="filter-row">
+    <input type="text" id="filterInput" placeholder="Filter collections..." oninput="filterTable()">
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+<table class="full-table" id="contribTable">
+    <thead>
+        <tr>
+            <th onclick="sortTable(0)">Collection ↕</th>
+            <th onclick="sortTable(1)">Rarity ↕</th>
+            <th onclick="sortTable(2)">Progress ↕</th>
+            <th onclick="sortTable(3)">Boost ↕</th>
+            <th onclick="sortTable(4)">Reward ↕</th>
+            <th>Requirement</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for c in result.contributing %}
+    <tr>
+        <td><strong>{{ c.name }}</strong></td>
+        <td><span class="coll-badge badge-{{ c.rarity|lower|replace(' ', '-') }}">{{ c.rarity }}</span></td>
+        <td>
+            <span class="pct-cell {% if c.pct >= 75 %}pct-high{% elif c.pct >= 40 %}pct-mid{% else %}pct-low{% endif %}">
+                {{ c.owned }}/{{ c.required }}
+            </span>
+            <span style="color:#bbb;font-size:11px">({{ c.pct }}%)</span>
+        </td>
+        <td class="coll-boost">{{ c.boost }}x</td>
+        <td>{% if c.reward > 0 %}{{ "{:,}".format(c.reward) }}{% else %}—{% endif %}</td>
+        <td style="color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ c.requirements_text }}">{{ c.requirements_text }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterTable() {
+    var q = document.getElementById("filterInput").value.toLowerCase();
+    var rows = document.querySelectorAll("#contribTable tbody tr");
+    rows.forEach(function(row) {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+    });
+}
+
+function sortTable(col) {
+    var table = document.getElementById("contribTable");
+    var tbody = table.querySelector("tbody");
+    var rows = Array.from(tbody.querySelectorAll("tr"));
+    var asc = table.dataset.sortCol == col && table.dataset.sortDir == "asc";
+    table.dataset.sortCol = col;
+    table.dataset.sortDir = asc ? "desc" : "asc";
+
+    rows.sort(function(a, b) {
+        var av = a.cells[col].textContent.trim();
+        var bv = b.cells[col].textContent.trim();
+        var an = parseFloat(av.replace(/[^0-9.\-]/g, ""));
+        var bn = parseFloat(bv.replace(/[^0-9.\-]/g, ""));
+        if (!isNaN(an) && !isNaN(bn)) return asc ? bn - an : an - bn;
+        return asc ? bv.localeCompare(av) : av.localeCompare(bv);
+    });
+
+    rows.forEach(function(r) { tbody.appendChild(r); });
+}
+</script>
+{% endblock %}
