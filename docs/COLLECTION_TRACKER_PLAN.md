@@ -1,5 +1,26 @@
 # Collection Tracker — Plan
 
+## Status
+
+### Phase 1 — Core Tracker ✅ DONE (merged PR #10)
+
+| Component | File | Status |
+|---|---|---|
+| Analysis backend | `webapp/collection_tracker.py` | **Done** |
+| Input form | `webapp/templates/collections.html` | **Done** |
+| Results page | `webapp/templates/collections_results.html` | **Done** |
+| Flask routes | `webapp/app.py` `/collections` + `/collections/run` | **Done** |
+| Nav link | `webapp/templates/base.html` | **Done** |
+
+Results are bucketed into three sections:
+- **Completable now** — owns all required properties
+- **Almost complete** (1–2 gap) — shows exact requirement still needed
+- **In progress** — sortable/filterable table with progress %
+
+### Phase 2 — Enhancements (not started)
+
+---
+
 ## Goal
 
 Track which Upland collections you're contributing to, how close you are to completing each one, and which missing properties in your target collections are the cheapest to buy. Collections give a `collection_boost` multiplier to property yield — completing them is one of the highest-ROI moves in the game.
@@ -26,14 +47,14 @@ Upland has hundreds of collections. Players typically:
 
 ## Features
 
-- [ ] **Collection membership scan**
+- [x] **Collection membership scan**
   - For every collection in the game, check how many of its required properties you own
   - Show: collection name | category | boost | required | you own | missing | % complete
 
-- [ ] **Completion priority ranking**
-  - Rank collections by cost-to-complete: sum of cheapest available listing prices for all missing properties
-  - Also rank by yield impact: how much does completing this collection increase your total yield/hour
-  - Flag collections where you own all but 1–2 properties — these are the easiest wins
+- [x] **Completion priority ranking**
+  - Rank by gap (1 away first, 2 away next, then in-progress by % complete)
+  - Flag collections where you own all but 1–2 properties — highlighted in amber
+  - Full results are sortable by boost, rarity, progress
 
 - [ ] **Cheapest missing properties**
   - For each target collection, list the missing properties with their current listing price (if on market)
