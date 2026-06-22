@@ -11,6 +11,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from neighborhoods import search_neighborhoods, get_all_neighborhoods
 from map_service import request_map, get_job, get_cached_map, MAPS_DIR
 from collection_optimizer import load_collections, load_user_properties, optimize_collections
+from collection_tracker import analyze_collections
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -123,6 +124,35 @@ def optimizer_run():
         import traceback
         traceback.print_exc()
         return render_template("optimizer.html", error=f"Error: {e}")
+
+
+# ── Collection Tracker ─────────────────────────────────────────────────────
+
+@app.route("/collections")
+def collections():
+    return render_template("collections.html")
+
+
+@app.route("/collections/run", methods=["POST"])
+def collections_run():
+    username = request.form.get("username", "").strip()
+    eos_account = request.form.get("eos_account", "").strip()
+
+    if not username or not eos_account:
+        return render_template("collections.html", error="Both username and EOS account are required.")
+
+    try:
+        colls = load_collections()
+        props = load_user_properties(username, eos_account)
+        if not props:
+            return render_template("collections.html", error=f"No properties found for {username}.")
+        result = analyze_collections(props, colls)
+        result["total_properties"] = len(props)
+        return render_template("collections_results.html", result=result, username=username)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render_template("collections.html", error=f"Error: {e}")
 
 
 # ── Startup ────────────────────────────────────────────────────────────────
