@@ -34,10 +34,14 @@ from pathlib import Path
 import requests
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Load credentials from upland-monitor/.env
+# Load credentials from .env (root, scraper/, or environment variables)
 # ─────────────────────────────────────────────────────────────────────────────
 
-ENV_FILE = Path(__file__).resolve().parent.parent / "upland-monitor" / ".env"
+_ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = next(
+    (p for p in [_ROOT / ".env", _ROOT / "scraper" / ".env"] if p.exists()),
+    _ROOT / ".env",
+)
 
 
 def _load_env(path: Path) -> None:
@@ -79,7 +83,7 @@ OVERPASS_ENDPOINTS = [
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PARENT_DIR = _SCRIPT_DIR.parent
 MAIN_CACHE_CANDIDATES = [
-    _PARENT_DIR / "upland-monitor" / "property_cache.json",
+    _PARENT_DIR / "scraper" / "property_cache.json",
     _PARENT_DIR / "property_cache.json",
     _PARENT_DIR / "property_cache.json.gz",
 ]
@@ -211,7 +215,7 @@ def find_neighborhood(name: str, city_hint: str = None) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Property cache (from listings.py / upland-monitor)
+# Property cache (from scraper/listings.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _main_cache: dict | None = None  # {prop_id_str: full_address_str}

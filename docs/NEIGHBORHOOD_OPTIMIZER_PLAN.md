@@ -203,6 +203,48 @@ dongan_hills_zone_map.py
   - Output tabs: Interactive Map | Recommendation Table | Score Breakdown
   - Mobile-friendly
 
+- [ ] **Current Score Dashboard (Score Breakdown tab)**
+  - Show the user's actual current scores for the neighborhood, broken out by the 16 Resident Score parameters
+  - Display as a scorecard with each metric, current value, and a visual indicator (green/yellow/red) of how healthy it is
+  - Categories to show:
+    - **Service Ratios** (per LU): Essential SU, Entertainment SU, Public SU, Transportation SU, Employment SU — highlight any at zero
+    - **Variety**: how many distinct Essential / Entertainment / Public structure types are present vs missing
+    - **Living Units**: total LU, total SU, SU/LU ratio
+    - **Greenery**: STEM plants on residential properties (count + which properties have none)
+    - **Residents**: total home addresses, active home addresses (if accessible via API)
+  - Below the scorecard, show a "biggest gaps" summary: the 3 metrics scoring lowest, with a one-line suggested action for each
+  - Data sourced from the already-fetched structures cache + dims cache — no extra API calls needed for most metrics
+
+- [ ] **Building image thumbnails**
+  - The API already returns `buildingImage` (e.g. `apartment_new/apartment_baked.png`) on every structure
+  - Find Upland's CDN base URL and construct full image URLs
+  - Show a small building thumbnail in each map popup and recommendation table row
+  - Fallback: gray placeholder icon if image fails to load
+
+- [ ] **In-game building footprint rendering**
+  - The API returns `polygon`, `lat/lng`, `scale`, and `rotate` for every placed structure
+  - Use this to draw the actual in-game building footprint on each lot in the map, instead of OSM outlines
+  - More accurate than OSM — shows exactly where the building sits on the lot and how much space remains
+  - Render as a filled overlay on top of the lot polygon
+
+- [ ] **For-sale scanner**
+  - Fetch `on_market` and `price` fields from the full API response for all unowned properties in the neighborhood
+  - Surface a "Buy opportunities" panel: unowned lots currently listed for sale, ranked by potential SU gain if purchased
+  - Show: address, current price (UPX), lot size, best structure that fits, SU gain, price-per-SU efficiency
+  - Helps prioritize what to buy next vs what to build on existing lots
+
+- [ ] **Spark hours estimator**
+  - The API returns `stepSparks` and `minStackedSparks` per structure in the `details` field
+  - Given the full recommended build queue, compute total spark hours needed end-to-end
+  - Show per-structure spark cost and a running total
+  - Flag structures that are spark-heavy relative to their SU gain
+
+- [ ] **Residents tracker**
+  - The API returns a `residents` count per building
+  - Surface total residents across all user properties
+  - Flag residential buildings with 0 residents — these are underperforming housing units
+  - Show trend if data is refreshed over time (residents gained/lost since last fetch)
+
 - [ ] **Commerce Score layer**
   - Track office structures separately from service structures
   - Show a "Commerce" section in the recommendation report
@@ -218,6 +260,35 @@ dongan_hills_zone_map.py
   - Currently `api_dims_cache.json` stores only dimensions
   - Store full response: add `area`, `status`, `yield_per_hour`, `building`, `labels` fields
   - Saves re-fetching for structure + dimension data in one shot
+
+- [ ] **Plan completion tracker**
+  - Compute % of recommended actions completed (BUILD done, DEMOLISH done) vs total in plan
+  - Show at the top of the Score Breakdown tab: "32% of plan complete — 58 actions remaining"
+  - Break down by phase: Phase 1 (X/10 done), Phase 2 (X/Y done)
+
+- [ ] **Build cost planner**
+  - For every recommended structure in the action queue, surface its real-money cost (from structure DB) and spark hours estimate
+  - Show total plan cost: "$142 USD + 4,200 spark hours remaining"
+  - Sortable by cost-efficiency: SU gained per dollar spent
+
+- [ ] **"What if" build simulator**
+  - Let the user select any empty lot and any structure from a dropdown
+  - Show how SU/LU ratios and variety counts change if that structure were built
+  - No API call needed — runs entirely off cached data + structure DB
+
+- [ ] **Multi-owner coordination view**
+  - For each property in the neighborhood NOT owned by the user, show what the current owner has built
+  - Highlight gaps where a neighboring player's lot is empty — useful for identifying coordination opportunities
+  - Could surface: "your neighbor at 244 Liberty Ave has an empty 52 UP² lot — if they built X it would help the whole neighborhood"
+
+- [ ] **Ornaments and decorations tracker**
+  - Aesthetics (Ornaments / LU, Decorations / LU) are explicit Resident Score metrics
+  - Surface which residential properties have 0 ornaments/decorations
+  - Flag seasonal ornament opportunities (ornaments get scoring bonuses during events)
+
+- [ ] **Shareable neighborhood report**
+  - One-page HTML summary of the neighborhood state: score breakdown, top 5 recommended actions, zone map thumbnail
+  - Shareable URL or exportable as PNG — useful for Discord/community posts
 
 - [ ] **Fix technical debt**
   - `_RESIDENTIAL_ZONES` threshold (`best_su < 5`) for preferring residential is arbitrary — tune

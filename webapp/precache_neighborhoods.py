@@ -12,7 +12,7 @@ Usage:
     python3 precache_neighborhoods.py --dry-run     # Show what would be cached
 
 Reads:
-    ../upland-monitor/property_cache.json  (4.7M properties)
+    ../scraper/property_cache.json  (4.7M properties)
     cache/neighborhoods_all.json           (neighborhood list)
 
 Writes:
@@ -31,7 +31,7 @@ CACHE_DIR = SCRIPT_DIR / "cache" / "neighborhoods"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 MAIN_CACHE_CANDIDATES = [
-    SCRIPT_DIR.parent / "upland-monitor" / "property_cache.json",
+    SCRIPT_DIR.parent / "scraper" / "property_cache.json",
     SCRIPT_DIR.parent / "property_cache.json",
 ]
 
