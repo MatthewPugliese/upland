@@ -21,7 +21,9 @@ services:
           cpus: "0.1"
 
   scraper:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper
     command: python /app/scraper/economy_scraper.py
     volumes:
       - ./data:/app/data

@@ -1,0 +1,12 @@
+FROM python:3.13-slim-bookworm
+
+WORKDIR /app
+
+# Only needs requests — everything else is stdlib (sqlite3, json, time, etc.)
+RUN pip install --no-cache-dir requests
+
+COPY scraper/ /app/scraper/
+
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "/app/scraper/economy_scraper.py"]
