@@ -1251,7 +1251,8 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
                 return pid, [
                     {"buildingName": b.get("buildingName", ""),
                      "buildingType": b.get("buildingType", ""),
-                     "constructionStatus": b.get("constructionStatus", "")}
+                     "constructionStatus": b.get("constructionStatus", ""),
+                     "buildingImage": b.get("buildingImage", "")}
                     for b in bldgs
                 ]
         except Exception:
@@ -1470,7 +1471,15 @@ def _popup_html(prop: dict, structures: list, is_user_prop: bool = False) -> str
             name = s.get("buildingName", "?")
             btype = s.get("buildingType", "")
             cstatus = s.get("constructionStatus", "")
-            label = name
+            img_path = s.get("buildingImage", "")
+            thumb = (
+                f'<img src="https://static.upland.me/3d-models/{img_path}" '
+                f'style="width:36px;height:36px;object-fit:contain;vertical-align:middle;'
+                f'margin-right:6px;border-radius:4px;background:#f4f5f7" '
+                f'onerror="this.style.display=\'none\'">'
+                if img_path else ""
+            )
+            label = f"{thumb}{name}"
             if cstatus and cstatus != "completed":
                 label += f" <i>({cstatus})</i>"
             if btype:
