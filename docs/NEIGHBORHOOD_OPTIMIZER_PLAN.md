@@ -212,11 +212,12 @@ dongan_hills_zone_map.py
   - No live API calls — computed from structures cache built during map generation
   - Not yet: greenery/STEM scoring, residents count (requires per-property API call)
 
-- [ ] **Building image thumbnails**
-  - The API already returns `buildingImage` (e.g. `apartment_new/apartment_baked.png`) on every structure
-  - Find Upland's CDN base URL and construct full image URLs
-  - Show a small building thumbnail in each map popup and recommendation table row
-  - Fallback: gray placeholder icon if image fails to load
+- [x] **Building image thumbnails** — shipped PR #16
+  - CDN: `https://static.upland.me/3d-models/{buildingImage}`
+  - Score Dashboard inventory: 48px thumbnail per row with graceful fallback
+  - Map popups: 36px inline thumbnail next to each structure name
+  - `building_images.py` caches name→path; auto-fetches new types
+  - `neighborhood_map.py` now stores `buildingImage` in structures cache
 
 - [ ] **In-game building footprint rendering**
   - The API returns `polygon`, `lat/lng`, `scale`, and `rotate` for every placed structure
