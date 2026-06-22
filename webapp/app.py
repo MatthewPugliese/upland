@@ -13,6 +13,7 @@ from map_service import request_map, get_job, get_cached_map, MAPS_DIR
 from collection_optimizer import load_collections, load_user_properties, optimize_collections
 from collection_tracker import analyze_collections
 from forsale_finder import find_forsale_for_collection
+from score_calculator import get_neighborhood_score, list_cached_neighborhoods
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -188,6 +189,16 @@ def api_collections_forsale():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+# ── Neighborhood Score Dashboard ───────────────────────────────────────────
+
+@app.route("/score")
+def score():
+    hood = request.args.get("neighborhood", "Dongan Hills").strip()
+    cached = list_cached_neighborhoods()
+    score = get_neighborhood_score(hood)
+    return render_template("score.html", score=score, neighborhood=hood, cached=cached)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────
