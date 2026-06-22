@@ -61,6 +61,8 @@ def analyze_collections(user_props: list, all_collections: list) -> dict:
             "owned_props": eligible[:required],
             "requirements_text": coll.get("requirements", "").rstrip("."),
             "req_type": req_type,
+            "parsed_req": parsed,
+            "city_id": coll.get("cityId"),
         }
 
         if gap == 0:

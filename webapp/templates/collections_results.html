@@ -119,6 +119,36 @@
         margin-top: 4px;
         font-style: italic;
     }
+    .btn-forsale {
+        background: none;
+        border: 1px solid #4a90d9;
+        color: #4a90d9;
+        border-radius: 6px;
+        padding: 3px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        margin-top: 8px;
+        transition: all 0.15s;
+    }
+    .btn-forsale:hover { background: #4a90d9; color: white; }
+    .btn-forsale:disabled { opacity: 0.5; cursor: default; }
+    .forsale-results {
+        margin-top: 10px;
+        font-size: 12px;
+    }
+    .forsale-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 5px 0;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    .forsale-row:last-child { border-bottom: none; }
+    .forsale-addr { flex: 1; color: #333; font-weight: 500; }
+    .forsale-price-upx { color: #1B4F72; font-weight: 700; white-space: nowrap; }
+    .forsale-price-usd { color: #1E8449; font-weight: 700; white-space: nowrap; }
+    .forsale-owner { color: #aaa; font-size: 11px; }
+    .forsale-none { color: #aaa; font-style: italic; }
 
     .full-table {
         width: 100%;
@@ -279,6 +309,10 @@
         {% endfor %}
     </div>
     <div class="coll-need">Need {{ c.gap }} more: {{ c.requirements_text }}</div>
+    {% if c.req_type in ("street_city", "street", "neighborhood_city", "neighborhood", "place") %}
+    <button class="btn-forsale" onclick="loadForSale(this, {{ c.id }})">Find listings</button>
+    <div class="forsale-results" id="forsale-{{ c.id }}" style="display:none"></div>
+    {% endif %}
 </div>
 {% endfor %}
 {% endif %}
@@ -335,6 +369,50 @@ function filterTable() {
     rows.forEach(function(row) {
         row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
     });
+}
+
+function loadForSale(btn, collId) {
+    btn.disabled = true;
+    btn.textContent = "Searching...";
+    var container = document.getElementById("forsale-" + collId);
+    container.style.display = "block";
+    container.innerHTML = '<span style="color:#aaa;font-size:12px">Checking listings...</span>';
+
+    fetch("/api/collections/forsale?coll_id=" + collId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                container.innerHTML = '<span class="forsale-none">Error: ' + data.error + '</span>';
+                btn.textContent = "Find listings";
+                btn.disabled = false;
+                return;
+            }
+            var listings = data.listings || [];
+            if (!listings.length) {
+                container.innerHTML = '<span class="forsale-none">No qualifying properties currently for sale.</span>';
+                btn.textContent = "No listings found";
+                return;
+            }
+            var html = '';
+            listings.forEach(function(l) {
+                var upx = l.price_upx ? l.price_upx.toLocaleString() + " UPX" : "—";
+                var usd = l.price_usd ? "$" + l.price_usd.toFixed(2) : "";
+                var owner = l.owner_username ? "@ " + l.owner_username : "";
+                html += '<div class="forsale-row">'
+                    + '<span class="forsale-addr">' + l.address + (l.city ? ' <span style="color:#bbb;font-size:10px">' + l.city + '</span>' : '') + '</span>'
+                    + '<span class="forsale-price-upx">' + upx + '</span>'
+                    + (usd ? '<span class="forsale-price-usd">' + usd + '</span>' : '')
+                    + '<span class="forsale-owner">' + owner + '</span>'
+                    + '</div>';
+            });
+            container.innerHTML = html;
+            btn.textContent = listings.length + " listing" + (listings.length !== 1 ? "s" : "") + " found";
+        })
+        .catch(function(e) {
+            container.innerHTML = '<span class="forsale-none">Request failed.</span>';
+            btn.textContent = "Find listings";
+            btn.disabled = false;
+        });
 }
 
 function sortTable(col) {

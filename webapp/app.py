@@ -6,12 +6,13 @@ A neighborhood mapping and optimization tool for Upland players.
 
 import config  # noqa: F401 — must be first to load .env before neighborhood_map
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory, session
 
 from neighborhoods import search_neighborhoods, get_all_neighborhoods
 from map_service import request_map, get_job, get_cached_map, MAPS_DIR
 from collection_optimizer import load_collections, load_user_properties, optimize_collections
 from collection_tracker import analyze_collections
+from forsale_finder import find_forsale_for_collection
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -148,11 +149,45 @@ def collections_run():
             return render_template("collections.html", error=f"No properties found for {username}.")
         result = analyze_collections(props, colls)
         result["total_properties"] = len(props)
+
+        # Store analysis in session so the forsale endpoint can use it without re-running
+        session["coll_analysis"] = {
+            "user_prop_ids": [p["id"] for p in props],
+            "almost": result["almost"],
+            "completable": result["completable"],
+        }
+
         return render_template("collections_results.html", result=result, username=username)
     except Exception as e:
         import traceback
         traceback.print_exc()
         return render_template("collections.html", error=f"Error: {e}")
+
+
+@app.route("/api/collections/forsale")
+def api_collections_forsale():
+    coll_id = request.args.get("coll_id", type=int)
+    if not coll_id:
+        return jsonify({"error": "coll_id required"}), 400
+
+    analysis = session.get("coll_analysis")
+    if not analysis:
+        return jsonify({"error": "No active session — run analysis first"}), 400
+
+    user_prop_ids = set(str(x) for x in analysis.get("user_prop_ids", []))
+    all_entries = analysis.get("almost", []) + analysis.get("completable", [])
+    coll_entry = next((c for c in all_entries if c["id"] == coll_id), None)
+
+    if not coll_entry:
+        return jsonify({"error": "Collection not found in session"}), 404
+
+    try:
+        listings = find_forsale_for_collection(coll_entry, user_prop_ids)
+        return jsonify({"listings": listings, "count": len(listings)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Startup ────────────────────────────────────────────────────────────────
