@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.13-slim-bookworm
 
 # System deps for Shapely (libgeos)
 RUN apt-get update && \
@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY optimizer/ /app/optimizer/
+COPY scraper/ /app/scraper/
 COPY webapp/ /app/webapp/
 
 # Create data directories
