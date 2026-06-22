@@ -49,17 +49,38 @@ The existing code handles `n5` with a `"FIAT"` case and does `1 USD = 1,000 UPX`
 
 ---
 
-## What We Already Have
+## Status
 
-| Component | File | What It Does |
+### Phase 1 — Data Pipeline ✅ COMPLETE (merged PR #8)
+
+| Component | File | Status |
 |---|---|---|
-| Blockchain poller | `upland-monitor/track.py` | Polls Hyperion API every 5s, 50-action batches |
-| Sale event decoder | `upland-monitor/listings.py` | Handles `n2`/`n4`/`n5`, property cache, Upland API auth |
-| Property lookup cache | `property_cache.json.gz` | 100k+ property IDs → address/neighborhood/city |
-| Flask web app | `webapp/app.py` | Routes, job queue, Jinja2 templates |
-| API credentials | `upland-monitor/.env` | Upland Developers API auth already wired |
+| Economy scraper | `scraper/economy_scraper.py` | **Done** — backfill + live daemon |
+| SQLite DB | `data/economy.db` | **Done** — created on first run |
+| Docker Compose | `docker-compose.yml` | **Done** — webapp + scraper as two services |
+| Property lookup cache | `scraper/property_cache.json.gz` | **Done** — 4.7M properties |
+| API credentials | `.env` | **Done** — Upland Developers API auth wired |
 
-The polling infrastructure is done. The scraper needs to be extended to handle `n52`, `n111`, `n112`, persist to a DB, and maintain the pending USD listings cache.
+### Pending: Run the backfill
+
+The scraper is written and deployed but **has not been run yet** — waiting on the Raspberry Pi (home server). The Pi will run `docker compose up -d` to start both services permanently.
+
+```bash
+# On the Pi:
+git clone https://github.com/MatthewPugliese/upland.git
+cp /path/to/.env upland/.env
+cd upland && docker compose up -d
+
+# Monitor progress:
+docker compose logs -f scraper
+
+# Check what came in:
+python3 scraper/economy_scraper.py --stats
+```
+
+Estimated backfill: **2–3 hours**, ~620k records across both chains.
+
+### Phase 2–4 — Not started
 
 ---
 
@@ -186,12 +207,19 @@ New file. Does NOT extend `listings.py` directly — instead imports the chain/A
 
 ### Backfill on first run
 
-Configurable `--backfill-days N` flag. Walks backwards through:
-- `n5` events (fast — all have UPX price inline)
-- `n52` events (slower — each needs a reverse lookup of prior `n2` via Hyperion, or accept NULL USD price for old records)
-- `n111`/`n112` events
+The scraper walks both chains automatically in one run:
+- **EOS mainchain** (`eos.hyperion.eosrio.io`): Mar 18, 2023 → Apr 28, 2025
+- **Upland AppChain** (`chain-history.upland.me`): Apr 28, 2025 → present
 
-Suggested: start with 90 days. That gives a full "last month" view on day one.
+Timestamp-based pagination bypasses Hyperion's 10k skip cap. Cursor stored in `scraper_state` table — safe to restart mid-backfill.
+
+Run modes:
+```bash
+python3 scraper/economy_scraper.py               # backfill then live daemon
+python3 scraper/economy_scraper.py --backfill-only
+python3 scraper/economy_scraper.py --live-only
+python3 scraper/economy_scraper.py --stats
+```
 
 ---
 
@@ -250,27 +278,33 @@ Sortable table: City | UPX Volume | USD Volume | Total Trades | Avg UPX Price | 
 
 The scraper runs as a second process alongside Flask.
 
-**Docker Compose (two services, shared volume):**
+**Docker Compose (two services, shared volume) — already wired in `docker-compose.yml`:**
 ```yaml
 services:
   webapp:
     build: .
-    command: gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 webapp.app:app
     ports: ["8080:5000"]
     volumes:
       - ./data/cache:/app/webapp/cache
-      - ./data/economy:/app/data/economy   # shared SQLite lives here
+      - ./data/maps:/app/webapp/maps
+      - ./data:/app/data
+    environment:
+      - ECONOMY_DB=/app/data/economy.db
 
   scraper:
     build: .
-    command: python upland-monitor/economy_scraper.py --backfill-days 90
+    command: python scraper/economy_scraper.py
     volumes:
-      - ./data/economy:/app/data/economy
-    env_file: upland-monitor/.env
+      - ./data:/app/data
+      - ./scraper/property_cache.json.gz:/app/scraper/property_cache.json.gz:ro
+    environment:
+      - ECONOMY_DB=/app/data/economy.db
     restart: unless-stopped
 ```
 
 SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) safely.
+
+**Target host: Raspberry Pi** — `docker compose up -d` keeps both services running permanently with automatic restart on reboot.
 
 ---
 
@@ -320,22 +354,28 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 
 ## Phased Build Order
 
-### Phase 1 — Data Pipeline
-- Create SQLite schema (`transactions`, `pending_usd_listings`, `hourly_aggregates`)
-- Write `economy_scraper.py` with poll loop handling `n2`, `n4`, `n5`, `n52`, `n111`, `n112`
-- Implement `--backfill-days` for historical data
-- Verify USD price recovery via `pending_usd_listings` table works end-to-end
+### Phase 1 — Data Pipeline ✅ DONE
+- [x] Create SQLite schema (`transactions`, `pending_usd_listings`, `hourly_aggregates`, `scraper_state`)
+- [x] Write `scraper/economy_scraper.py` — poll loop for `n2`, `n4`, `n5`, `n52`, `n111`, `n112`
+- [x] EOS mainchain backfill (Mar 2023–Apr 2025) via `eos.hyperion.eosrio.io`
+- [x] AppChain backfill (Apr 2025–present) via `chain-history.upland.me`
+- [x] USD price recovery via `pending_usd_listings` staging table + reverse lookup fallback
+- [x] Timestamp cursor pagination (bypasses Hyperion 10k skip cap)
+- [x] Docker Compose two-service setup (webapp + scraper, shared `./data` volume)
+- [ ] **Run backfill on Pi** — blocked until home with Pi
 
 ### Phase 2 — API
-- Add `/api/economy/*` routes to `app.py`
-- Test summary, timeseries, and feed endpoints manually
+- [ ] Add `/api/economy/*` routes to `webapp/app.py`
+- [ ] Test summary, timeseries, and feed endpoints manually
+- [ ] Prerequisite: ≥1 day of scraped data in DB
 
 ### Phase 3 — Dashboard
-- Hero totals with period selector
-- Chart.js volume chart
-- Live feed via SSE
+- [ ] Hero totals with period selector (today / 7d / 30d / all)
+- [ ] Chart.js volume chart (dual axis: UPX left, USD right)
+- [ ] Live transaction feed via SSE
+- [ ] Prerequisite: Phase 2 done
 
 ### Phase 4 — Polish
-- City/neighborhood breakdown
-- Asset type filtering
-- Docker Compose two-service setup
+- [ ] City/neighborhood breakdown table
+- [ ] Asset type filtering (property vs spark/equipment)
+- [ ] Neighborhood price heatmap overlay on existing map
