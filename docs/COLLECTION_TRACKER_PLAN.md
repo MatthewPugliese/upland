@@ -17,7 +17,18 @@ Results are bucketed into three sections:
 - **Almost complete** (1–2 gap) — shows exact requirement still needed
 - **In progress** — sortable/filterable table with progress %
 
-### Phase 2 — Enhancements (not started)
+### Phase 2 — For-Sale Finder ✅ DONE (merged PR #12)
+
+| Component | File | Status |
+|---|---|---|
+| Finder backend | `webapp/forsale_finder.py` | **Done** |
+| API endpoint | `webapp/app.py` `/api/collections/forsale` | **Done** |
+| Session storage | `webapp/app.py` collections_run | **Done** |
+| UI button + async display | `webapp/templates/collections_results.html` | **Done** |
+
+"Find listings" button on each 1–2 away collection. Fetches async, shows matching for-sale props sorted by UPX price with address, owner, and USD price if applicable.
+
+### Phase 3 — Remaining Enhancements (not started)
 
 ---
 
@@ -56,7 +67,7 @@ Upland has hundreds of collections. Players typically:
   - Flag collections where you own all but 1–2 properties — highlighted in amber
   - Full results are sortable by boost, rarity, progress
 
-- [ ] **Cheapest missing properties**
+- [x] **Cheapest missing properties**
   - For each target collection, list the missing properties with their current listing price (if on market)
   - Flag which ones are unlisted (harder to acquire — need to make an offer)
   - Show last known sale price for unlisted properties (from economy scraper) as a negotiation anchor
