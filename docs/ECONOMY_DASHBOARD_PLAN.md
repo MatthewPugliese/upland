@@ -282,7 +282,7 @@ The scraper runs as a second process alongside Flask.
 ```yaml
 services:
   webapp:
-    build: .
+    build: .                         # uses main Dockerfile (has gcc/libgeos for Shapely)
     ports: ["8080:5000"]
     volumes:
       - ./data/cache:/app/webapp/cache
@@ -290,17 +290,28 @@ services:
       - ./data:/app/data
     environment:
       - ECONOMY_DB=/app/data/economy.db
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: "1.0"}
 
   scraper:
-    build: .
-    command: python scraper/economy_scraper.py
+    build:
+      context: .
+      dockerfile: Dockerfile.scraper  # lightweight: python:slim + requests only, no gcc
+    command: python /app/scraper/economy_scraper.py
     volumes:
       - ./data:/app/data
       - ./scraper/property_cache.json.gz:/app/scraper/property_cache.json.gz:ro
     environment:
       - ECONOMY_DB=/app/data/economy.db
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: "0.5"}         # leaves headroom for Home Assistant + Son of Adam
 ```
+
+> **Pi note:** The original `Dockerfile` pulled gcc/libgeos for Shapely and OOM'd the Pi during build (~1.8 GB RAM, HA + Son of Adam running). `Dockerfile.scraper` is ~30s build, ~60 MB image — safe. Merged in PR #19.
 
 SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) safely.
 
