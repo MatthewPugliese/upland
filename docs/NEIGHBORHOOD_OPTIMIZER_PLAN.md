@@ -203,17 +203,14 @@ dongan_hills_zone_map.py
   - Output tabs: Interactive Map | Recommendation Table | Score Breakdown
   - Mobile-friendly
 
-- [ ] **Current Score Dashboard (Score Breakdown tab)**
-  - Show the user's actual current scores for the neighborhood, broken out by the 16 Resident Score parameters
-  - Display as a scorecard with each metric, current value, and a visual indicator (green/yellow/red) of how healthy it is
-  - Categories to show:
-    - **Service Ratios** (per LU): Essential SU, Entertainment SU, Public SU, Transportation SU, Employment SU — highlight any at zero
-    - **Variety**: how many distinct Essential / Entertainment / Public structure types are present vs missing
-    - **Living Units**: total LU, total SU, SU/LU ratio
-    - **Greenery**: STEM plants on residential properties (count + which properties have none)
-    - **Residents**: total home addresses, active home addresses (if accessible via API)
-  - Below the scorecard, show a "biggest gaps" summary: the 3 metrics scoring lowest, with a one-line suggested action for each
-  - Data sourced from the already-fetched structures cache + dims cache — no extra API calls needed for most metrics
+- [x] **Current Score Dashboard** — shipped as standalone `/score` page (PR #14)
+  - SU breakdown by category (essential, entertainment, public, transportation) with progress bars vs targets
+  - SU/LU ratios, variety counts, density %, employment building count
+  - "Biggest gaps" section with shortfall numbers and action suggestions
+  - Full building inventory table (type, SU, LU per unit)
+  - Neighborhood tabs to switch between any neighborhood with a structures cache
+  - No live API calls — computed from structures cache built during map generation
+  - Not yet: greenery/STEM scoring, residents count (requires per-property API call)
 
 - [ ] **Building image thumbnails**
   - The API already returns `buildingImage` (e.g. `apartment_new/apartment_baked.png`) on every structure
