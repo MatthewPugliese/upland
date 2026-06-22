@@ -13,11 +13,16 @@ services:
       - SECRET_KEY=${SECRET_KEY:-uplandscope-change-this-in-prod}
       - ECONOMY_DB=/app/data/economy.db
     restart: unless-stopped
-    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+        reservations:
+          cpus: "0.1"
 
   scraper:
     build: .
-    command: python scraper/economy_scraper.py
+    command: python /app/scraper/economy_scraper.py
     volumes:
       - ./data:/app/data
       - ./scraper/property_cache.json.gz:/app/scraper/property_cache.json.gz:ro
@@ -26,4 +31,9 @@ services:
     environment:
       - ECONOMY_DB=/app/data/economy.db
     restart: unless-stopped
-    mem_limit: 256m
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+        reservations:
+          cpus: "0.1"
