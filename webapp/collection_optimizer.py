@@ -27,7 +27,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CACHE_DIR = SCRIPT_DIR / "cache"
-NEIGHBORHOOD_MAP_DIR = SCRIPT_DIR.parent / "neighborhood-map"
+NEIGHBORHOOD_MAP_DIR = SCRIPT_DIR.parent / "optimizer"
 
 sys.path.insert(0, str(NEIGHBORHOOD_MAP_DIR))
 
@@ -189,7 +189,7 @@ def _load_main_property_cache() -> dict:
         return _main_cache
 
     candidates = [
-        SCRIPT_DIR.parent / "upland-monitor" / "property_cache.json",
+        SCRIPT_DIR.parent / "scraper" / "property_cache.json",
         SCRIPT_DIR.parent / "property_cache.json",
     ]
     for path in candidates:

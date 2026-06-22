@@ -8,11 +8,11 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Install Python deps
-COPY webapp/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY neighborhood-map/ /app/neighborhood-map/
+COPY optimizer/ /app/optimizer/
 COPY webapp/ /app/webapp/
 
 # Create data directories

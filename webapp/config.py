@@ -8,7 +8,7 @@ from pathlib import Path
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 WEBAPP_DIR = Path(__file__).resolve().parent
-NEIGHBORHOOD_MAP_DIR = BASE_DIR / "neighborhood-map"
+NEIGHBORHOOD_MAP_DIR = BASE_DIR / "optimizer"
 
 CACHE_DIR = Path(os.environ.get("CACHE_DIR", str(WEBAPP_DIR / "cache")))
 MAPS_DIR = Path(os.environ.get("MAPS_DIR", str(WEBAPP_DIR / "maps")))
@@ -19,7 +19,7 @@ MAPS_DIR.mkdir(parents=True, exist_ok=True)
 # ── Load .env before anything imports neighborhood_map ─────────────────────
 _ENV_CANDIDATES = [
     Path(os.environ.get("ENV_FILE", "")),
-    BASE_DIR / "upland-monitor" / ".env",
+    BASE_DIR / "scraper" / ".env",
     BASE_DIR / ".env",
     WEBAPP_DIR / ".env",
 ]
