@@ -101,7 +101,7 @@
 
     .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .inv-table th { text-align: left; padding: 7px 10px; border-bottom: 2px solid #e0e0e0; color: #555; font-weight: 600; }
-    .inv-table td { padding: 6px 10px; border-bottom: 1px solid #f5f5f5; }
+    .inv-table td { padding: 6px 10px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
     .inv-table tr:last-child td { border-bottom: none; }
     .inv-table tr:hover td { background: #fafafa; }
     .btype-residential { color: #27AE60; }
@@ -109,6 +109,16 @@
     .btype-factory { color: #E67E22; }
     .btype-commerce { color: #8E44AD; }
     .btype-special { color: #7F8C8D; }
+    .bldg-thumb {
+        width: 48px; height: 48px; object-fit: contain;
+        border-radius: 6px; background: #f4f5f7;
+        display: block;
+    }
+    .bldg-thumb-placeholder {
+        width: 48px; height: 48px; border-radius: 6px;
+        background: #f4f5f7; display: flex; align-items: center;
+        justify-content: center; color: #ccc; font-size: 18px;
+    }
 
     .no-data {
         text-align: center; padding: 40px 20px; color: #aaa;
@@ -215,6 +225,7 @@
 <table class="inv-table">
     <thead>
         <tr>
+            <th style="width:58px"></th>
             <th>Building</th>
             <th>#</th>
             <th>Type</th>
@@ -226,6 +237,15 @@
     <tbody>
     {% for b in score.inventory %}
     <tr>
+        <td>
+            {% if b.image_url %}
+            <img class="bldg-thumb" src="{{ b.image_url }}" alt="{{ b.name }}"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="bldg-thumb-placeholder" style="display:none">🏗</div>
+            {% else %}
+            <div class="bldg-thumb-placeholder">🏗</div>
+            {% endif %}
+        </td>
         <td><strong>{{ b.name }}</strong></td>
         <td>{{ b.count }}</td>
         <td class="btype-{{ b.type }}">{{ b.type }}</td>

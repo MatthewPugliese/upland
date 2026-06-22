@@ -22,6 +22,7 @@ CACHE_DIR = SCRIPT_DIR / "cache" / "neighborhoods"
 
 sys.path.insert(0, str(SCRIPT_DIR.parent / "optimizer"))
 from structure_fitter import STRUCTURES
+from building_images import get_image_url
 
 # ── SU category display names ──────────────────────────────────────────────
 CATEGORY_LABELS = {
@@ -159,7 +160,7 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
     # Biggest gaps: categories furthest from target
     gaps = sorted(categories, key=lambda x: x["pct_of_target"])[:3]
 
-    # Building inventory sorted by count desc, with per-type info
+    # Building inventory sorted by count desc, with per-type info and image URL
     inventory = []
     for name, count in sorted(bldg_counts.items(), key=lambda x: -x[1]):
         info = _lookup(name) or {}
@@ -170,6 +171,7 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
             "su": info.get("su", 0) or 0,
             "su_cat": CATEGORY_LABELS.get(info.get("su_cat", ""), ""),
             "lu": info.get("living_units", 0) or 0,
+            "image_url": get_image_url(name),
         })
 
     return {
