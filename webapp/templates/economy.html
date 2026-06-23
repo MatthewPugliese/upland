@@ -1,0 +1,584 @@
+{% extends "base.html" %}
+{% block title %}Economy Dashboard — UplandScope{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+    /* ── Period tabs ───────────────────────────────── */
+    .period-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .period-btn {
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        border: 1px solid #ddd;
+        background: #f0f0f0;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .period-btn:hover { background: #e0e0e0; color: #333; }
+    .period-btn.active { background: #1a1a2e; color: #D4A017; border-color: #1a1a2e; }
+
+    /* ── Hero totals ────────────────────────────────── */
+    .hero-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    @media (max-width: 520px) { .hero-grid { grid-template-columns: 1fr; } }
+
+    .hero-card {
+        border-radius: 12px;
+        padding: 20px 24px;
+        border: 1px solid transparent;
+    }
+    .hero-card.upx {
+        background: #EBF5FB;
+        border-color: #AED6F1;
+    }
+    .hero-card.usd {
+        background: #EAFAF1;
+        border-color: #A9DFBF;
+    }
+    .hero-label {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #777;
+        margin-bottom: 6px;
+    }
+    .hero-volume {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1a1a2e;
+        line-height: 1.1;
+        margin-bottom: 4px;
+    }
+    .hero-trades {
+        font-size: 13px;
+        color: #888;
+    }
+    .hero-card.upx .hero-volume { color: #1B4F72; }
+    .hero-card.usd .hero-volume { color: #1E8449; }
+
+    /* ── Chart ───────────────────────────────────────── */
+    .chart-wrap {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        position: relative;
+    }
+    .chart-wrap canvas { max-height: 260px; }
+
+    .section-heading {
+        font-size: 16px; font-weight: 700; color: #1a1a2e;
+        margin: 0 0 12px; padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+        display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* ── Feed ───────────────────────────────────────── */
+    .feed-filters {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    .filter-btn {
+        padding: 4px 14px;
+        border-radius: 14px;
+        font-size: 12px;
+        border: 1px solid #ddd;
+        background: #f0f0f0;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .filter-btn.active { background: #1a1a2e; color: #D4A017; border-color: #1a1a2e; }
+
+    .feed-list {
+        max-height: 360px;
+        overflow-y: auto;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        margin-bottom: 24px;
+    }
+    .feed-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 13px;
+        transition: background 0.1s;
+    }
+    .feed-item:last-child { border-bottom: none; }
+    .feed-item:hover { background: #fafafa; }
+    .feed-item.new { animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { background: #fffbea; } to { background: transparent; } }
+
+    .feed-badge {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+    }
+    .feed-badge.upx { background: #1B4F72; }
+    .feed-badge.usd { background: #1E8449; }
+    .feed-badge.asset { background: #7D3C98; }
+
+    .feed-info { flex: 1; min-width: 0; }
+    .feed-address {
+        font-weight: 600;
+        color: #1a1a2e;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .feed-meta { font-size: 11px; color: #aaa; margin-top: 1px; }
+    .feed-amount { flex-shrink: 0; text-align: right; font-weight: 700; }
+    .feed-amount.upx { color: #1B4F72; }
+    .feed-amount.usd { color: #1E8449; }
+    .feed-time { font-size: 11px; color: #ccc; margin-top: 2px; }
+
+    .feed-empty {
+        padding: 40px;
+        text-align: center;
+        color: #bbb;
+        font-size: 14px;
+    }
+
+    /* ── Cities table ────────────────────────────────── */
+    .cities-wrap {
+        overflow-x: auto;
+        border: 1px solid #eee;
+        border-radius: 10px;
+        margin-bottom: 24px;
+    }
+    .cities-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .cities-table th {
+        text-align: right;
+        padding: 8px 12px;
+        border-bottom: 2px solid #e0e0e0;
+        color: #555;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+    }
+    .cities-table th:first-child { text-align: left; }
+    .cities-table th:hover { color: #1a1a2e; }
+    .cities-table th.sort-asc::after { content: " ▲"; font-size: 10px; }
+    .cities-table th.sort-desc::after { content: " ▼"; font-size: 10px; }
+    .cities-table td {
+        padding: 7px 12px;
+        border-bottom: 1px solid #f5f5f5;
+        text-align: right;
+        vertical-align: middle;
+    }
+    .cities-table td:first-child { text-align: left; font-weight: 600; color: #1a1a2e; }
+    .cities-table tr:last-child td { border-bottom: none; }
+    .cities-table tr:hover td { background: #fafafa; }
+
+    .loading-msg { color: #bbb; font-size: 13px; padding: 20px 0; text-align: center; }
+    .no-data-banner {
+        background: #FEF9E7;
+        border: 1px solid #F9E79F;
+        border-radius: 10px;
+        padding: 16px 20px;
+        color: #856404;
+        font-size: 13px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 4px;">Economy Dashboard</h2>
+<p style="color:#888;font-size:13px;margin-bottom:16px;">Live player-to-player marketplace activity across UPX and USD economies.</p>
+
+<div id="no-data-banner" class="no-data-banner" style="display:none">
+    No transaction data yet — the scraper is still backfilling. Check back soon.
+</div>
+
+<div class="period-tabs">
+    <button class="period-btn" data-period="today">Today</button>
+    <button class="period-btn active" data-period="30d">30 Days</button>
+    <button class="period-btn" data-period="7d">7 Days</button>
+    <button class="period-btn" data-period="90d">90 Days</button>
+    <button class="period-btn" data-period="all">All Time</button>
+</div>
+
+<div class="hero-grid">
+    <div class="hero-card upx">
+        <div class="hero-label">UPX Marketplace</div>
+        <div class="hero-volume" id="upx-volume">—</div>
+        <div class="hero-trades" id="upx-trades">— trades</div>
+    </div>
+    <div class="hero-card usd">
+        <div class="hero-label">USD Marketplace</div>
+        <div class="hero-volume" id="usd-volume">—</div>
+        <div class="hero-trades" id="usd-trades">— trades</div>
+    </div>
+</div>
+
+<div class="chart-wrap">
+    <div class="section-heading" style="border:none;margin-bottom:8px;">
+        <span>Volume Over Time</span>
+        <span id="chart-interval-label" style="font-size:11px;font-weight:400;color:#aaa;"></span>
+    </div>
+    <canvas id="volumeChart"></canvas>
+    <div id="chart-loading" class="loading-msg">Loading chart…</div>
+</div>
+
+<div class="section-heading">
+    <span>Live Transaction Feed</span>
+    <span id="feed-status" style="font-size:11px;font-weight:400;color:#aaa;">updating…</span>
+</div>
+<div class="feed-filters">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="upx">UPX only</button>
+    <button class="filter-btn" data-filter="usd">USD only</button>
+</div>
+<div class="feed-list" id="feed-list">
+    <div class="feed-empty">Loading feed…</div>
+</div>
+
+<div class="section-heading" style="margin-top:8px;">
+    <span>City Breakdown</span>
+</div>
+<div class="cities-wrap">
+    <table class="cities-table" id="cities-table">
+        <thead>
+            <tr>
+                <th data-col="city">City</th>
+                <th data-col="total_trades">Trades</th>
+                <th data-col="upx_trades">UPX Trades</th>
+                <th data-col="usd_trades">USD Trades</th>
+                <th data-col="upx_volume">UPX Volume</th>
+                <th data-col="usd_volume">USD Volume</th>
+                <th data-col="avg_upx">Avg UPX Price</th>
+                <th data-col="avg_usd">Avg USD Price</th>
+            </tr>
+        </thead>
+        <tbody id="cities-body">
+            <tr><td colspan="8" class="loading-msg">Loading…</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let currentPeriod = '30d';
+let feedFilter = 'all';
+let feedMaxId = 0;
+let feedRows = [];
+let citiesData = [];
+let citiesSortCol = 'total_trades';
+let citiesSortDir = -1; // -1 = desc
+let volumeChart = null;
+let feedPollTimer = null;
+
+// ── Formatting ────────────────────────────────────────────────────────────
+function fmtUpx(v) {
+    if (v == null) return '—';
+    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B UPX';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M UPX';
+    if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K UPX';
+    return v.toFixed(0) + ' UPX';
+}
+function fmtUsd(v) {
+    if (v == null) return '—';
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
+    return '$' + v.toFixed(2);
+}
+function fmtNum(v) {
+    if (v == null) return '—';
+    return Number(v).toLocaleString();
+}
+function relTime(ts) {
+    if (!ts) return '';
+    const diff = (Date.now() / 1000) - (new Date(ts + 'Z').getTime() / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+// ── Period selector ───────────────────────────────────────────────────────
+document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPeriod = btn.dataset.period;
+        loadSummary();
+        loadChart();
+        loadCities();
+    });
+});
+
+// ── Feed filter ───────────────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        feedFilter = btn.dataset.filter;
+        renderFeed();
+    });
+});
+
+// ── Summary ───────────────────────────────────────────────────────────────
+async function loadSummary() {
+    const r = await fetch('/api/economy/summary?period=' + currentPeriod);
+    const d = await r.json();
+    if (d.no_data || (d.upx_trades === 0 && d.usd_trades === 0)) {
+        document.getElementById('no-data-banner').style.display = '';
+    } else {
+        document.getElementById('no-data-banner').style.display = 'none';
+    }
+    document.getElementById('upx-volume').textContent = fmtUpx(d.upx_volume);
+    document.getElementById('upx-trades').textContent = fmtNum(d.upx_trades) + ' trades';
+    document.getElementById('usd-volume').textContent = fmtUsd(d.usd_volume);
+    document.getElementById('usd-trades').textContent = fmtNum(d.usd_trades) + ' trades';
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────
+async function loadChart() {
+    document.getElementById('chart-loading').style.display = '';
+    const r = await fetch('/api/economy/timeseries?period=' + currentPeriod);
+    const pts = await r.json();
+
+    const labels = pts.map(p => p.timestamp);
+    const upxVols = pts.map(p => p.upx_volume / 1e6);   // millions
+    const usdVols = pts.map(p => p.usd_volume);
+
+    const isHourly = currentPeriod === 'today' || currentPeriod === '7d';
+    document.getElementById('chart-interval-label').textContent = isHourly ? 'hourly buckets' : 'daily buckets';
+    document.getElementById('chart-loading').style.display = 'none';
+
+    if (volumeChart) volumeChart.destroy();
+
+    volumeChart = new Chart(document.getElementById('volumeChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'UPX Volume (M)',
+                    data: upxVols,
+                    borderColor: '#1B4F72',
+                    backgroundColor: 'rgba(27,79,114,0.08)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'yUpx',
+                    pointRadius: pts.length > 60 ? 0 : 3,
+                },
+                {
+                    label: 'USD Volume',
+                    data: usdVols,
+                    borderColor: '#1E8449',
+                    backgroundColor: 'rgba(30,132,73,0.08)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'yUsd',
+                    pointRadius: pts.length > 60 ? 0 : 3,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            if (ctx.datasetIndex === 0) return ' UPX: ' + (ctx.raw * 1e6).toLocaleString(undefined, {maximumFractionDigits: 0});
+                            return ' USD: $' + ctx.raw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 10,
+                        maxRotation: 0,
+                        font: { size: 11 }
+                    },
+                    grid: { display: false }
+                },
+                yUpx: {
+                    type: 'linear',
+                    position: 'left',
+                    title: { display: true, text: 'UPX (millions)', font: { size: 11 } },
+                    ticks: { font: { size: 11 } }
+                },
+                yUsd: {
+                    type: 'linear',
+                    position: 'right',
+                    title: { display: true, text: 'USD ($)', font: { size: 11 } },
+                    ticks: { font: { size: 11 } },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+}
+
+// ── Feed ──────────────────────────────────────────────────────────────────
+function feedBadge(row) {
+    if (row.asset_type === 'asset') return 'asset';
+    return row.marketplace;
+}
+function feedBadgeLabel(row) {
+    if (row.asset_type === 'asset') return 'AST';
+    return row.marketplace.toUpperCase();
+}
+
+function buildFeedItem(row, isNew) {
+    const badge = feedBadge(row);
+    const label = feedBadgeLabel(row);
+    const addr = row.address || '(asset sale)';
+    const city = row.city ? ' · ' + row.city : '';
+    const buyer = row.buyer || '?';
+    const seller = row.seller ? row.seller : '?';
+    const amount = row.marketplace === 'usd' ? fmtUsd(row.usd_amount) : fmtUpx(row.upx_amount);
+    const amtClass = row.marketplace === 'usd' ? 'usd' : (row.asset_type === 'asset' ? 'asset' : 'upx');
+    const t = relTime(row.timestamp);
+
+    return `<div class="feed-item${isNew ? ' new' : ''}">
+        <div class="feed-badge ${badge}">${label}</div>
+        <div class="feed-info">
+            <div class="feed-address">${addr}${city}</div>
+            <div class="feed-meta">${buyer} ← ${seller}</div>
+        </div>
+        <div>
+            <div class="feed-amount ${amtClass}">${amount}</div>
+            <div class="feed-time">${t}</div>
+        </div>
+    </div>`;
+}
+
+function renderFeed(newIds) {
+    const visible = feedFilter === 'all'
+        ? feedRows
+        : feedRows.filter(r => r.marketplace === feedFilter);
+
+    if (visible.length === 0) {
+        document.getElementById('feed-list').innerHTML = '<div class="feed-empty">No transactions yet.</div>';
+        return;
+    }
+    document.getElementById('feed-list').innerHTML = visible
+        .map(r => buildFeedItem(r, newIds && newIds.has(r.id)))
+        .join('');
+}
+
+async function loadFeedInitial() {
+    const r = await fetch('/api/economy/feed?limit=50');
+    const d = await r.json();
+    feedRows = d.transactions || [];
+    feedMaxId = d.max_id || 0;
+    renderFeed();
+    document.getElementById('feed-status').textContent = 'live';
+}
+
+async function pollFeed() {
+    try {
+        const r = await fetch('/api/economy/feed?since_id=' + feedMaxId);
+        const d = await r.json();
+        const newRows = d.transactions || [];
+        if (newRows.length > 0) {
+            const newIds = new Set(newRows.map(r => r.id));
+            feedMaxId = d.max_id || feedMaxId;
+            feedRows = [...newRows, ...feedRows].slice(0, 100);
+            renderFeed(newIds);
+        }
+        document.getElementById('feed-status').textContent = 'updated ' + relTime(new Date().toISOString().replace('Z', ''));
+    } catch (e) {
+        // silent — don't disrupt the UI on a poll failure
+    }
+    feedPollTimer = setTimeout(pollFeed, 30000);
+}
+
+// ── Cities ────────────────────────────────────────────────────────────────
+async function loadCities() {
+    const r = await fetch('/api/economy/cities?period=' + currentPeriod);
+    const d = await r.json();
+    citiesData = d.cities || [];
+    renderCities();
+}
+
+function renderCities() {
+    const sorted = [...citiesData].sort((a, b) => {
+        const av = a[citiesSortCol] ?? 0;
+        const bv = b[citiesSortCol] ?? 0;
+        return citiesSortDir * (typeof av === 'string' ? av.localeCompare(bv) : bv - av);
+    });
+    // flip sort direction for strings
+    const body = document.getElementById('cities-body');
+    if (sorted.length === 0) {
+        body.innerHTML = '<tr><td colspan="8" class="loading-msg">No city data for this period.</td></tr>';
+        return;
+    }
+    body.innerHTML = sorted.map(c => `<tr>
+        <td>${c.city}</td>
+        <td>${fmtNum(c.total_trades)}</td>
+        <td>${fmtNum(c.upx_trades)}</td>
+        <td>${fmtNum(c.usd_trades)}</td>
+        <td>${fmtUpx(c.upx_volume)}</td>
+        <td>${fmtUsd(c.usd_volume)}</td>
+        <td>${c.avg_upx ? fmtUpx(c.avg_upx) : '—'}</td>
+        <td>${c.avg_usd ? fmtUsd(c.avg_usd) : '—'}</td>
+    </tr>`).join('');
+
+    // Update sort indicators
+    document.querySelectorAll('.cities-table th').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.col === citiesSortCol) {
+            th.classList.add(citiesSortDir === -1 ? 'sort-desc' : 'sort-asc');
+        }
+    });
+}
+
+document.querySelectorAll('.cities-table th').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (citiesSortCol === col) {
+            citiesSortDir *= -1;
+        } else {
+            citiesSortCol = col;
+            citiesSortDir = col === 'city' ? 1 : -1;
+        }
+        renderCities();
+    });
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadSummary();
+loadChart();
+loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
+loadCities();
+</script>
+{% endblock %}

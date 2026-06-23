@@ -392,20 +392,26 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] USD price recovery via `pending_usd_listings` staging table + reverse lookup fallback
 - [x] Timestamp cursor pagination (bypasses Hyperion 10k skip cap)
 - [x] Docker Compose two-service setup (webapp + scraper, shared `./data` volume)
-- [ ] **Run backfill on Pi** — blocked until home with Pi
+- [x] **Run backfill on Pi** — complete, 963K+ rows, EOS chain done, AppChain backfilling (~1 day to catch up to present)
 
-### Phase 2 — API
-- [ ] Add `/api/economy/*` routes to `webapp/app.py`
-- [ ] Test summary, timeseries, and feed endpoints manually
-- [ ] Prerequisite: ≥1 day of scraped data in DB
+### Phase 2 — API ✅ DONE
+- [x] Add `/api/economy/*` routes to `webapp/app.py`
+- [x] Test summary, timeseries, and feed endpoints manually
+- [x] `/api/economy/summary`, `/api/economy/timeseries`, `/api/economy/feed`, `/api/economy/cities`
 
-### Phase 3 — Dashboard
-- [ ] Hero totals with period selector (today / 7d / 30d / all)
-- [ ] Chart.js volume chart (dual axis: UPX left, USD right)
-- [ ] Live transaction feed via SSE
-- [ ] Prerequisite: Phase 2 done
+### Phase 3 — Dashboard ✅ DONE
+- [x] Hero totals with period selector (today / 7d / 30d / all)
+- [x] Chart.js volume chart (dual axis: UPX left, USD right)
+- [x] Live transaction feed with 30s JS polling and marketplace filter
+- [x] Webapp deployed to Pi at `http://69.113.229.61:8080/economy`
 
 ### Phase 4 — Polish
-- [ ] City/neighborhood breakdown table
+- [x] City/neighborhood breakdown table (sortable)
 - [ ] Asset type filtering (property vs spark/equipment)
 - [ ] Neighborhood price heatmap overlay on existing map
+
+### Deployment notes
+- Webapp image must be built on Mac (`--platform linux/arm64`) and transferred via `docker save | gzip | ssh ... gunzip | docker load`
+- Heavy imports (shapely, matplotlib, numpy) are lazy-loaded inside route handlers — webapp starts with ~60MB RAM
+- Pi kernel does not support cgroup memory limits (`memory limit capabilities` warning on startup — harmless, limit is not enforced)
+- HA uses ~1.5GB RAM after warmup; webapp + scraper fit in the remaining ~300MB

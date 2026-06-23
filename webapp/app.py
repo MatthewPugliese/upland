@@ -6,14 +6,31 @@ A neighborhood mapping and optimization tool for Upland players.
 
 import config  # noqa: F401 — must be first to load .env before neighborhood_map
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory, session, Response, stream_with_context
 
-from neighborhoods import search_neighborhoods, get_all_neighborhoods
-from map_service import request_map, get_job, get_cached_map, MAPS_DIR
-from collection_optimizer import load_collections, load_user_properties, optimize_collections
-from collection_tracker import analyze_collections
-from forsale_finder import find_forsale_for_collection
-from score_calculator import get_neighborhood_score, list_cached_neighborhoods
+def _neighborhoods():
+    from neighborhoods import search_neighborhoods, get_all_neighborhoods
+    return search_neighborhoods, get_all_neighborhoods
+
+def _map_service():
+    from map_service import request_map, get_job, get_cached_map, MAPS_DIR
+    return request_map, get_job, get_cached_map, MAPS_DIR
+
+def _optimizer():
+    from collection_optimizer import load_collections, load_user_properties, optimize_collections
+    return load_collections, load_user_properties, optimize_collections
+
+def _tracker():
+    from collection_tracker import analyze_collections
+    return analyze_collections
+
+def _forsale():
+    from forsale_finder import find_forsale_for_collection
+    return find_forsale_for_collection
+
+def _score():
+    from score_calculator import get_neighborhood_score, list_cached_neighborhoods
+    return get_neighborhood_score, list_cached_neighborhoods
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -28,6 +45,7 @@ def index():
 
 @app.route("/api/neighborhoods")
 def api_neighborhoods():
+    search_neighborhoods, _ = _neighborhoods()
     q = request.args.get("q", "").strip()
     results = search_neighborhoods(q)
     return jsonify([
@@ -38,6 +56,7 @@ def api_neighborhoods():
 
 @app.route("/generate", methods=["POST"])
 def generate():
+    request_map, get_job, get_cached_map, MAPS_DIR = _map_service()
     neighborhood = request.form.get("neighborhood", "").strip()
     city_hint = request.form.get("city_hint", "").strip() or None
     username = request.form.get("username", "").strip()
@@ -66,6 +85,7 @@ def generate():
 
 @app.route("/status/<key>")
 def status(key):
+    _, get_job, _, _ = _map_service()
     job = get_job(key)
     if not job:
         return jsonify({"status": "unknown"})
@@ -82,6 +102,7 @@ def status(key):
 
 @app.route("/map/<key>")
 def map_view(key):
+    _, get_job, _, _ = _map_service()
     job = get_job(key)
     if not job or job.get("status") != "ready":
         return redirect(url_for("index"))
@@ -90,6 +111,7 @@ def map_view(key):
 
 @app.route("/maps/<path:filename>")
 def serve_map(filename):
+    _, _, _, MAPS_DIR = _map_service()
     return send_from_directory(str(MAPS_DIR), filename)
 
 
@@ -102,6 +124,7 @@ def optimizer():
 
 @app.route("/optimizer/run", methods=["POST"])
 def optimizer_run():
+    load_collections, load_user_properties, optimize_collections = _optimizer()
     username = request.form.get("username", "").strip()
     eos_account = request.form.get("eos_account", "").strip()
 
@@ -137,6 +160,8 @@ def collections():
 
 @app.route("/collections/run", methods=["POST"])
 def collections_run():
+    load_collections, load_user_properties, _ = _optimizer()
+    analyze_collections = _tracker()
     username = request.form.get("username", "").strip()
     eos_account = request.form.get("eos_account", "").strip()
 
@@ -183,6 +208,7 @@ def api_collections_forsale():
         return jsonify({"error": "Collection not found in session"}), 404
 
     try:
+        find_forsale_for_collection = _forsale()
         listings = find_forsale_for_collection(coll_entry, user_prop_ids)
         return jsonify({"listings": listings, "count": len(listings)})
     except Exception as e:
@@ -195,17 +221,68 @@ def api_collections_forsale():
 
 @app.route("/score")
 def score():
+    get_neighborhood_score, list_cached_neighborhoods = _score()
     hood = request.args.get("neighborhood", "Dongan Hills").strip()
     cached = list_cached_neighborhoods()
     score = get_neighborhood_score(hood)
     return render_template("score.html", score=score, neighborhood=hood, cached=cached)
 
 
+# ── Economy Dashboard ──────────────────────────────────────────────────────
+
+import json
+import time
+import economy as _econ
+
+_VALID_PERIODS = {"today", "7d", "30d", "90d", "all"}
+
+
+@app.route("/economy")
+def economy_dashboard():
+    return render_template("economy.html")
+
+
+@app.route("/api/economy/summary")
+def api_economy_summary():
+    period = request.args.get("period", "30d")
+    if period not in _VALID_PERIODS:
+        period = "30d"
+    return jsonify(_econ.summary(period))
+
+
+@app.route("/api/economy/timeseries")
+def api_economy_timeseries():
+    period = request.args.get("period", "30d")
+    if period not in _VALID_PERIODS:
+        period = "30d"
+    return jsonify(_econ.timeseries(period))
+
+
+@app.route("/api/economy/feed")
+def api_economy_feed():
+    limit = min(request.args.get("limit", 50, type=int), 200)
+    marketplace = request.args.get("marketplace", None)
+    last_id = request.args.get("since_id", 0, type=int)
+    if last_id:
+        rows = _econ.latest_since(last_id)
+    else:
+        rows = _econ.feed(limit, marketplace)
+    return jsonify({"transactions": rows, "max_id": _econ.max_id()})
+
+
+@app.route("/api/economy/cities")
+def api_economy_cities():
+    period = request.args.get("period", "30d")
+    if period not in _VALID_PERIODS:
+        period = "30d"
+    return jsonify({"cities": _econ.cities(period)})
+
+
 # ── Startup ────────────────────────────────────────────────────────────────
 
 def preload_neighborhoods():
-    """Cache neighborhood list on first request (lazy)."""
     try:
+        _, get_all_neighborhoods = _neighborhoods()
         get_all_neighborhoods()
     except Exception as e:
         print(f"[!] Failed to preload neighborhoods: {e}")
