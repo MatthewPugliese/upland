@@ -61,24 +61,43 @@ The existing code handles `n5` with a `"FIAT"` case and does `1 USD = 1,000 UPX`
 | Property lookup cache | `scraper/property_cache.json.gz` | **Done** — 4.7M properties |
 | API credentials | `.env` | **Done** — Upland Developers API auth wired |
 
-### Pending: Run the backfill
+### Scraper: Running on Pi ✅
 
-The scraper is written and deployed but **has not been run yet** — waiting on the Raspberry Pi (home server). The Pi will run `docker compose up -d` to start both services permanently.
+The scraper container (`upland-scraper-1`) is running on the Pi with `restart: unless-stopped`.
+It auto-restarted after the Pi power cycle. Backfill is in progress.
 
 ```bash
-# On the Pi:
-git clone https://github.com/MatthewPugliese/upland.git
-cp /path/to/.env upland/.env
-cd upland && docker compose up -d
-
-# Monitor progress:
-docker compose logs -f scraper
-
-# Check what came in:
-python3 scraper/economy_scraper.py --stats
+# Check scraper status:
+ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61
+docker compose -f /opt/upland/docker-compose.yml logs -f scraper
 ```
 
-Estimated backfill: **2–3 hours**, ~620k records across both chains.
+### Webapp: NOT deployed to Pi yet ⚠️
+
+The main `Dockerfile` builds gcc + libgeos (for Shapely) and **will OOM the Pi** the same way the previous attempt did. Do NOT run `docker compose build` on the Pi for the webapp service.
+
+**Recommended approach: build on Mac, transfer to Pi**
+
+Option A — Docker Hub (cleanest):
+```bash
+# On Mac:
+docker build -t <dockerhub-user>/upland-webapp:latest .
+docker push <dockerhub-user>/upland-webapp:latest
+# On Pi:
+docker pull <dockerhub-user>/upland-webapp:latest
+docker compose up -d webapp
+```
+
+Option B — `docker save` / `scp` (no registry needed):
+```bash
+# On Mac:
+docker build --platform linux/arm64 -t upland-webapp .
+docker save upland-webapp | gzip > /tmp/upland-webapp.tar.gz
+scp -P 8008 -i ~/Desktop/rpi /tmp/upland-webapp.tar.gz root@69.113.229.61:/tmp/
+# On Pi:
+docker load < /tmp/upland-webapp.tar.gz
+docker compose up -d webapp
+```
 
 ### Phase 2–4 — Not started
 
