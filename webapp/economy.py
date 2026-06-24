@@ -13,8 +13,10 @@ DB_PATH = os.environ.get("ECONOMY_DB", os.path.join(os.path.dirname(__file__), "
 def _connect():
     if not os.path.exists(DB_PATH):
         return None
-    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn = sqlite3.connect(DB_PATH, timeout=3)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=3000")
     return conn
 
 

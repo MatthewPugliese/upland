@@ -392,7 +392,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] USD price recovery via `pending_usd_listings` staging table + reverse lookup fallback
 - [x] Timestamp cursor pagination (bypasses Hyperion 10k skip cap)
 - [x] Docker Compose two-service setup (webapp + scraper, shared `./data` volume)
-- [x] **Run backfill on Pi** — complete, 963K+ rows, EOS chain done, AppChain backfilling (~1 day to catch up to present)
+- [x] **Run backfill on Pi** — complete. EOS chain Mar 2023–Apr 2025 (829K rows) + AppChain Apr 2025–Jun 2026 (~150K rows). Now live polling every 5s.
 
 ### Phase 2 — API ✅ DONE
 - [x] Add `/api/economy/*` routes to `webapp/app.py`
@@ -403,15 +403,21 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] Hero totals with period selector (today / 7d / 30d / all)
 - [x] Chart.js volume chart (dual axis: UPX left, USD right)
 - [x] Live transaction feed with 30s JS polling and marketplace filter
-- [x] Webapp deployed to Pi at `http://69.113.229.61:8080/economy`
+- [x] Webapp deployed to Pi at `http://192.168.1.115:8080/economy` (LAN only — port 8080 not forwarded externally)
 
 ### Phase 4 — Polish
 - [x] City/neighborhood breakdown table (sortable)
 - [ ] Asset type filtering (property vs spark/equipment)
 - [ ] Neighborhood price heatmap overlay on existing map
 
+### Known issues to fix
+- [ ] **30d/7d/today show low data** — scraper just caught up to present on 2026-06-24; data will accumulate naturally over the coming days/weeks
+- [ ] **Dashboard page spins intermittently** — root cause unclear; possibly SQLite read contention with active scraper writes, or lingering iptables weirdness from OOM events. Needs investigation.
+
 ### Deployment notes
+- Webapp uses `Dockerfile.webapp` (light: flask + gunicorn + requests only, ~160MB image, no shapely/matplotlib/numpy)
+- Map/optimizer routes lazy-load heavy deps — will error if hit on Pi since those packages aren't installed; run those features from Mac
+- Pi kernel does not support cgroup memory limits — `memory limit capabilities` warning on startup is harmless
+- Pi swap expanded from 200MB → 1GB (`/etc/dphys-swapfile`) to give headroom alongside HA
+- HA uses ~1.5GB RAM after warmup; with 1GB swap the system is stable at idle
 - Webapp image must be built on Mac (`--platform linux/arm64`) and transferred via `docker save | gzip | ssh ... gunzip | docker load`
-- Heavy imports (shapely, matplotlib, numpy) are lazy-loaded inside route handlers — webapp starts with ~60MB RAM
-- Pi kernel does not support cgroup memory limits (`memory limit capabilities` warning on startup — harmless, limit is not enforced)
-- HA uses ~1.5GB RAM after warmup; webapp + scraper fit in the remaining ~300MB

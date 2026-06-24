@@ -1,0 +1,23 @@
+FROM python:3.13-slim-bookworm
+
+WORKDIR /app
+
+COPY requirements-light.txt .
+RUN pip install --no-cache-dir -r requirements-light.txt
+
+COPY optimizer/ /app/optimizer/
+COPY scraper/ /app/scraper/
+COPY webapp/ /app/webapp/
+
+RUN mkdir -p /app/webapp/cache /app/webapp/maps
+
+WORKDIR /app/webapp
+
+ENV PYTHONUNBUFFERED=1
+ENV FLASK_APP=app.py
+ENV CACHE_DIR=/app/webapp/cache
+ENV MAPS_DIR=/app/webapp/maps
+
+EXPOSE 5000
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "--timeout", "300", "app:app"]

@@ -1,6 +1,8 @@
 services:
   webapp:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.webapp
     ports:
       - "8080:5000"
     volumes:
