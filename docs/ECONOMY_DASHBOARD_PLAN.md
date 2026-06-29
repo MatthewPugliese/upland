@@ -397,6 +397,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] Timestamp cursor pagination (bypasses Hyperion 10k skip cap)
 - [x] Docker Compose two-service setup (webapp + scraper, shared `./data` volume)
 - [x] **Run backfill on Pi** — complete. EOS chain Mar 2023–Apr 2025 (829K rows) + AppChain Apr 2025–Jun 2026 (~150K rows). Now live polling every 5s.
+- [x] **Local scraper running** — `data/economy.db` being built from scratch; backfilling EOS 2023-03-18 → 2025-04-28, then AppChain.
+- [x] **Genesis transaction found**: 2019-10-11T16:09:04.500, 756 Chenery St SF, 16,000 UPX, buyer "landlord" (u3eb3kngdkd2), trx `f987837ff896600ef66cd712231a9fafb7c47253ceca61af1366d92988e1b61b`. Found via greymass v1 API (seq 21,224 of 946M EOS actions). Pre-2023 EOS data not scraped yet — greymass v1 would take ~54 days to scan (no action filtering).
+- [x] **Scraper node resilience**: `fetch_actions()` now distinguishes network errors (None) from genuinely empty responses ([]), so backfill no longer marks a chain done when the Hyperion node is temporarily down.
 
 ### Phase 2 — API ✅ DONE
 - [x] Add `/api/economy/*` routes to `webapp/app.py`
