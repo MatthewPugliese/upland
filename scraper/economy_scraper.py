@@ -224,6 +224,24 @@ def set_state(conn, key: str, value: str) -> None:
 # Hyperion API fetch
 # ─────────────────────────────────────────────────────────────────────────────
 
+def fetch_n5_seller(base_url: str, trx_id: str) -> str | None:
+    """Fetch full transaction and extract seller from UPX transfer to seller account."""
+    url = f"{base_url}/v2/history/get_transaction?id={trx_id}"
+    req = urllib.request.Request(url, headers=HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            actions = json.loads(r.read()).get("actions", [])
+        for a in actions:
+            act = a.get("act", {})
+            if act.get("account") == "upxtokenacct" and act.get("name") == "transfer":
+                d = act.get("data", {})
+                if d.get("from") == "playuplandme" and d.get("to") not in ("communityupx", "playuplandme"):
+                    return d.get("to")
+    except Exception:
+        pass
+    return None
+
+
 def fetch_actions(base_url: str, after: str, before: str = None,
                   limit: int = BATCH_SIZE, retries: int = 3) -> list:
     params = [
@@ -351,14 +369,15 @@ def process_actions(conn: sqlite3.Connection, actions: list, base_url: str) -> i
             upx     = parse_upx(data.get("p24", ""))
             buyer   = data.get("p14")
             meta    = prop_meta(prop_id)
+            seller  = fetch_n5_seller(base_url, trx_id) if _live_lookup_enabled else None
             try:
                 conn.execute(
                     """INSERT OR IGNORE INTO transactions
                        (trx_id,block_num,timestamp,action,property_id,address,city,neighborhood,
                         buyer,seller,upx_amount,marketplace,asset_type)
-                       VALUES(?,?,?,?,?,?,?,?,?,NULL,?,'upx','property')""",
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,'upx','property')""",
                     (trx_id, block_num, timestamp, "n5", prop_id,
-                     meta["address"], meta["city"], meta["neighborhood"], buyer, upx),
+                     meta["address"], meta["city"], meta["neighborhood"], buyer, seller, upx),
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1

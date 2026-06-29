@@ -415,6 +415,13 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [ ] **30d/7d/today show low data** — scraper just caught up to present on 2026-06-24; data will accumulate naturally over the coming days/weeks
 - [ ] **Dashboard page spins intermittently** — root cause unclear; possibly SQLite read contention with active scraper writes, or lingering iptables weirdness from OOM events. Needs investigation.
 
+### Pending — backfill UPX sellers
+UPX sales (n5) historically have `seller = NULL` because the seller isn't in the n5 action data — it's in a `upxtokenacct::transfer` inline action in the same transaction. Fix requires fetching full transaction via `get_transaction?id={trx_id}` for each n5 row with null seller.
+
+- Live scraper now captures seller correctly going forward (`fetch_n5_seller()`)
+- ~695K historical n5 rows have null seller — need a backfill script similar to `backfill_addresses.py`
+- At 5 req/s that's ~39h; run overnight on Pi after address backfill completes
+
 ### Pending — sync local DB improvements back to Pi
 Local DB (`/tmp/economy_live.db`) is ahead of Pi in two ways:
 1. **Address backfill** — `backfill_addresses.py` is filling in 192K missing address/city/neighborhood rows (running locally, ~11h). Once complete, copy the updated DB to Pi.
