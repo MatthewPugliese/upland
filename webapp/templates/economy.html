@@ -237,8 +237,8 @@
 </div>
 
 <div class="period-tabs">
-    <button class="period-btn" data-period="today">Today</button>
-    <button class="period-btn active" data-period="30d">30 Days</button>
+    <button class="period-btn active" data-period="today">Today</button>
+    <button class="period-btn" data-period="30d">30 Days</button>
     <button class="period-btn" data-period="7d">7 Days</button>
     <button class="period-btn" data-period="90d">90 Days</button>
     <button class="period-btn" data-period="all">All Time</button>
@@ -311,7 +311,7 @@
 {% block scripts %}
 <script>
 // ── State ─────────────────────────────────────────────────────────────────
-let currentPeriod = '30d';
+let currentPeriod = 'today';
 let feedFilter = 'all';
 let feedMaxId = 0;
 let feedRows = [];
