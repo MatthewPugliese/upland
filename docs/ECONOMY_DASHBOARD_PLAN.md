@@ -365,11 +365,14 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   - Show: avg days on market per city, per price range
   - Flag listings that have been sitting unusually long — potentially overpriced
 
-- [ ] **Whale tracker** ⚠️ blocked on username resolution
+- [x] **Whale tracker** — unblocked via on-chain notarization data
   - Backend query done (`/api/economy/whales`) — top buyers/sellers by volume
-  - UI built and then removed — EOS account names (e.g. `qbi3jazhmbrh`) are not the same as Upland display names; no public API to resolve them; Developers API user endpoints return 403 with current credentials
-  - Profile URL format: `https://play.upland.me/profile?username={display_name}` — but display name ≠ EOS account
-  - Re-enable once username resolution is figured out (API tier upgrade, community-sourced mapping, or scraping profile pages)
+  - **Username resolution**: Upland's `a4` (property deed notarization) action on the AppChain embeds `"Upland user {username} with corresponding EOS account {eos_account}"` in the memo
+  - `scraper/build_username_cache.py` scans all `a4` actions and builds `data/username_cache.json` (EOS→username). Ran once: **35,601 mappings** from AppChain only, ~90 seconds.
+  - `webapp/username_lookup.py` provides `lookup(eos_account)` → display name
+  - UI re-enabled with resolved names + links to `play.upland.me/profile?username={name}`
+  - **Pending**: run `build_username_cache.py --chain eos` to add pre-AppChain (EOS chain 2023–2025) mappings. Refresh periodically (cron or manual).
+  - **Pending**: redeploy webapp on Pi after syncing data/username_cache.json
 
 - [ ] **Mint activity tracker**
   - Track `a4` (mint) events: how many new properties minted per day, per city

@@ -306,6 +306,31 @@
         </tbody>
     </table>
 </div>
+
+<div class="section-heading" style="margin-top:8px;">
+    <span>Top Buyers & Sellers</span>
+    <span style="font-size:11px;font-weight:400;color:#aaa;">UPX volume · property sales only</span>
+</div>
+<div class="whale-grid">
+    <div>
+        <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px;">Top Buyers</div>
+        <table class="cities-table">
+            <thead><tr>
+                <th>Player</th><th>Trades</th><th>UPX Spent</th><th>USD Spent</th>
+            </tr></thead>
+            <tbody id="buyers-body"><tr><td colspan="4" class="loading-msg">Loading…</td></tr></tbody>
+        </table>
+    </div>
+    <div>
+        <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px;">Top Sellers</div>
+        <table class="cities-table">
+            <thead><tr>
+                <th>Player</th><th>Trades</th><th>UPX Earned</th><th>USD Earned</th>
+            </tr></thead>
+            <tbody id="sellers-body"><tr><td colspan="4" class="loading-msg">Loading…</td></tr></tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -362,6 +387,7 @@ document.querySelectorAll('.period-btn').forEach(btn => {
         loadSummary();
         loadChart();
         loadCities();
+        loadWhales();
     });
 });
 
@@ -576,12 +602,17 @@ function renderWhaleTable(bodyId, rows, upxCol, usdCol) {
         body.innerHTML = '<tr><td colspan="4" class="loading-msg">No data.</td></tr>';
         return;
     }
-    body.innerHTML = rows.map((r, i) => `<tr>
-        <td>${i + 1}. ${r.account}</td>
-        <td>${fmtNum(r.trades)}</td>
-        <td>${r[upxCol] ? fmtUpx(r[upxCol]) : '—'}</td>
-        <td>${r[usdCol] ? fmtUsd(r[usdCol]) : '—'}</td>
-    </tr>`).join('');
+    body.innerHTML = rows.map((r, i) => {
+        const displayName = r.username
+            ? `<a href="https://play.upland.me/profile?username=${encodeURIComponent(r.username)}" target="_blank" class="acct-link">${r.username}</a>`
+            : `<span style="color:#aaa;font-size:11px">${r.account}</span>`;
+        return `<tr>
+            <td>${i + 1}. ${displayName}</td>
+            <td>${fmtNum(r.trades)}</td>
+            <td>${r[upxCol] ? fmtUpx(r[upxCol]) : '—'}</td>
+            <td>${r[usdCol] ? fmtUsd(r[usdCol]) : '—'}</td>
+        </tr>`;
+    }).join('');
 }
 
 // ── Cities ────────────────────────────────────────────────────────────────
@@ -675,5 +706,6 @@ loadSummary();
 loadChart();
 loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
 loadCities();
+loadWhales();
 </script>
 {% endblock %}

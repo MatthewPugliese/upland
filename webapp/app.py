@@ -301,10 +301,20 @@ def api_economy_cities():
 
 @app.route("/api/economy/whales")
 def api_economy_whales():
+    from username_lookup import lookup_many
     period = request.args.get("period", "30d")
     if period not in _VALID_PERIODS:
         period = "30d"
-    return jsonify(_econ.whales(period))
+    data = _econ.whales(period)
+    # Resolve EOS accounts → Upland usernames
+    all_accounts = (
+        [r["account"] for r in data.get("buyers", []) if r.get("account")]
+        + [r["account"] for r in data.get("sellers", []) if r.get("account")]
+    )
+    names = lookup_many(all_accounts)
+    for r in data.get("buyers", []) + data.get("sellers", []):
+        r["username"] = names.get(r.get("account"))
+    return jsonify(data)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────
