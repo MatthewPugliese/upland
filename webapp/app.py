@@ -262,11 +262,12 @@ def api_economy_timeseries():
 def api_economy_feed():
     limit = min(request.args.get("limit", 50, type=int), 200)
     marketplace = request.args.get("marketplace", None)
+    city = request.args.get("city", None) or None
     last_id = request.args.get("since_id", 0, type=int)
     if last_id:
-        rows = _econ.latest_since(last_id)
+        rows = _econ.latest_since(last_id, city=city)
     else:
-        rows = _econ.feed(limit, marketplace)
+        rows = _econ.feed(limit, marketplace, city=city)
     return jsonify({"transactions": rows, "max_id": _econ.max_id()})
 
 

@@ -162,6 +162,14 @@
         font-size: 14px;
     }
 
+    /* ── City filter badge + clickable rows ──────────── */
+    .cities-table tbody tr { cursor: pointer; }
+    .cities-table tbody tr:hover { background: #f0f4ff; }
+    .cities-table tbody tr.city-active { background: #e8eeff; font-weight: 600; }
+    .city-filter-badge { display: inline-flex; align-items: center; gap: 5px; background: #1a1a2e; color: #fff; font-size: 12px; padding: 3px 10px 3px 12px; border-radius: 20px; margin-left: 6px; }
+    .city-filter-clear { background: none; border: none; color: #fff; font-size: 15px; cursor: pointer; padding: 0 0 0 2px; line-height: 1; opacity: 0.8; }
+    .city-filter-clear:hover { opacity: 1; }
+
     /* ── Cities table ────────────────────────────────── */
     .cities-wrap {
         overflow-x: auto;
@@ -257,6 +265,10 @@
     <button class="filter-btn active" data-filter="all">All</button>
     <button class="filter-btn" data-filter="upx">UPX only</button>
     <button class="filter-btn" data-filter="usd">USD only</button>
+    <span id="city-filter-badge" style="display:none" class="city-filter-badge">
+        <span id="city-filter-badge-label"></span>
+        <button class="city-filter-clear" onclick="clearCityFilter()">×</button>
+    </span>
 </div>
 <div class="feed-list" id="feed-list">
     <div class="feed-empty">Loading feed…</div>
@@ -264,6 +276,7 @@
 
 <div class="section-heading" style="margin-top:8px;">
     <span>City Breakdown</span>
+    <span style="font-size:11px;font-weight:400;color:#aaa;">click a row to filter feed</span>
 </div>
 <div class="cities-wrap">
     <table class="cities-table" id="cities-table">
@@ -296,6 +309,7 @@ let feedRows = [];
 let citiesData = [];
 let citiesSortCol = 'total_trades';
 let citiesSortDir = -1; // -1 = desc
+let activeCityFilter = null;
 let volumeChart = null;
 let feedPollTimer = null;
 
@@ -306,6 +320,10 @@ function fmtUpx(v) {
     if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M UPX';
     if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K UPX';
     return v.toFixed(0) + ' UPX';
+}
+function fmtUpxFull(v) {
+    if (v == null) return '—';
+    return v.toLocaleString(undefined, {maximumFractionDigits: 0}) + ' UPX';
 }
 function fmtUsd(v) {
     if (v == null) return '—';
@@ -457,14 +475,20 @@ function feedBadgeLabel(row) {
     return row.marketplace.toUpperCase();
 }
 
+function assetLabel(row) {
+    if (row.action === 'n111') return 'Spark / Equipment Sale';
+    if (row.action === 'n112') return 'NFT Sale';
+    return 'Asset Sale';
+}
+
 function buildFeedItem(row, isNew) {
     const badge = feedBadge(row);
     const label = feedBadgeLabel(row);
-    const addr = row.address || '(asset sale)';
+    const addr = row.address || (row.asset_type === 'property' ? '(unknown address)' : assetLabel(row));
     const city = row.city ? ' · ' + row.city : '';
     const buyer = row.buyer || '?';
     const seller = row.seller ? row.seller : '?';
-    const amount = row.marketplace === 'usd' ? fmtUsd(row.usd_amount) : fmtUpx(row.upx_amount);
+    const amount = row.marketplace === 'usd' ? fmtUsd(row.usd_amount) : fmtUpxFull(row.upx_amount);
     const amtClass = row.marketplace === 'usd' ? 'usd' : (row.asset_type === 'asset' ? 'asset' : 'upx');
     const t = relTime(row.timestamp);
 
@@ -495,18 +519,22 @@ function renderFeed(newIds) {
         .join('');
 }
 
+function feedCityParam() {
+    return activeCityFilter ? '&city=' + encodeURIComponent(activeCityFilter) : '';
+}
+
 async function loadFeedInitial() {
-    const r = await fetch('/api/economy/feed?limit=50');
+    const r = await fetch('/api/economy/feed?limit=50' + feedCityParam());
     const d = await r.json();
     feedRows = d.transactions || [];
     feedMaxId = d.max_id || 0;
     renderFeed();
-    document.getElementById('feed-status').textContent = 'live';
+    document.getElementById('feed-status').textContent = activeCityFilter ? activeCityFilter : 'live';
 }
 
 async function pollFeed() {
     try {
-        const r = await fetch('/api/economy/feed?since_id=' + feedMaxId);
+        const r = await fetch('/api/economy/feed?since_id=' + feedMaxId + feedCityParam());
         const d = await r.json();
         const newRows = d.transactions || [];
         if (newRows.length > 0) {
@@ -542,7 +570,10 @@ function renderCities() {
         body.innerHTML = '<tr><td colspan="8" class="loading-msg">No city data for this period.</td></tr>';
         return;
     }
-    body.innerHTML = sorted.map(c => `<tr>
+    body.innerHTML = sorted.map(c => {
+        const isActive = activeCityFilter === c.city;
+        const esc = c.city.replace(/"/g, '&quot;');
+        return `<tr data-city="${esc}"${isActive ? ' class="city-active"' : ''}>
         <td>${c.city}</td>
         <td>${fmtNum(c.total_trades)}</td>
         <td>${fmtNum(c.upx_trades)}</td>
@@ -551,7 +582,8 @@ function renderCities() {
         <td>${fmtUsd(c.usd_volume)}</td>
         <td>${c.avg_upx ? fmtUpx(c.avg_upx) : '—'}</td>
         <td>${c.avg_usd ? fmtUsd(c.avg_usd) : '—'}</td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
 
     // Update sort indicators
     document.querySelectorAll('.cities-table th').forEach(th => {
@@ -574,6 +606,35 @@ document.querySelectorAll('.cities-table th').forEach(th => {
         renderCities();
     });
 });
+
+document.getElementById('cities-body').addEventListener('click', e => {
+    const row = e.target.closest('tr[data-city]');
+    if (!row) return;
+    const city = row.dataset.city;
+    if (activeCityFilter === city) {
+        clearCityFilter();
+    } else {
+        setCityFilter(city);
+    }
+});
+
+function setCityFilter(city) {
+    activeCityFilter = city;
+    document.getElementById('city-filter-badge-label').textContent = city;
+    document.getElementById('city-filter-badge').style.display = '';
+    renderCities();
+    if (feedPollTimer) { clearTimeout(feedPollTimer); feedPollTimer = null; }
+    loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
+    document.getElementById('feed-list').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearCityFilter() {
+    activeCityFilter = null;
+    document.getElementById('city-filter-badge').style.display = 'none';
+    renderCities();
+    if (feedPollTimer) { clearTimeout(feedPollTimer); feedPollTimer = null; }
+    loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────
 loadSummary();

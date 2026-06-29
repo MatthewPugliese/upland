@@ -71,22 +71,29 @@ def timeseries(period: str = "30d") -> list:
         return []
     try:
         since = _period_start(period)
-        # hourly buckets for ≤7d, daily for longer
-        if period in ("today", "7d"):
-            fmt = "%Y-%m-%dT%H:00:00"
+        use_hourly = period in ("today", "7d")
+
+        if use_hourly:
+            # hourly_aggregates is already at hour granularity
+            rows = conn.execute("""
+                SELECT hour AS bucket, marketplace,
+                       trade_count, volume
+                FROM hourly_aggregates
+                WHERE hour >= ?
+                ORDER BY hour
+            """, (since,)).fetchall()
         else:
-            fmt = "%Y-%m-%d"
-        rows = conn.execute(f"""
-            SELECT strftime('{fmt}', timestamp) AS bucket,
-                   marketplace,
-                   COUNT(*) AS trade_count,
-                   COALESCE(SUM(upx_amount), 0) AS upx_volume,
-                   COALESCE(SUM(usd_amount), 0) AS usd_volume
-            FROM transactions
-            WHERE timestamp >= ?
-            GROUP BY bucket, marketplace
-            ORDER BY bucket
-        """, (since,)).fetchall()
+            # roll up hourly_aggregates into daily buckets — much faster than scanning transactions
+            rows = conn.execute("""
+                SELECT strftime('%Y-%m-%d', hour) AS bucket,
+                       marketplace,
+                       SUM(trade_count) AS trade_count,
+                       SUM(volume) AS volume
+                FROM hourly_aggregates
+                WHERE hour >= ?
+                GROUP BY bucket, marketplace
+                ORDER BY bucket
+            """, (since,)).fetchall()
 
         buckets: dict = {}
         for row in rows:
@@ -95,36 +102,34 @@ def timeseries(period: str = "30d") -> list:
                 buckets[b] = {"timestamp": b, "upx_volume": 0, "usd_volume": 0,
                                "upx_trades": 0, "usd_trades": 0}
             if row["marketplace"] == "upx":
-                buckets[b]["upx_volume"] = row["upx_volume"]
+                buckets[b]["upx_volume"] = row["volume"]
                 buckets[b]["upx_trades"] = row["trade_count"]
             elif row["marketplace"] == "usd":
-                buckets[b]["usd_volume"] = row["usd_volume"]
+                buckets[b]["usd_volume"] = row["volume"]
                 buckets[b]["usd_trades"] = row["trade_count"]
         return sorted(buckets.values(), key=lambda x: x["timestamp"])
     finally:
         conn.close()
 
 
-def feed(limit: int = 50, marketplace: str = None) -> list:
+def feed(limit: int = 50, marketplace: str = None, city: str = None) -> list:
     conn = _connect()
     if not conn:
         return []
     try:
+        clauses, params = ["asset_type = 'property'"], []
         if marketplace in ("upx", "usd"):
-            rows = conn.execute("""
-                SELECT id, timestamp, address, city, neighborhood,
-                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type
-                FROM transactions
-                WHERE marketplace = ?
-                ORDER BY id DESC LIMIT ?
-            """, (marketplace, limit)).fetchall()
-        else:
-            rows = conn.execute("""
-                SELECT id, timestamp, address, city, neighborhood,
-                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type
-                FROM transactions
-                ORDER BY id DESC LIMIT ?
-            """, (limit,)).fetchall()
+            clauses.append("marketplace = ?"); params.append(marketplace)
+        if city:
+            clauses.append("city = ?"); params.append(city)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = conn.execute(f"""
+            SELECT id, timestamp, address, city, neighborhood,
+                   buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action
+            FROM transactions
+            {where}
+            ORDER BY id DESC LIMIT ?
+        """, (*params, limit)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -155,19 +160,28 @@ def cities(period: str = "30d") -> list:
         conn.close()
 
 
-def latest_since(last_id: int = 0, limit: int = 30) -> list:
+def latest_since(last_id: int = 0, limit: int = 30, city: str = None) -> list:
     """Return transactions with id > last_id — used by feed polling."""
     conn = _connect()
     if not conn:
         return []
     try:
-        rows = conn.execute("""
-            SELECT id, timestamp, address, city, neighborhood,
-                   buyer, seller, upx_amount, usd_amount, marketplace, asset_type
-            FROM transactions
-            WHERE id > ?
-            ORDER BY id ASC LIMIT ?
-        """, (last_id, limit)).fetchall()
+        if city:
+            rows = conn.execute("""
+                SELECT id, timestamp, address, city, neighborhood,
+                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action
+                FROM transactions
+                WHERE id > ? AND city = ? AND asset_type = 'property'
+                ORDER BY id ASC LIMIT ?
+            """, (last_id, city, limit)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, timestamp, address, city, neighborhood,
+                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action
+                FROM transactions
+                WHERE id > ? AND asset_type = 'property'
+                ORDER BY id ASC LIMIT ?
+            """, (last_id, limit)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

@@ -62,6 +62,10 @@ PROPERTY_CACHE_CANDIDATES = [
 
 HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 
+UPLAND_APP_ID  = os.environ.get("UPLAND_APP_ID", "")
+UPLAND_SECRET  = os.environ.get("UPLAND_SECRET", "")
+UPLAND_API_URL = "https://api.prod.upland.me/developers-api"
+
 APPCHAIN_URL = "https://chain-history.upland.me"
 EOS_URL      = "https://eos.hyperion.eosrio.io"
 
@@ -83,6 +87,29 @@ BACKFILL_SLEEP = 0.3 # seconds between backfill requests
 # ─────────────────────────────────────────────────────────────────────────────
 
 _prop_cache: dict = {}
+_live_lookup_enabled: bool = False
+
+
+def _api_auth_headers() -> dict:
+    import base64
+    creds = base64.b64encode(f"{UPLAND_APP_ID}:{UPLAND_SECRET}".encode()).decode()
+    return {"Authorization": f"Basic {creds}", "Accept": "application/json", "User-Agent": "Mozilla/5.0"}
+
+
+def _api_lookup_property(prop_id: str) -> dict:
+    url = f"{UPLAND_API_URL}/properties/{prop_id}"
+    req = urllib.request.Request(url, headers=_api_auth_headers())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read())
+        return {
+            "address":      d.get("address"),
+            "neighborhood": (d.get("neighborhood") or {}).get("name"),
+            "city":         (d.get("city") or {}).get("name"),
+        }
+    except Exception:
+        return {"address": None, "neighborhood": None, "city": None}
+
 
 def load_property_cache() -> None:
     for path in PROPERTY_CACHE_CANDIDATES:
@@ -107,7 +134,14 @@ def load_property_cache() -> None:
 
 
 def prop_meta(prop_id: str) -> dict:
-    return _prop_cache.get(str(prop_id), {"address": None, "neighborhood": None, "city": None})
+    key = str(prop_id)
+    if key in _prop_cache:
+        return _prop_cache[key]
+    if _live_lookup_enabled and UPLAND_APP_ID and UPLAND_SECRET:
+        meta = _api_lookup_property(key)
+        _prop_cache[key] = meta
+        return meta
+    return {"address": None, "neighborhood": None, "city": None}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -455,6 +489,8 @@ def backfill(conn: sqlite3.Connection) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def live_poll(conn: sqlite3.Connection) -> None:
+    global _live_lookup_enabled
+    _live_lookup_enabled = True
     now    = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000")
     cursor = get_state(conn, "live_cursor", now)
     print(f"\n[*] Live polling AppChain from {cursor[:19]}  (every {POLL_INTERVAL}s)")

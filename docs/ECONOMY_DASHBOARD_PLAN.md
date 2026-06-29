@@ -414,6 +414,29 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [ ] **30d/7d/today show low data** — scraper just caught up to present on 2026-06-24; data will accumulate naturally over the coming days/weeks
 - [ ] **Dashboard page spins intermittently** — root cause unclear; possibly SQLite read contention with active scraper writes, or lingering iptables weirdness from OOM events. Needs investigation.
 
+### Pending — sync local DB improvements back to Pi
+Local DB (`/tmp/economy_live.db`) is ahead of Pi in two ways:
+1. **Address backfill** — `backfill_addresses.py` is filling in 192K missing address/city/neighborhood rows (running locally, ~11h). Once complete, copy the updated DB to Pi.
+2. **Code changes** — city filter, property-only feed, live API address lookup — need a new webapp image built and deployed.
+
+**Sync steps (when backfill completes):**
+```bash
+# 1. Stop Pi scraper so it's not writing during transfer
+ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 "docker stop upland-scraper-1"
+
+# 2. Checkpoint local DB and copy to Pi
+python3 -c "import sqlite3; sqlite3.connect('/tmp/economy_live.db').execute('PRAGMA wal_checkpoint(FULL)')"
+scp -P 8008 -i ~/Desktop/rpi /tmp/economy_live.db root@69.113.229.61:/opt/upland/data/economy.db
+
+# 3. Build and deploy updated webapp image
+docker build --platform linux/arm64 -f Dockerfile.webapp -t upland-webapp . && \
+  docker save upland-webapp | gzip | ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 "gunzip | docker load"
+
+# 4. Restart both services on Pi
+ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 \
+  "docker compose -f /opt/upland/docker-compose.yml up -d"
+```
+
 ### Deployment notes
 - Webapp uses `Dockerfile.webapp` (light: flask + gunicorn + requests only, ~160MB image, no shapely/matplotlib/numpy)
 - Map/optimizer routes lazy-load heavy deps — will error if hit on Pi since those packages aren't installed; run those features from Mac
