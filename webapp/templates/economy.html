@@ -501,10 +501,13 @@ function buildFeedItem(row, isNew) {
     const amtClass = row.marketplace === 'usd' ? 'usd' : (row.asset_type === 'asset' ? 'asset' : 'upx');
     const t = relTime(row.timestamp);
 
+    const addrEl = row.property_id
+        ? `<a href="https://play.upland.me/properties?prop_id=${row.property_id}" target="_blank" class="acct-link">${addr}</a>`
+        : addr;
     return `<div class="feed-item${isNew ? ' new' : ''}">
         <div class="feed-badge ${badge}">${label}</div>
         <div class="feed-info">
-            <div class="feed-address">${addr}${city}</div>
+            <div class="feed-address">${addrEl}${city}</div>
             <div class="feed-meta">${buyer} ← ${seller}</div>
         </div>
         <div>

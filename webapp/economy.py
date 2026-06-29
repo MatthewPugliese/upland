@@ -125,7 +125,8 @@ def feed(limit: int = 50, marketplace: str = None, city: str = None) -> list:
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         rows = conn.execute(f"""
             SELECT id, timestamp, address, city, neighborhood,
-                   buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action
+                   buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
+                   property_id
             FROM transactions
             {where}
             ORDER BY id DESC LIMIT ?
@@ -202,7 +203,8 @@ def latest_since(last_id: int = 0, limit: int = 30, city: str = None) -> list:
         if city:
             rows = conn.execute("""
                 SELECT id, timestamp, address, city, neighborhood,
-                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action
+                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
+                       property_id
                 FROM transactions
                 WHERE id > ? AND city = ? AND asset_type = 'property'
                 ORDER BY id ASC LIMIT ?
@@ -210,7 +212,8 @@ def latest_since(last_id: int = 0, limit: int = 30, city: str = None) -> list:
         else:
             rows = conn.execute("""
                 SELECT id, timestamp, address, city, neighborhood,
-                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action
+                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
+                       property_id
                 FROM transactions
                 WHERE id > ? AND asset_type = 'property'
                 ORDER BY id ASC LIMIT ?
