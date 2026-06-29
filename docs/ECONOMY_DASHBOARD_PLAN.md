@@ -397,9 +397,12 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] Timestamp cursor pagination (bypasses Hyperion 10k skip cap)
 - [x] Docker Compose two-service setup (webapp + scraper, shared `./data` volume)
 - [x] **Run backfill on Pi** — complete. EOS chain Mar 2023–Apr 2025 (829K rows) + AppChain Apr 2025–Jun 2026 (~150K rows). Now live polling every 5s.
-- [x] **Local scraper running** — `data/economy.db` being built from scratch; backfilling EOS 2023-03-18 → 2025-04-28, then AppChain.
-- [x] **Genesis transaction found**: 2019-10-11T16:09:04.500, 756 Chenery St SF, 16,000 UPX, buyer "landlord" (u3eb3kngdkd2), trx `f987837ff896600ef66cd712231a9fafb7c47253ceca61af1366d92988e1b61b`. Found via greymass v1 API (seq 21,224 of 946M EOS actions). Pre-2023 EOS data not scraped yet — greymass v1 would take ~54 days to scan (no action filtering).
+- [x] **Genesis transaction found**: 2019-10-11T16:09:04.500, 756 Chenery St SF, 16,000 UPX, buyer "landlord" (u3eb3kngdkd2), trx `f987837ff896600ef66cd712231a9fafb7c47253ceca61af1366d92988e1b61b`. Found via greymass v1 API (seq 21,224).
 - [x] **Scraper node resilience**: `fetch_actions()` now distinguishes network errors (None) from genuinely empty responses ([]), so backfill no longer marks a chain done when the Hyperion node is temporarily down.
+- [x] **Pre-2023 greymass backfill running on Pi** — `scraper/greymass_backfill.py` scans greymass v1 API pos 0 → 516M (genesis 2019-10-11 → 2023-03-18). Runs with `--no-cache` (~29MB RAM) to avoid OOM on Pi. 2 workers + 0.15s inter-request delay to stay under Cloudflare rate limit. Estimated ~20 days. Once complete, all three periods slot together: greymass (2019→2023) + EOS Hyperion (2023→2025) + AppChain (2025→present). Duplicates handled by `UNIQUE` on `trx_id`. Rows inserted with NULL address/city/neighborhood — backfilled afterward via `backfill_addresses.py`.
+- [x] **Username cache expanded** — `build_username_cache.py --chain eos` added EOS chain notarizations. Cache now has **239,029 EOS→username mappings** (up from 35,601 AppChain-only). Covers 2023-03-18 through AppChain present.
+- [x] **property_cache.db built** — `scraper/build_property_db.py` converts `property_cache.json` → `property_cache.db` (SQLite, 396MB, 4.7M rows). Enables O(log n) lookups without loading 500MB into RAM. `backfill_addresses.py` now checks this first (Pass 1: cache lookup, instant) before falling back to Upland API (Pass 2: only for IDs not in cache).
+- [x] **Son of Adam systemd service** — no longer needs manual tmux restart after Pi reboot. Service installed at `/etc/systemd/system/son-of-adam.service`, enabled and running.
 
 ### Phase 2 — API ✅ DONE
 - [x] Add `/api/economy/*` routes to `webapp/app.py`
@@ -443,28 +446,20 @@ UPX sales (n5) historically have `seller = NULL` because the seller isn't in the
 - ~695K historical n5 rows have null seller — need a backfill script similar to `backfill_addresses.py`
 - At 5 req/s that's ~39h; run overnight on Pi after address backfill completes
 
-### Pending — sync local DB improvements back to Pi
-Local DB (`/tmp/economy_live.db`) is ahead of Pi in two ways:
-1. **Address backfill** — `backfill_addresses.py` is filling in 192K missing address/city/neighborhood rows (running locally, ~11h). Once complete, copy the updated DB to Pi.
-2. **Code changes** — city filter, property-only feed, live API address lookup — need a new webapp image built and deployed.
+### Pending — deploy webapp code changes to Pi
+New features built locally (recommendation report, whale tracker with usernames) need a new webapp Docker image deployed to Pi.
 
-**Sync steps (when backfill completes):**
 ```bash
-# 1. Stop Pi scraper so it's not writing during transfer
-ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 "docker stop upland-scraper-1"
-
-# 2. Checkpoint local DB and copy to Pi
-python3 -c "import sqlite3; sqlite3.connect('/tmp/economy_live.db').execute('PRAGMA wal_checkpoint(FULL)')"
-scp -P 8008 -i ~/Desktop/rpi /tmp/economy_live.db root@69.113.229.61:/opt/upland/data/economy.db
-
-# 3. Build and deploy updated webapp image
+# Build on Mac, transfer to Pi
 docker build --platform linux/arm64 -f Dockerfile.webapp -t upland-webapp . && \
   docker save upland-webapp | gzip | ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 "gunzip | docker load"
 
-# 4. Restart both services on Pi
+# Restart webapp on Pi
 ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 \
-  "docker compose -f /opt/upland/docker-compose.yml up -d"
+  "docker compose -f /opt/upland/docker-compose.yml up -d webapp"
 ```
+
+Also sync `data/username_cache.json` to Pi before deploying so whale tracker has full 239k mappings.
 
 ### Deployment notes
 - Webapp uses `Dockerfile.webapp` (light: flask + gunicorn + requests only, ~160MB image, no shapely/matplotlib/numpy)

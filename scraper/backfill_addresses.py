@@ -39,10 +39,28 @@ for _env in [ROOT_DIR / ".env", SCRIPT_DIR / ".env"]:
         break
 
 DB_PATH        = Path(os.environ.get("ECONOMY_DB", str(ROOT_DIR / "data" / "economy.db")))
+PROP_CACHE_DB  = SCRIPT_DIR / "property_cache.db"
 UPLAND_APP_ID  = os.environ.get("UPLAND_APP_ID", "")
 UPLAND_SECRET  = os.environ.get("UPLAND_SECRET", "")
 UPLAND_API_URL = "https://api.prod.upland.me/developers-api"
 STATE_KEY      = "backfill_addr_last_id"
+
+
+def lookup_from_cache(prop_ids: list) -> dict:
+    """Check property_cache.db for addresses. Returns {prop_id: meta} for hits."""
+    if not PROP_CACHE_DB.exists():
+        return {}
+    results = {}
+    conn = sqlite3.connect(str(PROP_CACHE_DB))
+    placeholders = ",".join("?" * len(prop_ids))
+    rows = conn.execute(
+        f"SELECT prop_id, address, neighborhood, city FROM properties WHERE prop_id IN ({placeholders})",
+        prop_ids
+    ).fetchall()
+    conn.close()
+    for prop_id, address, neighborhood, city in rows:
+        results[prop_id] = {"address": address, "neighborhood": neighborhood, "city": city}
+    return results
 
 
 def auth_headers():
@@ -94,14 +112,11 @@ def main():
         conn.close()
         return
 
-    # Resume from last saved progress
+    # Pull distinct missing IDs in ascending order for stable pagination
     row = conn.execute("SELECT value FROM scraper_state WHERE key=?", (STATE_KEY,)).fetchone()
     last_done = int(row["value"]) if row else 0
     print(f"[*] Resuming from property_id cursor: {last_done}")
-    print(f"[*] Rate: {args.rate}/s  (~{total_missing/args.rate/3600:.1f}h to complete)")
-    print()
 
-    # Pull distinct missing IDs in ascending order for stable pagination
     ids = [
         r[0] for r in conn.execute(
             "SELECT DISTINCT property_id FROM transactions "
@@ -111,6 +126,55 @@ def main():
             (last_done,)
         ).fetchall()
     ]
+
+    # ── Pass 1: fill from local property_cache.db (free, no API) ─────────────
+    if PROP_CACHE_DB.exists():
+        print(f"[*] Pass 1: checking property_cache.db for {len(ids):,} IDs…")
+        CHUNK = 500
+        cache_hits = 0
+        for i in range(0, len(ids), CHUNK):
+            chunk = ids[i:i + CHUNK]
+            hits = lookup_from_cache(chunk)
+            for prop_id, meta in hits.items():
+                if meta["address"]:
+                    conn.execute(
+                        "UPDATE transactions SET address=?, city=?, neighborhood=? "
+                        "WHERE property_id=? AND address IS NULL",
+                        (meta["address"], meta["city"], meta["neighborhood"], prop_id)
+                    )
+                    cache_hits += 1
+            if cache_hits and i % 10000 == 0:
+                conn.commit()
+        conn.commit()
+        print(f"[+] Pass 1 complete — {cache_hits:,} filled from cache")
+    else:
+        print("[!] property_cache.db not found — skipping cache pass (run build_property_db.py)")
+
+    # Refresh list — only IDs still NULL after cache pass need API
+    ids = [
+        r[0] for r in conn.execute(
+            "SELECT DISTINCT property_id FROM transactions "
+            "WHERE asset_type='property' AND address IS NULL AND property_id IS NOT NULL "
+            "AND CAST(property_id AS INTEGER) > ? "
+            "ORDER BY CAST(property_id AS INTEGER) ASC",
+            (last_done,)
+        ).fetchall()
+    ]
+
+    if not ids:
+        print("[+] All addresses filled from cache — no API calls needed")
+        conn.close()
+        return
+
+    # ── Pass 2: remaining NULLs via Upland Developers API ────────────────────
+    if not UPLAND_APP_ID or not UPLAND_SECRET:
+        print(f"[!] {len(ids):,} IDs still missing but UPLAND_APP_ID/SECRET not set — skipping API pass")
+        conn.close()
+        return
+
+    print(f"[*] Pass 2: {len(ids):,} IDs still missing — querying Upland API at {args.rate}/s")
+    print(f"    (~{len(ids)/args.rate/3600:.1f}h to complete)")
+    print()
 
     sleep_s   = 1.0 / args.rate
     done      = 0
@@ -157,7 +221,7 @@ def main():
         time.sleep(sleep_s)
 
     elapsed = time.monotonic() - start
-    print(f"\n[+] Done — {found} updated, {not_found} not found, {errors} errors  ({elapsed/60:.1f} min)")
+    print(f"\n[+] Done — {found} updated via API, {not_found} not found, {errors} errors  ({elapsed/60:.1f} min)")
     conn.close()
 
 
