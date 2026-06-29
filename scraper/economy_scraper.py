@@ -4,8 +4,20 @@ Upland Economy Scraper
 
 Scrapes both the EOS mainchain and Upland AppChain for sale events and writes
 them to a local SQLite database. On first run, backfills all available history
-(EOS: Mar 2023 → Apr 2025, AppChain: Apr 2025 → present). On subsequent runs,
+(EOS: Oct 2019 → Apr 2025, AppChain: Apr 2025 → present). On subsequent runs,
 resumes from where it left off and polls live.
+
+Genesis transaction (first ever Upland property sale):
+  Date:       2019-10-11T16:09:04.500
+  TrxID:      f987837ff896600ef66cd712231a9fafb7c47253ceca61af1366d92988e1b61b
+  Property:   756 CHENERY ST, San Francisco, CA
+  Price:      16,000 UPX
+  Buyer:      landlord (EOS: u3eb3kngdkd2)
+
+Note: The eosrio Hyperion node indexes EOS chain from 2023-03-18 onward.
+Pre-2023 history exists on greymass v1 API but requires a separate backfill
+(see scraper/build_legacy_backfill.py — not yet implemented).
+The Pi DB contains full EOS backfill from 2023-03-18 to 2025-04-28 (~829K rows).
 
 Handles:
   n2   — property listed (UPX or USD price)
@@ -69,8 +81,11 @@ UPLAND_API_URL = "https://api.prod.upland.me/developers-api"
 APPCHAIN_URL = "https://chain-history.upland.me"
 EOS_URL      = "https://eos.hyperion.eosrio.io"
 
-# Earliest confirmed data per chain
+# True genesis: first property sale on 2019-10-11.
+# EOS_START is set to the earliest the eosrio Hyperion node indexes (2023-03-18).
+# Pre-2023 history requires the greymass v1 API (see docs — not yet implemented).
 EOS_START      = "2023-03-18T00:00:00.000"
+GENESIS_DATE   = "2019-10-11T00:00:00.000"  # noqa: F841 — documented above
 APPCHAIN_START = "2025-04-28T00:00:00.000"
 
 SALE_ACTIONS    = {"n5", "n52", "n111", "n112"}
@@ -242,8 +257,17 @@ def fetch_n5_seller(base_url: str, trx_id: str) -> str | None:
     return None
 
 
+# Sentinel returned when the node is unreachable — distinct from truly empty response.
+_FETCH_ERROR = None
+
+
 def fetch_actions(base_url: str, after: str, before: str = None,
-                  limit: int = BATCH_SIZE, retries: int = 3) -> list:
+                  limit: int = BATCH_SIZE, retries: int = 3):
+    """
+    Fetch filtered actions from a Hyperion v2 node.
+    Returns a list of actions (may be empty if there's no more data),
+    or None if the node is unreachable after all retries.
+    """
     params = [
         f"account=playuplandme",
         f"filter={_FILTER}",
@@ -271,7 +295,7 @@ def fetch_actions(base_url: str, after: str, before: str = None,
         except Exception as e:
             print(f"    [!] Fetch error (attempt {attempt+1}/{retries}): {e}")
             time.sleep(5)
-    return []
+    return _FETCH_ERROR  # None — node unreachable, not truly empty
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -483,14 +507,26 @@ def backfill(conn: sqlite3.Connection) -> None:
         total = 0
         batches = 0
 
+        node_errors = 0
         while True:
             actions = fetch_actions(base_url, after=cursor, before=chain_end, limit=BATCH_SIZE)
+
+            if actions is None:
+                # Node unreachable — skip this chain rather than marking it done
+                node_errors += 1
+                if node_errors >= 3:
+                    print(f"\n[!] {chain_name} node unreachable after {node_errors} tries — skipping for now")
+                    print(f"    Cursor saved at {cursor[:19]}; will retry on next run")
+                    break
+                time.sleep(30)
+                continue
 
             if not actions:
                 set_state(conn, done_key, "1")
                 print(f"\n[+] {chain_name} backfill complete — {total:,} records inserted")
                 break
 
+            node_errors = 0
             n       = process_actions(conn, actions, base_url)
             total  += n
             batches += 1
