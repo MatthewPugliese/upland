@@ -125,6 +125,61 @@
         font-size: 15px;
     }
     .stale-note { font-size: 12px; color: #aaa; margin-bottom: 16px; font-style: italic; }
+
+    /* Recommendation report */
+    .rec-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .rec-filter-btn {
+        padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 600;
+        border: 1.5px solid #ccc; background: white; color: #555; cursor: pointer;
+        transition: all 0.12s;
+    }
+    .rec-filter-btn:hover { background: #f0f0f0; }
+    .rec-filter-btn.active { background: #1a1a2e; color: #D4A017; border-color: #1a1a2e; }
+    .rec-filter-btn.demolish.active { background: #E74C3C; color: white; border-color: #E74C3C; }
+    .rec-filter-btn.build.active { background: #F39C12; color: white; border-color: #F39C12; }
+    .rec-filter-btn.keep.active { background: #27AE60; color: white; border-color: #27AE60; }
+
+    .rec-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .rec-table th {
+        text-align: left; padding: 7px 8px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; cursor: pointer; white-space: nowrap;
+        user-select: none;
+    }
+    .rec-table th:hover { color: #1a1a2e; }
+    .rec-table th .sort-arrow { color: #ccc; font-size: 10px; margin-left: 3px; }
+    .rec-table th.sort-asc .sort-arrow::after { content: "▲"; color: #1a1a2e; }
+    .rec-table th.sort-desc .sort-arrow::after { content: "▼"; color: #1a1a2e; }
+    .rec-table th.sort-none .sort-arrow::after { content: "⇅"; color: #ccc; }
+    .rec-table td { padding: 6px 8px; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+    .rec-table tr:hover td { background: #fafafa; }
+    .rec-table tr.mine td { background: #FEFDF5; }
+    .rec-table tr.mine:hover td { background: #FEF9E7; }
+
+    .action-badge {
+        display: inline-block; padding: 2px 7px; border-radius: 10px;
+        font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .action-badge.build { background: #FEF3C7; color: #D97706; }
+    .action-badge.demolish { background: #FEE2E2; color: #DC2626; }
+    .action-badge.keep { background: #D1FAE5; color: #065F46; }
+
+    .su-gain-pill {
+        display: inline-block; padding: 1px 7px; border-radius: 10px;
+        font-size: 11px; font-weight: 700;
+        background: #EBF5FB; color: #1B4F72;
+    }
+    .su-gain-pill.zero { background: #f4f5f7; color: #aaa; }
+
+    .zone-dot {
+        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+        margin-right: 5px; flex-shrink: 0;
+    }
+    .rec-mine-badge {
+        display: inline-block; padding: 1px 5px; border-radius: 6px;
+        font-size: 10px; font-weight: 700; background: #D4A017; color: white; margin-left: 4px;
+    }
+    .rec-loading { text-align: center; padding: 24px; color: #aaa; font-size: 13px; }
+    .rec-addon { font-size: 10px; color: #888; font-style: italic; }
 </style>
 {% endblock %}
 
@@ -258,5 +313,165 @@
 </table>
 </div>
 
+
+<!-- ── Recommendations ──────────────────────────────────────────────────── -->
+<h3 class="section-heading">Recommendations</h3>
+
+<div class="rec-filters" id="rec-filters">
+    <button class="rec-filter-btn active" data-filter="mine" onclick="setMineFilter(true)">My properties</button>
+    <button class="rec-filter-btn" data-filter="all" onclick="setMineFilter(false)">All properties</button>
+    <span style="width:1px;background:#e0e0e0;margin:2px 4px;display:inline-block"></span>
+    <button class="rec-filter-btn active" id="filter-all" onclick="setActionFilter('')">All actions</button>
+    <button class="rec-filter-btn demolish" id="filter-demolish" onclick="setActionFilter('DEMOLISH → BUILD')">Demolish → Build</button>
+    <button class="rec-filter-btn build" id="filter-build" onclick="setActionFilter('BUILD')">Build</button>
+    <button class="rec-filter-btn keep" id="filter-keep" onclick="setActionFilter('KEEP')">Keep</button>
+    <span style="margin-left:auto;font-size:12px;color:#aaa;line-height:28px" id="rec-count"></span>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden; overflow-x: auto;">
+<div id="rec-loading" class="rec-loading">Loading recommendations…</div>
+<table class="rec-table" id="rec-table" style="display:none">
+    <thead>
+        <tr>
+            <th onclick="sortBy('address')" class="sort-none" data-col="address">Address <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('zone')" class="sort-none" data-col="zone">Zone <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('up2')" class="sort-none" data-col="up2" style="text-align:right">UP² <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('eff_width')" class="sort-none" data-col="eff_width" style="text-align:right">Eff W <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('action')" class="sort-none" data-col="action">Action <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('recommended_name')" class="sort-none" data-col="recommended_name">Recommended Structure <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('su_gain')" class="sort-desc" data-col="su_gain" style="text-align:right">SU Gain <span class="sort-arrow"></span></th>
+            <th>Current Structures</th>
+        </tr>
+    </thead>
+    <tbody id="rec-tbody"></tbody>
+</table>
+</div>
+
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const NEIGHBORHOOD = {{ neighborhood|tojson }};
+const ZONE_COLORS = {
+    "Zone 1":"#E74C3C","Zone 2":"#3498DB","Zone 3":"#9B59B6",
+    "Zone 4":"#2ECC71","Zone 5":"#F39C12","Zone 6":"#1ABC9C"
+};
+
+let _allRows = [];
+let _mineOnly = true;
+let _actionFilter = '';
+let _sortCol = 'su_gain';
+let _sortDir = 'desc';
+
+function actionBadge(action) {
+    if (action.startsWith('DEMOLISH')) return `<span class="action-badge demolish">DEMOLISH → BUILD</span>`;
+    if (action === 'BUILD') return `<span class="action-badge build">BUILD</span>`;
+    return `<span class="action-badge keep">KEEP</span>`;
+}
+
+function suGainPill(gain, action) {
+    if (!gain || action === 'KEEP') return `<span class="su-gain-pill zero">—</span>`;
+    return `<span class="su-gain-pill">+${gain}</span>`;
+}
+
+function renderRows() {
+    let rows = _allRows;
+    if (_mineOnly) rows = rows.filter(r => r.is_mine);
+    if (_actionFilter) rows = rows.filter(r => r.action === _actionFilter);
+
+    // Sort
+    rows = [...rows].sort((a, b) => {
+        let av = a[_sortCol], bv = b[_sortCol];
+        if (av == null) av = _sortDir === 'asc' ? Infinity : -Infinity;
+        if (bv == null) bv = _sortDir === 'asc' ? Infinity : -Infinity;
+        if (typeof av === 'string') av = av.toLowerCase();
+        if (typeof bv === 'string') bv = bv.toLowerCase();
+        if (av < bv) return _sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return _sortDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    document.getElementById('rec-count').textContent = `${rows.length} properties`;
+
+    const tbody = document.getElementById('rec-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#aaa">No properties match the current filter.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+        const zcolor = ZONE_COLORS[r.zone] || '#999';
+        const mineBadge = r.is_mine ? '<span class="rec-mine-badge">MINE</span>' : '';
+        const current = r.current_names && r.current_names.length
+            ? r.current_names.join(', ')
+            : '<span style="color:#bbb">Empty</span>';
+        const addons = r.addons && r.addons.length
+            ? `<div class="rec-addon">+ ${r.addons.join(', ')}</div>`
+            : '';
+        const effW = r.eff_width != null ? r.eff_width.toFixed(1) + '^' : '—';
+        const up2 = r.up2 != null ? r.up2 : '—';
+        return `<tr class="${r.is_mine ? 'mine' : ''}">
+            <td><span style="font-weight:${r.is_mine?'600':'400'}">${r.address}</span>${mineBadge}</td>
+            <td style="white-space:nowrap">
+                <span class="zone-dot" style="background:${zcolor}"></span>${r.zone}
+            </td>
+            <td style="text-align:right">${up2}</td>
+            <td style="text-align:right">${effW}</td>
+            <td style="white-space:nowrap">${actionBadge(r.action)}</td>
+            <td>${r.recommended_name || '<span style="color:#bbb">—</span>'}${addons}</td>
+            <td style="text-align:right">${suGainPill(r.su_gain, r.action)}</td>
+            <td>${current}</td>
+        </tr>`;
+    }).join('');
+}
+
+function setMineFilter(mine) {
+    _mineOnly = mine;
+    document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === (mine?'mine':'all')));
+    renderRows();
+}
+
+function setActionFilter(action) {
+    _actionFilter = action;
+    document.querySelectorAll('#filter-all,#filter-demolish,#filter-build,#filter-keep').forEach(b => {
+        b.classList.remove('active');
+    });
+    const map = {'':'filter-all','DEMOLISH → BUILD':'filter-demolish','BUILD':'filter-build','KEEP':'filter-keep'};
+    document.getElementById(map[action]).classList.add('active');
+    renderRows();
+}
+
+function sortBy(col) {
+    document.querySelectorAll('.rec-table th').forEach(th => {
+        th.classList.remove('sort-asc','sort-desc');
+        th.classList.add('sort-none');
+    });
+    const th = document.querySelector(`[data-col="${col}"]`);
+    if (_sortCol === col) {
+        _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        _sortCol = col;
+        _sortDir = col === 'su_gain' ? 'desc' : 'asc';
+    }
+    th.classList.remove('sort-none');
+    th.classList.add(_sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    renderRows();
+}
+
+async function loadReport() {
+    try {
+        const resp = await fetch(`/api/score/report?neighborhood=${encodeURIComponent(NEIGHBORHOOD)}&mine_only=false`);
+        const data = await resp.json();
+        _allRows = data.rows || [];
+        document.getElementById('rec-loading').style.display = 'none';
+        document.getElementById('rec-table').style.display = '';
+        renderRows();
+    } catch(e) {
+        document.getElementById('rec-loading').textContent = 'Failed to load recommendations.';
+    }
+}
+
+loadReport();
+</script>
 {% endblock %}

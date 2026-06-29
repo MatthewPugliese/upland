@@ -44,6 +44,11 @@ from structure_fitter import (
     STRUCTURES, compute_dimensions_up,
     best_service_for_zone, lot_fill_pct, effective_width,
 )
+from recommender import (
+    auto_recommend, generate_report, get_zone,
+    ZONE_COLORS, ZONE_NAMES, ZONE_DESCRIPTIONS, STREET_ZONES,
+    MANUAL_OVERRIDES,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data paths
@@ -66,197 +71,11 @@ if not PROPS_CACHE.exists():
     GEOCODE_CACHE = SCRIPT_DIR / "Dongan_Hills_geocode_cache.json"
     BLOCKCHAIN_CACHE = SCRIPT_DIR / "pugs08_blockchain_cache.json"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Zone definitions
-# ─────────────────────────────────────────────────────────────────────────────
-
-ZONE_COLORS = {
-    "Zone 1": "#E74C3C",  # Red — Commercial / Liberty Ave
-    "Zone 2": "#3498DB",  # Blue — Residential / Dongan Hills Ave
-    "Zone 3": "#9B59B6",  # Purple — Public Services / Stobe Ave
-    "Zone 4": "#2ECC71",  # Green — Mixed Use / Buel Ave
-    "Zone 5": "#F39C12",  # Orange — Industrial / N Railroad + Seaview
-    "Zone 6": "#1ABC9C",  # Teal — Green Residential / STEM / Scattered
-}
-
-ZONE_NAMES = {
-    "Zone 1": "Liberty Ave — Commercial & Entertainment",
-    "Zone 2": "Dongan Hills Ave — Residential Core",
-    "Zone 3": "Stobe Ave — Public Services Hub",
-    "Zone 4": "Buel Ave — Mixed Residential & Employment",
-    "Zone 5": "N Railroad & Seaview — Industrial/Transit",
-    "Zone 6": "Naughton & Scattered — Green/STEM Residential",
-}
-
-ZONE_DESCRIPTIONS = {
-    "Zone 1": "Main Street corridor. High-value entertainment & essential service structures.",
-    "Zone 2": "Preserve existing residential. Add essential service variety.",
-    "Zone 3": "Public service anchor zone. Court House, Pool, DMV, Day Care.",
-    "Zone 4": "Mid-density residential + employment structures.",
-    "Zone 5": "Factories, transportation hubs, and employment.",
-    "Zone 6": "Residential with heavy STEM/greenery focus. Future nursery site.",
-}
-
-# Street → Zone assignment
-STREET_ZONES = {
-    "LIBERTY AVE": "Zone 1",
-    "DONGAN HILLS AVE": "Zone 2",
-    "STOBE AVE": "Zone 3",
-    "BUEL AVE": "Zone 4",
-    "N RAILROAD AVE": "Zone 5",
-    "RAILROAD AVENUE": "Zone 5",   # "NORTH RAILROAD AVENUE" has no house number → strips to this
-    "SEAVIEW AVE": "Zone 5",
-    "NAUGHTON AVE": "Zone 6",
-    "VERA ST": "Zone 6",
-    "JEFFERSON AVE": "Zone 6",
-    "JEFFERSON ST": "Zone 6",
-    "SLATER BLVD": "Zone 6",
-    "SEAVER AVE": "Zone 6",
-    "ZOE ST": "Zone 6",
-    "CLETUS ST": "Zone 6",
-    "BOUNDARY AVE": "Zone 6",
-    "HUSSON ST": "Zone 4",  # Geographically 81m from Buel Ave, 494m from Stobe — reassigned from Zone 3
-    "LACONIA AVE": "Zone 6",
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Manual overrides — special cases the auto-recommender should not change
-# ─────────────────────────────────────────────────────────────────────────────
-
-MANUAL_OVERRIDES = {
-    # Crown jewel — leave as-is, just note add-ons
-    "81295714389886": ("KEEP", "800 UP² | Med Showroom II + Bus Stop — crown jewel; can add Office Complex + Modern Farm Barn"),
-    # Pharmacy is a useful mixed-use structure, not worth demolishing
-    "81296486138922": ("KEEP", "Pharmacy (East Coast Modular) — service/residential mix, keep"),
-    # Funeral Home on narrow lot — keep it, it fits and gives 3 SU
-    "81298415518738": ("KEEP", "Funeral Home (3 Pub SU) — fits at 3.2^ wide; more SU than Bus Stop"),
-    # Arcade and Bakery on narrow Stobe lots — keep for entertainment variety
-    "81296251260674": ("KEEP", "Arcade (3 Ent SU) — keep for entertainment variety"),
-    "81296200929029": ("KEEP", "Bakery (3 Ent SU) — keep for entertainment variety"),
-    # Apartment + Bus Stop on Liberty — residential anchor, keep
-    "81298918835132": ("KEEP", "Apartment Building + Bus Stop — residential anchor on Liberty"),
-}
-
-# Zone 6 gets residential-first treatment; all others optimize for SU.
-_RESIDENTIAL_ZONES = {"Zone 6", "Zone 2"}
-
-# These structure types count as "trivially low value" — worth demolishing for a better fit.
-_LOW_VALUE_TYPES = {"Micro House", "Small Town House"}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Dynamic recommendation engine
-# ─────────────────────────────────────────────────────────────────────────────
-
-def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
-                   current_structs: list, zone: str) -> tuple[str, str]:
-    """
-    Compute the best (action, description) for a property based on its actual
-    MapPLUTO dimensions and current structures. Checks MANUAL_OVERRIDES first.
-    """
-    if prop_id in MANUAL_OVERRIDES:
-        return MANUAL_OVERRIDES[prop_id]
-
-    if not up2 or not width_up:
-        return ("BUILD", "Unknown size — check Playground before building")
-
-    current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
-    current_su = sum(STRUCTURES.get(n, {}).get("su", 0) for n in current_names)
-    current_lu = sum(STRUCTURES.get(n, {}).get("living_units", 0) for n in current_names)
-
-    # Find best service structure that physically fits
-    best_svc = best_service_for_zone(up2, width_up, zone)
-    best_su = best_svc["su"] if best_svc else 0
-    best_name = best_svc["name"] if best_svc else None
-
-    # For residential-priority zones, also compute best residential
-    best_res = None
-    if zone in _RESIDENTIAL_ZONES:
-        res_fits = [{"name": n, **v} for n, v in STRUCTURES.items()
-                    if v["type"] == "residential"
-                    and v["min_up2"] <= up2
-                    and v.get("min_width", 0) <= width_up]
-        if res_fits:
-            best_res = max(res_fits, key=lambda x: x["living_units"])
-
-    # Farm / office add-ons (supplementary; don't replace primary recommendation)
-    farm_fits = [n for n, v in STRUCTURES.items()
-                 if v["type"] == "farm" and v["min_up2"] <= up2 and v.get("min_width", 0) <= width_up]
-    best_farm = farm_fits[-1] if farm_fits else None
-    office_fits = [n for n, v in STRUCTURES.items()
-                   if v["type"] == "office" and v["min_up2"] <= up2 and v.get("min_width", 0) <= width_up]
-    best_office = office_fits[-1] if office_fits else None
-
-    # Build the add-on suffix
-    # If no service structure fits but an office does, lead with office instead of add-on
-    office_only = best_office and not best_name
-    addons = []
-    if not office_only:
-        if zone in ("Zone 5", "Zone 6") and best_farm:
-            addons.append(f"{best_farm} (farm)")
-        if zone in ("Zone 1", "Zone 5") and best_office:
-            # Warn if office fills most of the lot (up2 ratio suggests little room left)
-            office_min = STRUCTURES.get(best_office, {}).get("min_up2", 0)
-            fill_note = " — fills most of lot, little room for other structures" if office_min > up2 * 0.6 else ""
-            addons.append(f"{best_office} (commerce{fill_note})")
-    addon_str = " + " + " + ".join(addons) if addons else ""
-
-    # ── Decide action ──────────────────────────────────────────────────────────
-    # Nothing built yet
-    if not current_names:
-        if zone in _RESIDENTIAL_ZONES and best_res and best_su < 5:
-            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_res['name']} ({best_res['living_units']} living units){addon_str}"
-        elif best_name:
-            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_name} ({best_su} {best_svc['su_cat']} SU){addon_str}"
-        else:
-            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | Bus Stop or Kiosk only (too small/narrow for service structures)"
-        return ("BUILD", desc)
-
-    # Something already built — should we demolish?
-    # Demolish if: current structures are all low-value AND we can gain meaningful SU
-    all_low_value = all(n in _LOW_VALUE_TYPES for n in current_names)
-    su_gain = best_su - current_su
-    lu_loss = current_lu  # living units we'd lose
-
-    if all_low_value and best_name and su_gain >= 3:
-        current_str = ", ".join(current_names)
-        desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | "
-                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU){addon_str}")
-        return ("DEMOLISH → BUILD", desc)
-
-    # Not worth demolishing — but can we add something on an empty lot?
-    has_good_service = any(STRUCTURES.get(n, {}).get("su", 0) >= best_su * 0.7 for n in current_names)
-    if not has_good_service and best_name and su_gain >= 8:
-        current_str = ", ".join(current_names)
-        desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | "
-                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU) "
-                f"(+{su_gain} SU){addon_str}")
-        return ("DEMOLISH → BUILD", desc)
-
-    # Keep current — show best achievable context
-    current_str = ", ".join(current_names)
-    if best_name and best_su > current_su:
-        desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | {current_str} ({current_su} SU) — "
-                f"max possible: {best_name} ({best_su} SU){addon_str}")
-    else:
-        desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {current_str} — already at or near optimal"
-    return ("KEEP", desc)
+# Zone definitions, recommendation engine, and get_zone() all imported from recommender above.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
-def get_zone(address: str) -> str:
-    """Assign a zone based on street name."""
-    addr = address.upper().strip()
-    parts = addr.split(maxsplit=1)
-    if len(parts) < 2:
-        return "Zone 6"
-    street = parts[1]
-    for street_key, zone in STREET_ZONES.items():
-        if street_key in street:
-            return zone
-    return "Zone 6"
-
 
 def load_json(path: Path) -> dict | list:
     with open(path) as f:
@@ -289,7 +108,7 @@ def darken_color(hex_color: str, factor: float = 0.3) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def popup_html(prop: dict, structures: list, is_mine: bool,
-               zone: str, recommendation: tuple | None,
+               zone: str, recommendation: dict | None,
                dims: dict | None = None) -> str:
     """Build popup HTML for a property."""
     zone_color = ZONE_COLORS.get(zone, "#999")
@@ -329,7 +148,8 @@ def popup_html(prop: dict, structures: list, is_mine: bool,
     # Recommendation
     rec_html = ""
     if recommendation and is_mine:
-        action, desc = recommendation
+        action = recommendation["action"]
+        desc = recommendation["desc"]
         if action == "KEEP":
             rec_color = "#27AE60"
             icon = "✓"
@@ -653,7 +473,7 @@ def generate_zone_map(output_path: Path) -> None:
         if struct_names:
             tooltip += f" — {struct_names}"
         if rec and is_mine:
-            tooltip += f" | {rec[0]}"
+            tooltip += f" | {rec['action']}"
 
         folium.Polygon(
             locations=coords_latlon,
@@ -670,10 +490,10 @@ def generate_zone_map(output_path: Path) -> None:
         if is_mine:
             cx = sum(c[0] for c in coords_latlon) / len(coords_latlon)
             cy = sum(c[1] for c in coords_latlon) / len(coords_latlon)
-            if rec and rec[0].startswith("DEMOLISH"):
+            if rec and rec["action"].startswith("DEMOLISH"):
                 dot_color = "#E74C3C"
                 dot_radius = 4
-            elif rec and rec[0] == "BUILD":
+            elif rec and rec["action"] == "BUILD":
                 dot_color = "#F39C12"
                 dot_radius = 3
             elif structs:

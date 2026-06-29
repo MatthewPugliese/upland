@@ -1,0 +1,379 @@
+"""
+Dongan Hills neighborhood recommendation engine.
+
+Standalone module — no folium/shapely dependency, safe to import from the webapp.
+Contains zone definitions, auto_recommend(), and generate_report().
+"""
+import json
+import sys
+from pathlib import Path
+
+# Make structure_fitter importable from either the optimizer dir or from the webapp
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from structure_fitter import STRUCTURES, best_service_for_zone
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+CACHE_DIR = SCRIPT_DIR / "cache"
+
+# ─── Zone definitions ─────────────────────────────────────────────────────────
+
+ZONE_COLORS = {
+    "Zone 1": "#E74C3C",
+    "Zone 2": "#3498DB",
+    "Zone 3": "#9B59B6",
+    "Zone 4": "#2ECC71",
+    "Zone 5": "#F39C12",
+    "Zone 6": "#1ABC9C",
+}
+
+ZONE_NAMES = {
+    "Zone 1": "Liberty Ave — Commercial & Entertainment",
+    "Zone 2": "Dongan Hills Ave — Residential Core",
+    "Zone 3": "Stobe Ave — Public Services Hub",
+    "Zone 4": "Buel Ave — Mixed Residential & Employment",
+    "Zone 5": "N Railroad & Seaview — Industrial/Transit",
+    "Zone 6": "Naughton & Scattered — Green/STEM Residential",
+}
+
+ZONE_DESCRIPTIONS = {
+    "Zone 1": "Main Street corridor. High-value entertainment & essential service structures.",
+    "Zone 2": "Preserve existing residential. Add essential service variety.",
+    "Zone 3": "Public service anchor zone. Court House, Pool, DMV, Day Care.",
+    "Zone 4": "Mid-density residential + employment structures.",
+    "Zone 5": "Factories, transportation hubs, and employment.",
+    "Zone 6": "Residential with heavy STEM/greenery focus. Future nursery site.",
+}
+
+STREET_ZONES = {
+    "LIBERTY AVE": "Zone 1",
+    "DONGAN HILLS AVE": "Zone 2",
+    "STOBE AVE": "Zone 3",
+    "BUEL AVE": "Zone 4",
+    "N RAILROAD AVE": "Zone 5",
+    "RAILROAD AVENUE": "Zone 5",
+    "SEAVIEW AVE": "Zone 5",
+    "NAUGHTON AVE": "Zone 6",
+    "VERA ST": "Zone 6",
+    "JEFFERSON AVE": "Zone 6",
+    "JEFFERSON ST": "Zone 6",
+    "SLATER BLVD": "Zone 6",
+    "SEAVER AVE": "Zone 6",
+    "ZOE ST": "Zone 6",
+    "CLETUS ST": "Zone 6",
+    "BOUNDARY AVE": "Zone 6",
+    "HUSSON ST": "Zone 4",
+    "LACONIA AVE": "Zone 6",
+}
+
+# ─── Recommendation constants ─────────────────────────────────────────────────
+
+MANUAL_OVERRIDES = {
+    "81295714389886": ("KEEP", "800 UP² | Med Showroom II + Bus Stop — crown jewel; can add Office Complex + Modern Farm Barn"),
+    "81296486138922": ("KEEP", "Pharmacy (East Coast Modular) — service/residential mix, keep"),
+    "81298415518738": ("KEEP", "Funeral Home (3 Pub SU) — fits at 3.2^ wide; more SU than Bus Stop"),
+    "81296251260674": ("KEEP", "Arcade (3 Ent SU) — keep for entertainment variety"),
+    "81296200929029": ("KEEP", "Bakery (3 Ent SU) — keep for entertainment variety"),
+    "81298918835132": ("KEEP", "Apartment Building + Bus Stop — residential anchor on Liberty"),
+}
+
+_RESIDENTIAL_ZONES = {"Zone 6", "Zone 2"}
+_LOW_VALUE_TYPES = {"Micro House", "Small Town House"}
+
+
+def get_zone(address: str) -> str:
+    """Assign a zone based on street name."""
+    addr = address.upper().strip()
+    parts = addr.split(maxsplit=1)
+    if len(parts) < 2:
+        return "Zone 6"
+    street = parts[1]
+    for street_key, zone in STREET_ZONES.items():
+        if street_key in street:
+            return zone
+    return "Zone 6"
+
+
+def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
+                   current_structs: list, zone: str) -> dict:
+    """
+    Compute the best recommendation for a property.
+
+    Returns a dict:
+        action          — "BUILD", "DEMOLISH → BUILD", or "KEEP"
+        desc            — human-readable string (used in map popups)
+        recommended_name — structure to build/keep (str or None)
+        recommended_su  — SU of recommended structure
+        su_cat          — SU category string or None
+        su_gain         — net SU gained by taking action (0 for KEEP)
+        current_names   — list of currently built structure names
+        current_su      — total SU of current structures
+        addons          — list of supplementary structure suggestions
+        up2             — lot area in UP²
+        width_up        — raw width in UP units
+        depth_up        — depth in UP units
+    """
+    if prop_id in MANUAL_OVERRIDES:
+        action, desc = MANUAL_OVERRIDES[prop_id]
+        current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
+        current_su = sum(STRUCTURES.get(n, {}).get("su", 0) for n in current_names)
+        return {
+            "action": action,
+            "desc": desc,
+            "recommended_name": None,
+            "recommended_su": current_su,
+            "su_cat": None,
+            "su_gain": 0,
+            "current_names": current_names,
+            "current_su": current_su,
+            "addons": [],
+            "up2": up2,
+            "width_up": width_up,
+            "depth_up": depth_up,
+        }
+
+    if not up2 or not width_up:
+        return {
+            "action": "BUILD",
+            "desc": "Unknown size — check Playground before building",
+            "recommended_name": None,
+            "recommended_su": 0,
+            "su_cat": None,
+            "su_gain": 0,
+            "current_names": [],
+            "current_su": 0,
+            "addons": [],
+            "up2": up2,
+            "width_up": width_up,
+            "depth_up": depth_up,
+        }
+
+    current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
+    current_su = sum(STRUCTURES.get(n, {}).get("su", 0) for n in current_names)
+
+    best_svc = best_service_for_zone(up2, width_up, zone)
+    best_su = best_svc["su"] if best_svc else 0
+    best_name = best_svc["name"] if best_svc else None
+
+    best_res = None
+    if zone in _RESIDENTIAL_ZONES:
+        res_fits = [{"name": n, **v} for n, v in STRUCTURES.items()
+                    if v["type"] == "residential"
+                    and v["min_up2"] <= up2
+                    and v.get("min_width", 0) <= width_up]
+        if res_fits:
+            best_res = max(res_fits, key=lambda x: x["living_units"])
+
+    farm_fits = [n for n, v in STRUCTURES.items()
+                 if v["type"] == "farm" and v["min_up2"] <= up2 and v.get("min_width", 0) <= width_up]
+    best_farm = farm_fits[-1] if farm_fits else None
+    office_fits = [n for n, v in STRUCTURES.items()
+                   if v["type"] == "office" and v["min_up2"] <= up2 and v.get("min_width", 0) <= width_up]
+    best_office = office_fits[-1] if office_fits else None
+
+    office_only = best_office and not best_name
+    addons = []
+    if not office_only:
+        if zone in ("Zone 5", "Zone 6") and best_farm:
+            addons.append(f"{best_farm} (farm)")
+        if zone in ("Zone 1", "Zone 5") and best_office:
+            office_min = STRUCTURES.get(best_office, {}).get("min_up2", 0)
+            fill_note = " — fills most of lot, little room for other structures" if office_min > up2 * 0.6 else ""
+            addons.append(f"{best_office} (commerce{fill_note})")
+    addon_str = " + " + " + ".join(addons) if addons else ""
+
+    su_gain = best_su - current_su
+
+    # ── Nothing built yet ────────────────────────────────────────────────────
+    if not current_names:
+        if zone in _RESIDENTIAL_ZONES and best_res and best_su < 5:
+            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_res['name']} ({best_res['living_units']} living units){addon_str}"
+            return {
+                "action": "BUILD",
+                "desc": desc,
+                "recommended_name": best_res["name"],
+                "recommended_su": 0,
+                "su_cat": None,
+                "su_gain": 0,
+                "current_names": current_names,
+                "current_su": current_su,
+                "addons": addons,
+                "up2": up2,
+                "width_up": width_up,
+                "depth_up": depth_up,
+            }
+        elif best_name:
+            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_name} ({best_su} {best_svc['su_cat']} SU){addon_str}"
+            return {
+                "action": "BUILD",
+                "desc": desc,
+                "recommended_name": best_name,
+                "recommended_su": best_su,
+                "su_cat": best_svc["su_cat"],
+                "su_gain": best_su,
+                "current_names": current_names,
+                "current_su": current_su,
+                "addons": addons,
+                "up2": up2,
+                "width_up": width_up,
+                "depth_up": depth_up,
+            }
+        else:
+            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | Bus Stop or Kiosk only (too small/narrow for service structures)"
+            return {
+                "action": "BUILD",
+                "desc": desc,
+                "recommended_name": "Bus Stop",
+                "recommended_su": 0,
+                "su_cat": None,
+                "su_gain": 0,
+                "current_names": current_names,
+                "current_su": current_su,
+                "addons": addons,
+                "up2": up2,
+                "width_up": width_up,
+                "depth_up": depth_up,
+            }
+
+    # ── Something built — should we demolish? ───────────────────────────────
+    all_low_value = all(n in _LOW_VALUE_TYPES for n in current_names)
+    if all_low_value and best_name and su_gain >= 3:
+        current_str = ", ".join(current_names)
+        desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | "
+                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU){addon_str}")
+        return {
+            "action": "DEMOLISH → BUILD",
+            "desc": desc,
+            "recommended_name": best_name,
+            "recommended_su": best_su,
+            "su_cat": best_svc["su_cat"],
+            "su_gain": su_gain,
+            "current_names": current_names,
+            "current_su": current_su,
+            "addons": addons,
+            "up2": up2,
+            "width_up": width_up,
+            "depth_up": depth_up,
+        }
+
+    has_good_service = any(STRUCTURES.get(n, {}).get("su", 0) >= best_su * 0.7 for n in current_names)
+    if not has_good_service and best_name and su_gain >= 8:
+        current_str = ", ".join(current_names)
+        desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | "
+                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU) "
+                f"(+{su_gain} SU){addon_str}")
+        return {
+            "action": "DEMOLISH → BUILD",
+            "desc": desc,
+            "recommended_name": best_name,
+            "recommended_su": best_su,
+            "su_cat": best_svc["su_cat"],
+            "su_gain": su_gain,
+            "current_names": current_names,
+            "current_su": current_su,
+            "addons": addons,
+            "up2": up2,
+            "width_up": width_up,
+            "depth_up": depth_up,
+        }
+
+    # ── Keep current ─────────────────────────────────────────────────────────
+    current_str = ", ".join(current_names)
+    if best_name and best_su > current_su:
+        desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | {current_str} ({current_su} SU) — "
+                f"max possible: {best_name} ({best_su} SU){addon_str}")
+    else:
+        desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {current_str} — already at or near optimal"
+    return {
+        "action": "KEEP",
+        "desc": desc,
+        "recommended_name": best_name,
+        "recommended_su": best_su,
+        "su_cat": best_svc["su_cat"] if best_svc else None,
+        "su_gain": 0,
+        "current_names": current_names,
+        "current_su": current_su,
+        "addons": addons,
+        "up2": up2,
+        "width_up": width_up,
+        "depth_up": depth_up,
+    }
+
+
+def generate_report(neighborhood: str = "Dongan_Hills") -> list:
+    """
+    Load cached data and return recommendation rows for all properties.
+
+    Each row dict:
+        prop_id, address, zone, up2, eff_width, width_up, depth_up,
+        is_mine, action, recommended_name, recommended_su, su_cat,
+        su_gain, current_names, current_su, addons, desc
+
+    Sorted: owned first, then by action priority (DEMOLISH → BUILD > BUILD > KEEP),
+    then by su_gain descending.
+    """
+    cache_dir = CACHE_DIR
+    props_path = cache_dir / f"{neighborhood}_props_cache.json"
+    structs_path = cache_dir / f"{neighborhood}_structures_cache.json"
+    dims_path = cache_dir / f"{neighborhood}_api_dims_cache.json"
+    blockchain_path = cache_dir / "pugs08_blockchain_cache.json"
+
+    if not props_path.exists():
+        return []
+
+    props = json.loads(props_path.read_text())
+    structures = json.loads(structs_path.read_text()) if structs_path.exists() else {}
+    dims_raw = json.loads(dims_path.read_text()) if dims_path.exists() else {}
+    api_dims = {k: v for k, v in dims_raw.items() if k != "_ts"}
+    blockchain = json.loads(blockchain_path.read_text()) if blockchain_path.exists() else {}
+    user_ids = {str(pid) for pid in blockchain.get("owned", [])}
+
+    rows = []
+    for prop in props:
+        prop_id = str(prop.get("id", ""))
+        address = prop.get("address", "")
+        zone = get_zone(address)
+        structs = structures.get(prop_id, [])
+        dims = api_dims.get(address.upper().strip())
+        is_mine = prop_id in user_ids
+
+        d = dims or {}
+        rec = auto_recommend(
+            prop_id,
+            d.get("up2"),
+            d.get("eff_width", d.get("width_up")),
+            d.get("depth_up"),
+            structs,
+            zone,
+        )
+
+        rows.append({
+            "prop_id": prop_id,
+            "address": address,
+            "zone": zone,
+            "up2": d.get("up2"),
+            "eff_width": d.get("eff_width"),
+            "width_up": d.get("width_up"),
+            "depth_up": d.get("depth_up"),
+            "is_mine": is_mine,
+            "action": rec["action"],
+            "recommended_name": rec["recommended_name"],
+            "recommended_su": rec["recommended_su"],
+            "su_cat": rec["su_cat"],
+            "su_gain": rec["su_gain"],
+            "current_names": rec["current_names"],
+            "current_su": rec["current_su"],
+            "addons": rec["addons"],
+            "desc": rec["desc"],
+        })
+
+    _ACTION_PRIORITY = {"DEMOLISH → BUILD": 0, "BUILD": 1, "KEEP": 2}
+
+    def _sort_key(r):
+        return (
+            0 if r["is_mine"] else 1,
+            _ACTION_PRIORITY.get(r["action"], 9),
+            -(r["su_gain"] or 0),
+        )
+
+    rows.sort(key=_sort_key)
+    return rows

@@ -32,6 +32,13 @@ def _score():
     from score_calculator import get_neighborhood_score, list_cached_neighborhoods
     return get_neighborhood_score, list_cached_neighborhoods
 
+def _report():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "optimizer"))
+    from recommender import generate_report
+    return generate_report
+
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
 
@@ -226,6 +233,19 @@ def score():
     cached = list_cached_neighborhoods()
     score = get_neighborhood_score(hood)
     return render_template("score.html", score=score, neighborhood=hood, cached=cached)
+
+
+@app.route("/api/score/report")
+def score_report():
+    hood = request.args.get("neighborhood", "Dongan Hills").strip()
+    mine_only = request.args.get("mine_only", "true").lower() == "true"
+    generate_report = _report()
+    # Normalize "Dongan Hills" → "Dongan_Hills" for file lookup
+    hood_key = hood.replace(" ", "_")
+    rows = generate_report(hood_key)
+    if mine_only:
+        rows = [r for r in rows if r["is_mine"]]
+    return jsonify({"rows": rows, "neighborhood": hood, "total": len(rows)})
 
 
 # ── Economy Dashboard ──────────────────────────────────────────────────────
