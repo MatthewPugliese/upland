@@ -279,6 +279,14 @@ def api_economy_cities():
     return jsonify({"cities": _econ.cities(period)})
 
 
+@app.route("/api/economy/whales")
+def api_economy_whales():
+    period = request.args.get("period", "30d")
+    if period not in _VALID_PERIODS:
+        period = "30d"
+    return jsonify(_econ.whales(period))
+
+
 # ── Startup ────────────────────────────────────────────────────────────────
 
 def preload_neighborhoods():

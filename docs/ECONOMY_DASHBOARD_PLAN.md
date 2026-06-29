@@ -365,10 +365,11 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   - Show: avg days on market per city, per price range
   - Flag listings that have been sitting unusually long — potentially overpriced
 
-- [ ] **Whale tracker**
-  - Flag EOS accounts with unusually high buy or sell volume in the selected period
-  - Show: account | total UPX spent | total USD spent | # trades | most active city
-  - Useful for spotting market movers or identifying active investors in your target neighborhoods
+- [ ] **Whale tracker** ⚠️ blocked on username resolution
+  - Backend query done (`/api/economy/whales`) — top buyers/sellers by volume
+  - UI built and then removed — EOS account names (e.g. `qbi3jazhmbrh`) are not the same as Upland display names; no public API to resolve them; Developers API user endpoints return 403 with current credentials
+  - Profile URL format: `https://play.upland.me/profile?username={display_name}` — but display name ≠ EOS account
+  - Re-enable once username resolution is figured out (API tier upgrade, community-sourced mapping, or scraping profile pages)
 
 - [ ] **Mint activity tracker**
   - Track `a4` (mint) events: how many new properties minted per day, per city

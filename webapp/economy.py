@@ -160,6 +160,39 @@ def cities(period: str = "30d") -> list:
         conn.close()
 
 
+def whales(period: str = "30d", limit: int = 20) -> dict:
+    conn = _connect()
+    if not conn:
+        return {"buyers": [], "sellers": []}
+    try:
+        since = _period_start(period)
+        buyers = conn.execute("""
+            SELECT buyer AS account,
+                   COUNT(*) AS trades,
+                   COALESCE(SUM(upx_amount), 0) AS upx_spent,
+                   COALESCE(SUM(usd_amount), 0) AS usd_spent
+            FROM transactions
+            WHERE timestamp >= ? AND asset_type='property' AND buyer IS NOT NULL
+            GROUP BY buyer
+            ORDER BY upx_spent + usd_spent * 1000 DESC
+            LIMIT ?
+        """, (since, limit)).fetchall()
+        sellers = conn.execute("""
+            SELECT seller AS account,
+                   COUNT(*) AS trades,
+                   COALESCE(SUM(upx_amount), 0) AS upx_earned,
+                   COALESCE(SUM(usd_amount), 0) AS usd_earned
+            FROM transactions
+            WHERE timestamp >= ? AND asset_type='property' AND seller IS NOT NULL
+            GROUP BY seller
+            ORDER BY upx_earned + usd_earned * 1000 DESC
+            LIMIT ?
+        """, (since, limit)).fetchall()
+        return {"buyers": [dict(r) for r in buyers], "sellers": [dict(r) for r in sellers]}
+    finally:
+        conn.close()
+
+
 def latest_since(last_id: int = 0, limit: int = 30, city: str = None) -> list:
     """Return transactions with id > last_id — used by feed polling."""
     conn = _connect()

@@ -169,8 +169,17 @@
     .city-filter-badge { display: inline-flex; align-items: center; gap: 5px; background: #1a1a2e; color: #fff; font-size: 12px; padding: 3px 10px 3px 12px; border-radius: 20px; margin-left: 6px; }
     .city-filter-clear { background: none; border: none; color: #fff; font-size: 15px; cursor: pointer; padding: 0 0 0 2px; line-height: 1; opacity: 0.8; }
     .city-filter-clear:hover { opacity: 1; }
+    .acct-link { color: #1a1a2e; text-decoration: none; border-bottom: 1px dotted #aaa; }
+    .acct-link:hover { border-bottom-color: #1a1a2e; }
 
     /* ── Cities table ────────────────────────────────── */
+    .whale-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    @media (max-width: 700px) { .whale-grid { grid-template-columns: 1fr; } }
     .cities-wrap {
         overflow-x: auto;
         border: 1px solid #eee;
@@ -548,6 +557,28 @@ async function pollFeed() {
         // silent — don't disrupt the UI on a poll failure
     }
     feedPollTimer = setTimeout(pollFeed, 30000);
+}
+
+// ── Whales ────────────────────────────────────────────────────────────────
+async function loadWhales() {
+    const r = await fetch('/api/economy/whales?period=' + currentPeriod);
+    const d = await r.json();
+    renderWhaleTable('buyers-body', d.buyers, 'upx_spent', 'usd_spent');
+    renderWhaleTable('sellers-body', d.sellers, 'upx_earned', 'usd_earned');
+}
+
+function renderWhaleTable(bodyId, rows, upxCol, usdCol) {
+    const body = document.getElementById(bodyId);
+    if (!rows || rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="loading-msg">No data.</td></tr>';
+        return;
+    }
+    body.innerHTML = rows.map((r, i) => `<tr>
+        <td>${i + 1}. ${r.account}</td>
+        <td>${fmtNum(r.trades)}</td>
+        <td>${r[upxCol] ? fmtUpx(r[upxCol]) : '—'}</td>
+        <td>${r[usdCol] ? fmtUsd(r[usdCol]) : '—'}</td>
+    </tr>`).join('');
 }
 
 // ── Cities ────────────────────────────────────────────────────────────────
