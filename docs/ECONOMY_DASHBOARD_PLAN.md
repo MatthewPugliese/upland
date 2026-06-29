@@ -415,6 +415,21 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [ ] **30d/7d/today show low data** — scraper just caught up to present on 2026-06-24; data will accumulate naturally over the coming days/weeks
 - [ ] **Dashboard page spins intermittently** — root cause unclear; possibly SQLite read contention with active scraper writes, or lingering iptables weirdness from OOM events. Needs investigation.
 
+### Pending — rebuild pending_usd_listings from blockchain history
+`pending_usd_listings` only contains listings the scraper has observed since it started. Any property listed before the scraper began is missing — when it sells, the price can't be recovered.
+
+The Upland Developers API does not expose listing prices or "for sale" status — only ownership state (Owned/Locked/Unlocked) and mint price. No shortcut.
+
+**Fix:** one-time replay of all `n2`/`n4` events from March 2023 → present to reconstruct full listing state:
+- Process every `n2` (list): upsert into `pending_usd_listings`
+- Process every `n4` (unlist): delete from `pending_usd_listings`
+- Process every `n5`/`n52` (sold): delete from `pending_usd_listings`
+- At the end, `pending_usd_listings` reflects every property currently listed with its price and seller
+
+This is the same pagination approach as the main backfill. ~2,400 n2s/day × ~1,200 days = ~2.9M events to replay. At 100/batch and 0.3s between = ~2.5h.
+
+After this runs, all future USD sales will have prices as long as the scraper stays live.
+
 ### Pending — backfill UPX sellers
 UPX sales (n5) historically have `seller = NULL` because the seller isn't in the n5 action data — it's in a `upxtokenacct::transfer` inline action in the same transaction. Fix requires fetching full transaction via `get_transaction?id={trx_id}` for each n5 row with null seller.
 
