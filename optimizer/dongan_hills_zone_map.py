@@ -337,6 +337,14 @@ def generate_zone_map(output_path: Path) -> None:
     print(f"[+] {len(my_props_in_hood)} owned by pugs08")
     print(f"[+] {sum(1 for v in structures.values() if v)} with structures")
 
+    # Count structure types across the whole neighborhood for variety-aware recommendations
+    neighborhood_counts: dict[str, int] = {}
+    for structs_list in structures.values():
+        for s in structs_list:
+            name = s.get("buildingName", "")
+            if name:
+                neighborhood_counts[name] = neighborhood_counts.get(name, 0) + 1
+
     # Fetch lot dimensions from the Upland API (keyed by uppercased address)
     api_dims = fetch_api_dims(props)
 
@@ -450,7 +458,7 @@ def generate_zone_map(output_path: Path) -> None:
         rec = auto_recommend(
             prop_id,
             d.get("up2"), d.get("eff_width", d.get("width_up")), d.get("depth_up"),
-            structs, zone,
+            structs, zone, neighborhood_counts,
         ) if dims else None
 
         coords_latlon = [[pt[1], pt[0]] for pt in info["coords"]]
@@ -530,7 +538,7 @@ def generate_zone_map(output_path: Path) -> None:
         rec = auto_recommend(
             prop_id,
             d.get("up2"), d.get("eff_width", d.get("width_up")), d.get("depth_up"),
-            structs, zone,
+            structs, zone, neighborhood_counts,
         ) if dims else None
 
         if is_mine:
