@@ -222,11 +222,11 @@ dongan_hills_zone_map.py
   - More accurate than OSM — shows exactly where the building sits on the lot and how much space remains
   - Render as a filled overlay on top of the lot polygon
 
-- [ ] **For-sale scanner**
-  - Fetch `on_market` and `price` fields from the full API response for all unowned properties in the neighborhood
-  - Surface a "Buy opportunities" panel: unowned lots currently listed for sale, ranked by potential SU gain if purchased
-  - Show: address, current price (UPX), lot size, best structure that fits, SU gain, price-per-SU efficiency
-  - Helps prioritize what to buy next vs what to build on existing lots
+- [x] **For-sale scanner**
+  - `/api/score/forsale` cross-refs props_cache (status == "For sale") with generate_report recommendations
+  - Fetches live listing prices from public Upland API, cached 30 min per neighborhood
+  - "Buy Opportunities" panel on score dashboard: sorted by SU gain, shows UPX/SU efficiency
+  - 1919 Hylan Blvd surfaces as top DH buy (62 SU, Large Court House)
 
 - [ ] **Spark hours estimator**
   - The API returns `stepSparks` and `minStackedSparks` per structure in the `details` field

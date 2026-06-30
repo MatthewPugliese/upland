@@ -240,12 +240,99 @@ def score_report():
     hood = request.args.get("neighborhood", "Dongan Hills").strip()
     mine_only = request.args.get("mine_only", "true").lower() == "true"
     generate_report = _report()
-    # Normalize "Dongan Hills" → "Dongan_Hills" for file lookup
     hood_key = hood.replace(" ", "_")
-    rows = generate_report(hood_key)
+    result = generate_report(hood_key)
+    rows = result.get("rows", []) if isinstance(result, dict) else (result or [])
+    lu_balance = result.get("lu_balance") if isinstance(result, dict) else None
     if mine_only:
         rows = [r for r in rows if r["is_mine"]]
-    return jsonify({"rows": rows, "neighborhood": hood, "total": len(rows)})
+    return jsonify({"rows": rows, "neighborhood": hood, "total": len(rows), "lu_balance": lu_balance})
+
+
+@app.route("/api/score/forsale")
+def score_forsale():
+    import sys, json, time, concurrent.futures, requests as _req
+    from pathlib import Path
+    hood = request.args.get("neighborhood", "Dongan Hills").strip()
+    hood_key = hood.replace(" ", "_")
+
+    optimizer_cache = Path(__file__).resolve().parent.parent / "optimizer" / "cache"
+    props_path = optimizer_cache / f"{hood_key}_props_cache.json"
+    if not props_path.exists():
+        return jsonify({"listings": [], "error": "No cached data for this neighborhood"})
+
+    props = json.loads(props_path.read_text())
+    forsale_ids = {str(p["id"]) for p in props if p.get("status") == "For sale"}
+    if not forsale_ids:
+        return jsonify({"listings": []})
+
+    # Cache live prices for 30 min
+    price_cache_path = optimizer_cache / f"{hood_key}_forsale_prices.json"
+    price_cache = {}
+    if price_cache_path.exists() and (time.time() - price_cache_path.stat().st_mtime) < 1800:
+        price_cache = json.loads(price_cache_path.read_text())
+
+    to_fetch = [pid for pid in forsale_ids if pid not in price_cache]
+    if to_fetch:
+        def _fetch_price(pid):
+            try:
+                r = _req.get(f"https://api.upland.me/properties/{pid}",
+                             headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                if r.status_code == 200:
+                    d = r.json()
+                    om = d.get("on_market") or {}
+                    fiat_raw = om.get("fiat", "0 FIAT")
+                    try:
+                        usd = float(fiat_raw.split()[0])
+                    except (ValueError, IndexError):
+                        usd = 0.0
+                    return pid, {"price_upx": d.get("price"), "price_usd": usd or None,
+                                 "on_market": bool(om)}
+            except Exception:
+                pass
+            return pid, {"price_upx": None, "price_usd": None, "on_market": False}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            for pid, info in ex.map(_fetch_price, to_fetch):
+                price_cache[pid] = info
+        price_cache_path.write_text(json.dumps(price_cache))
+
+    # Get recommendations for all props, cross-ref with for-sale
+    generate_report = _report()
+    result = generate_report(hood_key)
+    rows = result.get("rows", []) if isinstance(result, dict) else (result or [])
+    by_id = {r["prop_id"]: r for r in rows}
+
+    listings = []
+    for prop in props:
+        pid = str(prop["id"])
+        if pid not in forsale_ids:
+            continue
+        prices = price_cache.get(pid, {})
+        if not prices.get("on_market", True) and prices.get("price_upx") is None:
+            continue  # skip if we know it's no longer listed
+        rec = by_id.get(pid, {})
+        su_gain = rec.get("su_gain") or 0
+        price_upx = prices.get("price_upx")
+        upx_per_su = round(price_upx / su_gain, 1) if (price_upx and su_gain > 0) else None
+        listings.append({
+            "prop_id": pid,
+            "address": prop.get("address", ""),
+            "mint_price": prop.get("mintPrice"),
+            "price_upx": price_upx,
+            "price_usd": prices.get("price_usd"),
+            "up2": rec.get("up2"),
+            "eff_width": rec.get("eff_width"),
+            "action": rec.get("action", ""),
+            "recommended_name": rec.get("recommended_name", ""),
+            "su_gain": su_gain,
+            "su_cat": rec.get("su_cat", ""),
+            "upx_per_su": upx_per_su,
+        })
+
+    listings.sort(key=lambda x: (x["su_gain"] == 0, -(x["su_gain"] or 0),
+                                  x["upx_per_su"] is None, x["upx_per_su"] or 0))
+    return jsonify({"listings": listings, "neighborhood": hood})
 
 
 # ── Economy Dashboard ──────────────────────────────────────────────────────

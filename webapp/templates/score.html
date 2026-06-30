@@ -314,6 +314,28 @@
 </div>
 
 
+<!-- ── Buy Opportunities ─────────────────────────────────────────────────── -->
+<h3 class="section-heading">Buy Opportunities <span style="font-size:12px;font-weight:400;color:#aaa">(for-sale lots, ranked by SU gain)</span></h3>
+<div id="forsale-loading" class="rec-loading">Loading…</div>
+<div id="forsale-empty" style="display:none;color:#aaa;font-size:13px;padding:8px 0 20px">No properties currently listed for sale in this neighborhood.</div>
+<div class="card" style="padding:0;overflow:hidden;overflow-x:auto;display:none" id="forsale-wrap">
+<table class="rec-table">
+    <thead>
+        <tr>
+            <th>Address</th>
+            <th style="text-align:right">UP²</th>
+            <th style="text-align:right">Eff W</th>
+            <th>Best Structure</th>
+            <th style="text-align:right">SU Gain</th>
+            <th style="text-align:right">Price (UPX)</th>
+            <th style="text-align:right">Price (USD)</th>
+            <th style="text-align:right">UPX / SU</th>
+        </tr>
+    </thead>
+    <tbody id="forsale-tbody"></tbody>
+</table>
+</div>
+
 <!-- ── Recommendations ──────────────────────────────────────────────────── -->
 <h3 class="section-heading">Recommendations</h3>
 
@@ -472,6 +494,43 @@ async function loadReport() {
     }
 }
 
+async function loadForSale() {
+    try {
+        const resp = await fetch(`/api/score/forsale?neighborhood=${encodeURIComponent(NEIGHBORHOOD)}`);
+        const data = await resp.json();
+        document.getElementById('forsale-loading').style.display = 'none';
+        const listings = data.listings || [];
+        if (!listings.length) {
+            document.getElementById('forsale-empty').style.display = '';
+            return;
+        }
+        document.getElementById('forsale-wrap').style.display = '';
+        const SU_CAT_COLOR = {essential:'#2980B9', entertainment:'#8E44AD', public:'#27AE60', transportation:'#E67E22', employment:'#C0392B'};
+        document.getElementById('forsale-tbody').innerHTML = listings.map(l => {
+            const catColor = SU_CAT_COLOR[l.su_cat] || '#999';
+            const suPill = l.su_gain > 0 ? `<span class="su-gain-pill">+${l.su_gain}</span>` : '<span style="color:#bbb">—</span>';
+            const priceUpx = l.price_upx != null ? l.price_upx.toLocaleString() : (l.mint_price ? l.mint_price.toLocaleString() + ' (mint)' : '—');
+            const priceUsd = l.price_usd != null ? `$${l.price_usd.toFixed(2)}` : '—';
+            const effPer = l.upx_per_su != null ? l.upx_per_su.toLocaleString() : '—';
+            const up2 = l.up2 != null ? l.up2 : '—';
+            const effW = l.eff_width != null ? l.eff_width.toFixed(1) + '^' : '—';
+            return `<tr>
+                <td><strong>${l.address}</strong></td>
+                <td style="text-align:right">${up2}</td>
+                <td style="text-align:right">${effW}</td>
+                <td>${l.recommended_name ? `<span style="color:${catColor};font-weight:500">${l.recommended_name}</span>` : '<span style="color:#bbb">—</span>'}</td>
+                <td style="text-align:right">${suPill}</td>
+                <td style="text-align:right">${priceUpx}</td>
+                <td style="text-align:right">${priceUsd}</td>
+                <td style="text-align:right" style="color:#888">${effPer}</td>
+            </tr>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('forsale-loading').textContent = 'Failed to load for-sale data.';
+    }
+}
+
 loadReport();
+loadForSale();
 </script>
 {% endblock %}
