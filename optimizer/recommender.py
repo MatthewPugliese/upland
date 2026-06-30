@@ -76,8 +76,26 @@ MANUAL_OVERRIDES = {
     "81298918835132": ("KEEP", "Apartment Building + Bus Stop — residential anchor on Liberty"),
 }
 
-_RESIDENTIAL_ZONES = {"Zone 6", "Zone 2"}
+_RESIDENTIAL_ZONES = {"Zone 6", "Zone 2", "residential", "green"}
 _LOW_VALUE_TYPES = {"Micro House", "Small Town House"}
+
+
+def _rule_based_action(prop_id: str, current_structs: list) -> tuple[str, str] | None:
+    """
+    Return (action, desc) for a portable rule-based override, or None.
+    Handles Showrooms (MetaVentures) and unknown/limited structures safely.
+    Works for any neighborhood — does not rely on hardcoded property IDs.
+    """
+    names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
+    if not names:
+        return None
+    for name in names:
+        if "Showroom" in name:
+            return ("KEEP", f"{name} — MetaVenture property (never demolish)")
+    for name in names:
+        if name and name not in STRUCTURES:
+            return ("KEEP", f"{name} — limited/event structure; not in standard DB")
+    return None
 
 
 def get_zone(address: str) -> str:
@@ -93,25 +111,113 @@ def get_zone(address: str) -> str:
     return "Zone 6"
 
 
+def compute_lu_balance(structures: dict, user_ids: set = None) -> dict:
+    """
+    Compute living unit vs service unit balance for user-owned properties.
+
+    structures: {prop_id: [{buildingName, ...}, ...]}  (neighborhood structures cache)
+    user_ids:   set of prop_id strings to include (None = all props in dict)
+
+    Returns:
+        total_lu  — living units currently built
+        total_su  — total service units built
+        by_cat    — {essential: N, entertainment: N, public: N, employment: N, transportation: N}
+        ratios    — {cat: SU/LU, ...}  (0 when total_lu == 0)
+        status    — "balanced" | "lu_deficit" | "lu_critical" | "su_deficit"
+        message   — human-readable summary line
+    """
+    total_lu = 0
+    by_cat: dict[str, int] = {"essential": 0, "entertainment": 0, "public": 0,
+                               "employment": 0, "transportation": 0}
+    total_su = 0
+
+    for prop_id, structs_list in structures.items():
+        if user_ids is not None and str(prop_id) not in user_ids:
+            continue
+        for s in structs_list:
+            name = s.get("buildingName", "")
+            if not name:
+                continue
+            info = STRUCTURES.get(name, {})
+            total_lu += info.get("living_units", 0)
+            su = info.get("su", 0)
+            total_su += su
+            cat = info.get("su_cat")
+            if cat in by_cat:
+                by_cat[cat] += su
+
+    if total_lu == 0:
+        ratios = {cat: 0 for cat in by_cat}
+        status = "lu_critical" if total_su > 0 else "balanced"
+        msg = ("No living units — SU ratios undefined. Build residential structures urgently."
+               if total_su > 0 else "No structures built yet.")
+    else:
+        ratios = {cat: round(v / total_lu, 2) for cat, v in by_cat.items()}
+        overall = total_su / total_lu
+        if overall > 12:
+            status = "lu_deficit"
+            msg = (f"{total_su} SU / {total_lu} LU = {overall:.1f}× — over-served. "
+                   "Prioritize residential structures.")
+        elif total_su > 0 and overall < 2:
+            status = "su_deficit"
+            msg = (f"{total_su} SU / {total_lu} LU = {overall:.1f}× — under-served. "
+                   "Prioritize service structures.")
+        else:
+            status = "balanced"
+            msg = f"{total_su} SU / {total_lu} LU = {overall:.1f}× — balanced."
+
+    return {
+        "total_lu": total_lu,
+        "total_su": total_su,
+        "by_cat": by_cat,
+        "ratios": ratios,
+        "status": status,
+        "message": msg,
+    }
+
+
 def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
-                   current_structs: list, zone: str) -> dict:
+                   current_structs: list, zone: str,
+                   neighborhood_counts: dict = None,
+                   lu_deficit: bool = False) -> dict:
     """
     Compute the best recommendation for a property.
 
+    neighborhood_counts: {structure_name: count_in_neighborhood}
+      When provided, recommends structure types not yet present in the
+      neighborhood before repeating types that are already well-covered.
+
+    lu_deficit: when True (SU/LU ratio > 12 for user-owned properties), treat
+      ALL zones as residential-eligible and lower the SU threshold for preferring
+      residential over service structures to 10 SU (vs the normal 5).
+
     Returns a dict:
-        action          — "BUILD", "DEMOLISH → BUILD", or "KEEP"
-        desc            — human-readable string (used in map popups)
+        action           — "BUILD", "DEMOLISH → BUILD", or "KEEP"
+        desc             — human-readable string (used in map popups)
         recommended_name — structure to build/keep (str or None)
-        recommended_su  — SU of recommended structure
-        su_cat          — SU category string or None
-        su_gain         — net SU gained by taking action (0 for KEEP)
-        current_names   — list of currently built structure names
-        current_su      — total SU of current structures
-        addons          — list of supplementary structure suggestions
-        up2             — lot area in UP²
-        width_up        — raw width in UP units
-        depth_up        — depth in UP units
+        recommended_su   — SU of recommended structure
+        su_cat           — SU category string or None
+        su_gain          — net SU gained by taking action (0 for KEEP)
+        current_names    — list of currently built structure names
+        current_su       — total SU of current structures
+        addons           — list of supplementary structure suggestions
+        up2              — lot area in UP²
+        width_up         — raw width in UP units
+        depth_up         — depth in UP units
     """
+    _rule = _rule_based_action(prop_id, current_structs)
+    if _rule:
+        action, desc = _rule
+        current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
+        current_su = sum(STRUCTURES.get(n, {}).get("su", 0) for n in current_names)
+        return {
+            "action": action, "desc": desc,
+            "recommended_name": None, "recommended_su": current_su,
+            "su_cat": None, "su_gain": 0,
+            "current_names": current_names, "current_su": current_su,
+            "addons": [], "up2": up2, "width_up": width_up, "depth_up": depth_up,
+        }
+
     if prop_id in MANUAL_OVERRIDES:
         action, desc = MANUAL_OVERRIDES[prop_id]
         current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
@@ -150,12 +256,27 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
     current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
     current_su = sum(STRUCTURES.get(n, {}).get("su", 0) for n in current_names)
 
-    best_svc = best_service_for_zone(up2, width_up, zone)
+    best_svc = best_service_for_zone(up2, width_up, zone, neighborhood_counts)
     best_su = best_svc["su"] if best_svc else 0
     best_name = best_svc["name"] if best_svc else None
 
+    # Compact variety note appended to descriptions
+    def _variety_tag(name):
+        if not neighborhood_counts or not name:
+            return ""
+        count = neighborhood_counts.get(name, 0)
+        if count == 0:
+            return " [new type]"
+        if count >= 3:
+            return f" [{count}× in nbhd]"
+        return ""
+
+    # Consider residential on residential zones always; on any zone when LU deficit
+    _res_eligible = zone in _RESIDENTIAL_ZONES or lu_deficit
+    _res_su_threshold = 10 if lu_deficit else 5  # raise bar for service when LU is low
+
     best_res = None
-    if zone in _RESIDENTIAL_ZONES:
+    if _res_eligible:
         res_fits = [{"name": n, **v} for n, v in STRUCTURES.items()
                     if v["type"] == "residential"
                     and v["min_up2"] <= up2
@@ -185,7 +306,7 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
 
     # ── Nothing built yet ────────────────────────────────────────────────────
     if not current_names:
-        if zone in _RESIDENTIAL_ZONES and best_res and best_su < 5:
+        if _res_eligible and best_res and best_su < _res_su_threshold:
             desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_res['name']} ({best_res['living_units']} living units){addon_str}"
             return {
                 "action": "BUILD",
@@ -202,7 +323,7 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
                 "depth_up": depth_up,
             }
         elif best_name:
-            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_name} ({best_su} {best_svc['su_cat']} SU){addon_str}"
+            desc = f"{up2} UP² ({width_up}^ × {depth_up}^) | {best_name} ({best_su} {best_svc['su_cat']} SU){_variety_tag(best_name)}{addon_str}"
             return {
                 "action": "BUILD",
                 "desc": desc,
@@ -239,7 +360,7 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
     if all_low_value and best_name and su_gain >= 3:
         current_str = ", ".join(current_names)
         desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | "
-                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU){addon_str}")
+                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU){_variety_tag(best_name)}{addon_str}")
         return {
             "action": "DEMOLISH → BUILD",
             "desc": desc,
@@ -259,8 +380,8 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
     if not has_good_service and best_name and su_gain >= 8:
         current_str = ", ".join(current_names)
         desc = (f"{up2} UP² ({width_up}^ × {depth_up}^) | "
-                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU) "
-                f"(+{su_gain} SU){addon_str}")
+                f"Demolish {current_str} → {best_name} ({best_su} {best_svc['su_cat']} SU)"
+                f"{_variety_tag(best_name)} (+{su_gain} SU){addon_str}")
         return {
             "action": "DEMOLISH → BUILD",
             "desc": desc,
@@ -299,17 +420,20 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
     }
 
 
-def generate_report(neighborhood: str = "Dongan_Hills") -> list:
+def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
     """
-    Load cached data and return recommendation rows for all properties.
+    Load cached data and return recommendations for all properties.
+
+    Returns:
+        rows        — list of row dicts (see below), sorted: owned-first,
+                      then by action priority, then by su_gain descending
+        lu_balance  — output of compute_lu_balance() for user-owned props
+        neighborhood_counts — {structure_name: count} across all props
 
     Each row dict:
         prop_id, address, zone, up2, eff_width, width_up, depth_up,
         is_mine, action, recommended_name, recommended_su, su_cat,
         su_gain, current_names, current_su, addons, desc
-
-    Sorted: owned first, then by action priority (DEMOLISH → BUILD > BUILD > KEEP),
-    then by su_gain descending.
     """
     cache_dir = CACHE_DIR
     props_path = cache_dir / f"{neighborhood}_props_cache.json"
@@ -326,6 +450,18 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> list:
     api_dims = {k: v for k, v in dims_raw.items() if k != "_ts"}
     blockchain = json.loads(blockchain_path.read_text()) if blockchain_path.exists() else {}
     user_ids = {str(pid) for pid in blockchain.get("owned", [])}
+
+    # Count how many of each structure type exist across the whole neighborhood
+    neighborhood_counts: dict[str, int] = {}
+    for structs_list in structures.values():
+        for s in structs_list:
+            name = s.get("buildingName", "")
+            if name:
+                neighborhood_counts[name] = neighborhood_counts.get(name, 0) + 1
+
+    # LU balance check — scope to user-owned props only
+    lu_balance = compute_lu_balance(structures, user_ids=user_ids)
+    lu_deficit = lu_balance["status"] in ("lu_deficit", "lu_critical")
 
     rows = []
     for prop in props:
@@ -344,6 +480,8 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> list:
             d.get("depth_up"),
             structs,
             zone,
+            neighborhood_counts,
+            lu_deficit=lu_deficit and is_mine,  # only nudge residential on owned props
         )
 
         rows.append({
@@ -376,4 +514,8 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> list:
         )
 
     rows.sort(key=_sort_key)
-    return rows
+    return {
+        "rows": rows,
+        "lu_balance": lu_balance,
+        "neighborhood_counts": neighborhood_counts,
+    }

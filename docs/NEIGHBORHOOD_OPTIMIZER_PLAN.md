@@ -1,6 +1,6 @@
 # Upland Neighborhood Optimizer — Project Plan
 
-**Last updated:** 2026-06-08  
+**Last updated:** 2026-06-30  
 **Primary working dir:** `/Users/matt.pugliese/projects/local/upland/neighborhood-map/`  
 **Ultimate goal:** A web app where any Upland player inputs a neighborhood + optional username and gets a fully personalized, shape-aware building recommendation breakdown for maximizing their **Neighborhood Score** (Resident Score + Commerce Score + Influence Score).
 
@@ -70,17 +70,18 @@ The old "Neighborhood Score" was retired in late 2025. The current primary metri
 
 ---
 
-## Current State (as of 2026-06-08)
+## Current State (as of 2026-06-30)
 
 ### Files
 
 | File | Purpose |
 |---|---|
 | `neighborhood_map.py` | General-purpose neighborhood map generator (HTML + PNG). Works for any city. |
-| `dongan_hills_zone_map.py` | Dongan Hills zone optimization map. Generates `Dongan_Hills_Zones.html`. |
+| `zone_map.py` | **Generalized** zone optimization map — works for any neighborhood via OSM auto-zoning. |
+| `dongan_hills_zone_map.py` | Dongan Hills–specific zone map (hardcoded STREET_ZONES + MANUAL_OVERRIDES). Kept for DH precision. |
 | `structure_fitter.py` | Structure database (min_up2, min_width, min_depth, SU, variety category) + fitting logic. |
-| `cache/` | Per-run caches: props, structures, pluto, geocode, blockchain, API dims. |
-| `PROJECT_PLAN.md` | This file. |
+| `recommender.py` | `auto_recommend()`, `_rule_based_action()` (portable Showroom/unknown-structure KEEP logic). |
+| `cache/` | Per-run caches: props, structures, pluto, geocode, blockchain, API dims, OSM zone map. |
 | `DONGAN_HILLS_OPTIMIZATION.md` | Legacy zone plan + build priority reference. |
 
 ### Architecture (current)
@@ -91,8 +92,10 @@ Upland API (/properties, /neighborhoods, /cities)
 
 api.upland.me/properties/{id}  (public, no auth)
     → structures_cache.json   (buildings on each property)
-    → api_dims_cache.json     (lot boundaries → width/depth/fill%)
-      *** Currently fetches only USER-OWNED props — needs to cover ALL props ***
+    → api_dims_cache.json     (lot boundaries → width/depth/fill%, ALL props covered)
+
+Overpass API (OSM)
+    → osm_zones_cache.json    (street name → zone key, auto-detected per neighborhood)
 
 MapPLUTO (NYC ArcGIS)
     → pluto_cache.json        (parcel polygons for OSM building outline drawing only)
@@ -140,49 +143,43 @@ dongan_hills_zone_map.py
 
 #### Critical Path — Web App
 
-- [ ] **`fetch_api_dims()` should cover ALL neighborhood properties, not just user-owned**
-  - File: `dongan_hills_zone_map.py` → `fetch_api_dims(props, user_ids)`
-  - Change: remove the `if str(p["id"]) in user_ids` filter, fetch for all 874 props
-  - Rate-limit: 10 concurrent threads is fine, add `time.sleep(0.05)` between batches
-  - Cache key: already keyed by address, just needs more entries
-  - Impact: enables recommendations for any property in the neighborhood, not just pugs08's
+- [x] **`fetch_api_dims()` covers ALL neighborhood properties** — 874/874 DH props in cache
 
-- [ ] **Generalize zone assignment beyond Dongan Hills**
-  - Current: `STREET_ZONES` is a hardcoded dict of DH street names
-  - Target: query Overpass API for street classifications (highway type, landuse) within the neighborhood boundary, auto-assign zones:
-    - `highway=primary/secondary` + commercial landuse → Zone 1 (Commercial)
-    - Residential landuse → Zone 2 (Residential)
-    - `amenity=*` density clusters → Zone 3 (Public Services)
-    - Mixed use → Zone 4 (Mixed)
-    - `landuse=industrial` or railway proximity → Zone 5 (Industrial)
-    - Parks/green space → Zone 6 (Green/STEM)
-  - Fallback: single zone "General" with balanced priority
+- [x] **Generalized zone assignment — `zone_map.py`**
+  - Queries Overpass for highway-tagged streets within the neighborhood boundary
+  - Maps `highway=primary/secondary` → `commercial`, `residential` → `residential`, etc.
+  - Six generic zones: `commercial`, `residential`, `public`, `mixed`, `industrial`, `green`
+  - Caches result as `{safe_name}_osm_zones_cache.json` (7-day TTL)
+  - Falls back to `"mixed"` for streets not in OSM or when Overpass is unavailable
+  - `structure_fitter.best_service_for_zone()` supports both generic and legacy "Zone N" keys
+  - `recommender._RESIDENTIAL_ZONES` includes `"residential"` and `"green"`
 
-- [ ] **Extract `dongan_hills_zone_map.py` → `zone_map.py`**
-  - Accept: `neighborhood_name`, `city`, `username` (optional), `eos_account` (optional)
-  - Remove: all hardcoded DH prop IDs from `MANUAL_OVERRIDES`
-  - Replace `MANUAL_OVERRIDES` with rule-based detection:
-    - Properties with Showrooms → KEEP (metaventure)
-    - Properties with unique event structures (e.g., Speedway, seasonal) → KEEP
-    - Properties already at maximum possible SU for their lot → KEEP + OPTIMAL tag
+- [x] **Extracted `zone_map.py`** — accepts any neighborhood name + city + optional username
+  - `_rule_based_action()` in `recommender.py` replaces hardcoded `MANUAL_OVERRIDES`:
+    - Showroom in any structure name → KEEP (MetaVenture, never demolish)
+    - Unknown structure name (not in STRUCTURES DB) → KEEP (limited/event blueprint)
+  - `dongan_hills_zone_map.py` remains for DH-specific precision (keeps hardcoded STREET_ZONES)
 
-- [ ] **Add variety tracking to recommendations**
-  - Track which structure types are already present in the neighborhood
-  - Penalize recommending a type already well-represented; prefer new types
-  - Show: "3 Farmers Markets already in neighborhood — recommend Modern Hotel for variety instead"
+- [x] **Add variety tracking to recommendations**
+  - `recommender.py:generate_report()` computes `neighborhood_counts` (dict of name→count across all built structures)
+  - `auto_recommend()` + `best_service_for_zone()` accept `neighborhood_counts`; prefer count==0 types, then least-duplicated
+  - Popup shows `" [new type]"` / `" [3× in nbhd]"` tags in recommendation description
+  - `zone_map.py:render_zone_map()` computes and threads `neighborhood_counts` through the `_rec()` closure
 
-- [ ] **Add living unit balance check**
-  - Compute current total SU and total LU for all user-owned properties
-  - Warn if SU/LU ratio is very high or very low
-  - Factor into recommendations: if LU is very low relative to SU, prefer residential structures
+- [x] **Add living unit balance check**
+  - `recommender.compute_lu_balance(structures, user_ids)` — computes total_lu, total_su, per-category SU, ratios, status, and a human-readable message
+  - Status: `"balanced"` | `"su_deficit"` (SU/LU < 2) | `"lu_deficit"` (SU/LU > 12) | `"lu_critical"` (0 LU built)
+  - `auto_recommend()` accepts `lu_deficit=True` — lowers the service-over-residential threshold from 5 SU to 10 SU and treats all zones as residential-eligible when LU is critically low
+  - `generate_report()` computes balance and passes `lu_deficit` only for owned properties (not neighbors)
+  - `zone_map.render_zone_map()` shows LU balance warning panel in bottom-left stats box (color-coded: green = balanced, orange = su_deficit, red = lu_deficit, dark red = lu_critical)
 
-- [ ] **Build recommendation report (HTML table)**
-  - Separate from the map: a sortable/filterable breakdown table
-  - Columns: Address | Zone | UP² | Eff Width | Action | Recommended Structure | SU Type | SU Gain | Current Structures | Notes
-  - Sort by SU gain descending (biggest wins first)
-  - Filter by: zone, action type (BUILD / DEMOLISH), minimum SU gain
-  - Summary row: total current SU | total potential SU | total SU gain
-  - Phase breakdown: Phase 1 (highest impact) / Phase 2 / Phase 3
+- [x] **Build recommendation report (HTML table)**
+  - `report.py` — self-contained HTML, all filtering/sorting client-side JS
+  - Columns: Address | Zone | UP² | Eff Width | Action | Recommendation | SU Type | SU Gain | Current Structures
+  - Filters: zone buttons, action buttons, mine-only toggle, min SU gain input
+  - Sort any column by clicking header; default sort: SU gain descending
+  - Summary metrics: total SU gain, current SU, potential SU, build/demolish/keep counts, SU/LU balance
+  - Auto-generated alongside the zone map by `zone_map.py`; also runnable standalone
 
 - [ ] **Web app backend (Flask or FastAPI)**
   - `POST /analyze` — accepts `{neighborhood, city, username?, eos_account?}`, returns map HTML + report HTML + JSON summary
@@ -374,24 +371,28 @@ dongan_hills_zone_map.py
 2. `auto_recommend()` demolish threshold (su_gain >= 8) and residential preference threshold (best_su < 5) are heuristics
 3. Zone boundaries computed from user props only — sparse zones look small
 4. `MANUAL_OVERRIDES` are DH prop IDs — not portable to other neighborhoods
-5. No variety tracking — could recommend 5 identical structure types
-6. No living unit balance check — SU/LU ratio not monitored
+5. ~~No variety tracking~~ — fixed: `neighborhood_counts` threaded through recommender
+6. ~~No living unit balance check~~ — fixed: `compute_lu_balance()` + `lu_deficit` flag in recommender
 7. `min_depth` exists in STRUCTURES for Classic Hotel but depth display in popup is secondary
 8. Commerce Score (offices) treated as add-on, not first-class recommendation
 
 ## Running the Project
 
 ```bash
-cd /Users/matt.pugliese/projects/local/upland/neighborhood-map
+cd /Users/matt.pugliese/projects/local/upland/optimizer
 
-# Generate Dongan Hills zone map (uses cached data, fast):
+# Generalized zone map — works for ANY neighborhood:
+python3 zone_map.py "Dongan Hills" --city "Staten Island"
+python3 zone_map.py "Rosebank" --city "Staten Island" --username pugs08
+python3 zone_map.py "Inner Richmond" --city "San Francisco"
+python3 zone_map.py "Lincoln Park" --city "Chicago" --output-dir ~/Desktop
+
+# DH-specific zone map (hardcoded street zones, higher precision for DH):
 python3 dongan_hills_zone_map.py
 
-# Regenerate with fresh property/structure data:
-python3 neighborhood_map.py "Dongan Hills" --city "Staten Island" --refresh-cache --html-only
-
-# General map for any neighborhood:
+# General status map for any neighborhood (no zones/recommendations):
 python3 neighborhood_map.py "Rosebank" --city "Staten Island"
+python3 neighborhood_map.py "Dongan Hills" --city "Staten Island" --refresh-cache --html-only
 
 # Structure fitter:
 python3 structure_fitter.py

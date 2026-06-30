@@ -272,39 +272,69 @@ def structures_that_fit(up2: float, width_up: float = 0, depth_up: float = 0) ->
     return results
 
 
-def best_service_for_zone(up2: float, width_up: float, zone: str) -> dict | None:
+def best_service_for_zone(up2: float, width_up: float, zone: str,
+                          neighborhood_counts: dict = None) -> dict | None:
     """
     Return the single best service structure for a lot in the given zone,
-    considering both area and width constraints.
+    considering area/width constraints and neighborhood variety.
+
+    neighborhood_counts: {structure_name: count_in_neighborhood}
+    When provided, structures already present are deprioritized so the
+    recommender naturally diversifies across types within each category.
 
     Zone priority (what SU category to maximize first):
-      Zone 1 — entertainment, then essential
-      Zone 2 — public, then essential
-      Zone 3 — public, then entertainment
-      Zone 4 — public, then essential
-      Zone 5 — essential, then employment
-      Zone 6 — public, then essential
+      commercial/Zone 1 — entertainment, then essential
+      residential/Zone 2 — public, then essential
+      public/Zone 3     — public, then entertainment
+      mixed/Zone 4      — public, then essential
+      industrial/Zone 5 — essential, then employment
+      green/Zone 6      — public, then essential
     """
     PRIORITY = {
-        "Zone 1": ["entertainment", "essential", "public"],
-        "Zone 2": ["public", "essential", "entertainment"],
-        "Zone 3": ["public", "entertainment", "essential"],
-        "Zone 4": ["public", "essential", "entertainment"],
-        "Zone 5": ["essential", "public", "entertainment"],
-        "Zone 6": ["public", "essential", "entertainment"],
+        # Generic OSM-based zone keys (used by zone_map.py)
+        "commercial":  ["entertainment", "essential", "public"],
+        "residential": ["public", "essential", "entertainment"],
+        "public":      ["public", "entertainment", "essential"],
+        "mixed":       ["public", "essential", "entertainment"],
+        "industrial":  ["essential", "public", "entertainment"],
+        "green":       ["public", "essential", "entertainment"],
+        # Dongan Hills legacy zone keys (used by dongan_hills_zone_map.py)
+        "Zone 1":      ["entertainment", "essential", "public"],
+        "Zone 2":      ["public", "essential", "entertainment"],
+        "Zone 3":      ["public", "entertainment", "essential"],
+        "Zone 4":      ["public", "essential", "entertainment"],
+        "Zone 5":      ["essential", "public", "entertainment"],
+        "Zone 6":      ["public", "essential", "entertainment"],
     }
     cats = PRIORITY.get(zone, ["essential", "entertainment", "public"])
     fits = [s for s in structures_that_fit(up2, width_up) if s["type"] == "service" and s["su"] > 0]
     if not fits:
         return None
-    # Score: primary category rank (lower = better), then SU descending
-    def score(s):
-        try:
-            rank = cats.index(s["su_cat"])
-        except ValueError:
-            rank = len(cats)
-        return (rank, -s["su"])
-    return min(fits, key=score)
+
+    nc = neighborhood_counts or {}
+
+    def _pick_from(candidates: list) -> dict | None:
+        """From candidates, prefer fresh types; among ties, pick highest SU."""
+        if not candidates:
+            return None
+        if nc:
+            fresh = [s for s in candidates if nc.get(s["name"], 0) == 0]
+            if fresh:
+                return max(fresh, key=lambda s: s["su"])
+            # All duplicates — pick least-duplicated, break ties by SU
+            min_count = min(nc.get(s["name"], 0) for s in candidates)
+            least_dup = [s for s in candidates if nc.get(s["name"], 0) == min_count]
+            return max(least_dup, key=lambda s: s["su"])
+        return max(candidates, key=lambda s: s["su"])
+
+    for cat in cats:
+        cat_fits = [s for s in fits if s["su_cat"] == cat]
+        result = _pick_from(cat_fits)
+        if result:
+            return result
+
+    # Fallback: best across all categories
+    return _pick_from(fits)
 
 
 def best_service_for_category(fits: list[dict], category: str) -> list[dict]:
