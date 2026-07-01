@@ -228,17 +228,20 @@ dongan_hills_zone_map.py
   - "Buy Opportunities" panel on score dashboard: sorted by SU gain, shows UPX/SU efficiency
   - 1919 Hylan Blvd surfaces as top DH buy (62 SU, Large Court House)
 
+- [ ] **Cache full Upland API response per property** ← do this first, unlocks next 3
+  - Currently `structures_cache.json` stores only `buildingName/Type/Image/constructionStatus`
+  - Confirmed live API has: `building.details.{stepSparks, minStackedSparks, maxStackedSparks}`, `building.residents`, `building.{polygon, lat, lng, scale, rotate}` for footprint
+  - Enhance `get_upland_property_structures()` in `neighborhood_map.py` to store these extra fields; cache schema extension, not a breaking change
+
 - [ ] **Spark hours estimator**
-  - The API returns `stepSparks` and `minStackedSparks` per structure in the `details` field
-  - Given the full recommended build queue, compute total spark hours needed end-to-end
-  - Show per-structure spark cost and a running total
-  - Flag structures that are spark-heavy relative to their SU gain
+  - Once `details` is cached: given the full recommended build queue, compute total spark hours needed end-to-end
+  - Show per-structure spark cost and running total on score dashboard
+  - Flag spark-heavy structures relative to their SU gain
 
 - [ ] **Residents tracker**
-  - The API returns a `residents` count per building
-  - Surface total residents across all user properties
-  - Flag residential buildings with 0 residents — these are underperforming housing units
-  - Show trend if data is refreshed over time (residents gained/lost since last fetch)
+  - Once `residents` is cached: surface total residents across user properties
+  - Flag residential buildings with 0 residents (underperforming housing)
+  - Show trend if data is refreshed over time
 
 - [ ] **Commerce Score layer**
   - Track office structures separately from service structures
@@ -250,11 +253,6 @@ dongan_hills_zone_map.py
   - After residential structure is placed, recommend STEM plants based on city climate zone
   - NYC = cold zone: Maple, Pine, Weeping Willow, Roses, Tulips
   - Flag residential properties with 0 greenery
-
-- [ ] **Cache full Upland API response per property**
-  - Currently `api_dims_cache.json` stores only dimensions
-  - Store full response: add `area`, `status`, `yield_per_hour`, `building`, `labels` fields
-  - Saves re-fetching for structure + dimension data in one shot
 
 - [ ] **Plan completion tracker**
   - Compute % of recommended actions completed (BUILD done, DEMOLISH done) vs total in plan
