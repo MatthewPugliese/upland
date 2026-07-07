@@ -147,8 +147,27 @@
     .forsale-addr { flex: 1; color: #333; font-weight: 500; }
     .forsale-price-upx { color: #1B4F72; font-weight: 700; white-space: nowrap; }
     .forsale-price-usd { color: #1E8449; font-weight: 700; white-space: nowrap; }
+    .forsale-markup { font-size: 11px; white-space: nowrap; padding: 1px 6px; border-radius: 8px; }
+    .forsale-markup.low { background: #EAFAF1; color: #1E8449; }
+    .forsale-markup.mid { background: #FEF9E7; color: #9A7D0A; }
+    .forsale-markup.high { background: #FDEDEC; color: #C0392B; }
     .forsale-owner { color: #aaa; font-size: 11px; }
     .forsale-none { color: #aaa; font-style: italic; }
+    .forsale-filters {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 11px;
+        color: #888;
+    }
+    .forsale-filters select {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        color: #555;
+    }
 
     .full-table {
         width: 100%;
@@ -371,6 +390,82 @@ function filterTable() {
     });
 }
 
+function markupClass(pct) {
+    if (pct === null || pct === undefined) return "";
+    if (pct <= 100) return "low";
+    if (pct <= 1000) return "mid";
+    return "high";
+}
+
+function renderForSaleListings(container) {
+    var listings = container._listings || [];
+    var currency = container._currencyFilter || "all";
+    var sortBy = container._sortBy || "price";
+
+    var filtered = listings.filter(function(l) {
+        if (currency === "upx") return l.currency === "UPX";
+        if (currency === "usd") return l.currency === "USD";
+        return true;
+    });
+
+    filtered.sort(function(a, b) {
+        if (sortBy === "markup") {
+            var am = a.markup_pct === null || a.markup_pct === undefined ? Infinity : a.markup_pct;
+            var bm = b.markup_pct === null || b.markup_pct === undefined ? Infinity : b.markup_pct;
+            return am - bm;
+        }
+        // price: compare within the same currency lane, UPX-priced first
+        var aHas = a.price_upx !== null && a.price_upx !== undefined;
+        var bHas = b.price_upx !== null && b.price_upx !== undefined;
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        if (aHas) return a.price_upx - b.price_upx;
+        var aUsd = a.price_usd || Infinity, bUsd = b.price_usd || Infinity;
+        return aUsd - bUsd;
+    });
+
+    var filterBar = '<div class="forsale-filters">'
+        + 'Currency: <select onchange="onForSaleFilterChange(this, \'' + container.id + '\', \'currency\')">'
+        + '<option value="all"' + (currency === "all" ? " selected" : "") + '>All</option>'
+        + '<option value="upx"' + (currency === "upx" ? " selected" : "") + '>UPX only</option>'
+        + '<option value="usd"' + (currency === "usd" ? " selected" : "") + '>USD only</option>'
+        + '</select>'
+        + 'Sort: <select onchange="onForSaleFilterChange(this, \'' + container.id + '\', \'sort\')">'
+        + '<option value="price"' + (sortBy === "price" ? " selected" : "") + '>Price</option>'
+        + '<option value="markup"' + (sortBy === "markup" ? " selected" : "") + '>Markup %</option>'
+        + '</select>'
+        + '</div>';
+
+    if (!filtered.length) {
+        container.innerHTML = filterBar + '<span class="forsale-none">No listings match this filter.</span>';
+        return;
+    }
+
+    var html = filterBar;
+    filtered.forEach(function(l) {
+        var upx = l.price_upx ? l.price_upx.toLocaleString() + " UPX" : "—";
+        var usd = l.price_usd ? "$" + l.price_usd.toFixed(2) : "";
+        var owner = l.owner_username ? "@ " + l.owner_username : "";
+        var markup = (l.markup_pct !== null && l.markup_pct !== undefined)
+            ? '<span class="forsale-markup ' + markupClass(l.markup_pct) + '">+' + l.markup_pct.toLocaleString() + '% vs mint</span>'
+            : "";
+        html += '<div class="forsale-row">'
+            + '<span class="forsale-addr">' + l.address + (l.city ? ' <span style="color:#bbb;font-size:10px">' + l.city + '</span>' : '') + '</span>'
+            + (l.currency === "UPX" ? '<span class="forsale-price-upx">' + upx + '</span>' : '')
+            + (l.currency === "USD" ? '<span class="forsale-price-usd">' + usd + '</span>' : '')
+            + markup
+            + '<span class="forsale-owner">' + owner + '</span>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function onForSaleFilterChange(select, containerId, kind) {
+    var container = document.getElementById(containerId);
+    if (kind === "currency") container._currencyFilter = select.value;
+    if (kind === "sort") container._sortBy = select.value;
+    renderForSaleListings(container);
+}
+
 function loadForSale(btn, collId) {
     btn.disabled = true;
     btn.textContent = "Searching...";
@@ -393,19 +488,8 @@ function loadForSale(btn, collId) {
                 btn.textContent = "No listings found";
                 return;
             }
-            var html = '';
-            listings.forEach(function(l) {
-                var upx = l.price_upx ? l.price_upx.toLocaleString() + " UPX" : "—";
-                var usd = l.price_usd ? "$" + l.price_usd.toFixed(2) : "";
-                var owner = l.owner_username ? "@ " + l.owner_username : "";
-                html += '<div class="forsale-row">'
-                    + '<span class="forsale-addr">' + l.address + (l.city ? ' <span style="color:#bbb;font-size:10px">' + l.city + '</span>' : '') + '</span>'
-                    + '<span class="forsale-price-upx">' + upx + '</span>'
-                    + (usd ? '<span class="forsale-price-usd">' + usd + '</span>' : '')
-                    + '<span class="forsale-owner">' + owner + '</span>'
-                    + '</div>';
-            });
-            container.innerHTML = html;
+            container._listings = listings;
+            renderForSaleListings(container);
             btn.textContent = listings.length + " listing" + (listings.length !== 1 ? "s" : "") + " found";
         })
         .catch(function(e) {

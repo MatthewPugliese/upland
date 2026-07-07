@@ -28,7 +28,19 @@ Results are bucketed into three sections:
 
 "Find listings" button on each 1–2 away collection. Fetches async, shows matching for-sale props sorted by UPX price with address, owner, and USD price if applicable.
 
-### Phase 3 — Remaining Enhancements (not started)
+### Phase 3 — Markup & Currency Filtering ✅ DONE (2026-07-07)
+
+| Component | File | Status |
+|---|---|---|
+| Fix USD/UPX price mislabeling bug | `webapp/forsale_finder.py` `_public_api_price()` | **Done** |
+| Markup % + currency fields (backend) | `webapp/forsale_finder.py` `find_forsale_for_collection()` | **Done** |
+| Markup/currency filter UI (frontend) | `webapp/templates/collections_results.html` `loadForSale()` / `renderForSaleListings()` | **Done** |
+
+**Bug fixed:** `_public_api_price()` read the public API's `price` field as if it were always UPX. For USD-only listings (`on_market.currency == "USD"`), `price` actually holds the *fiat* amount — so a $5 USD listing was also showing up as "5 UPX". Fixed by branching on `on_market.currency` before assigning `price_upx`/`price_usd`. Verified against real Dongan Hills for-sale properties (one USD listing, one UPX listing).
+
+**Backend:** `find_forsale_for_collection()` now returns every qualifying listing (not currency-filtered) with `price_upx`, `price_usd`, `currency` ("UPX"/"USD"), `markup_pct`, and `mint_price` all populated. `markup_pct = (price_upx - mint_price) / mint_price * 100`, computed only for UPX-currency listings (mint_price comes from the developers-API `mintPrice` field already present in cached candidate data — None for USD listings or when mint_price is missing/zero). Verified live against real listings.
+
+**Frontend:** `collections_results.html` now has a filter bar per collection (`renderForSaleListings()`) with a currency select (All / UPX / USD) and sort select (Price / Markup %). Raw listings are stashed on the container element (`container._listings`) so switching filters re-renders client-side with no re-fetch — the 30-min server cache already returns everything in one call. Listings show a color-coded markup badge (green ≤100%, amber ≤1000%, red above) next to the price. Verified: template renders without Jinja errors, JS passes `node --check`, and filter/sort logic was functionally tested with simulated mixed-currency data (currency filter correctly excludes non-matching listings; markup sort correctly ranks lowest-markup first).
 
 ---
 
@@ -71,6 +83,11 @@ Upland has hundreds of collections. Players typically:
   - For each target collection, list the missing properties with their current listing price (if on market)
   - Flag which ones are unlisted (harder to acquire — need to make an offer)
   - Show last known sale price for unlisted properties (from economy scraper) as a negotiation anchor
+
+- [x] **Markup & currency filtering** — shipped 2026-07-07 (see Phase 3 above)
+  - Sort missing-property listings by markup over mint price, not just absolute price
+  - Filter listings by currency: UPX only / USD only / both
+  - Also fixed a bug along the way where USD-only listings were mislabeled as UPX prices
 
 - [ ] **Yield impact calculator**
   - Current total yield/hour across all your properties

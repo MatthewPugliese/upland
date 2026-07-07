@@ -35,7 +35,15 @@ import requests as _requests
 
 
 def _public_api_price(prop_id):
-    """Fetch listing price from the public Upland API. Returns (upx_price, usd_price, owner_username)."""
+    """
+    Fetch listing price + currency from the public Upland API.
+    Returns (upx_price, usd_price, currency, owner_username).
+
+    `on_market.currency` ("UPX" or "USD") tells you which field `price` actually
+    represents — for a USD listing, `price` holds the *fiat* amount, not a UPX
+    price (confirmed empirically: a $5 listing returns price=5, not a UPX figure).
+    Reading `price` without checking currency first mislabels USD listings as UPX.
+    """
     try:
         r = _requests.get(
             f"https://api.upland.me/properties/{prop_id}",
@@ -44,18 +52,15 @@ def _public_api_price(prop_id):
         )
         if r.status_code == 200:
             data = r.json()
-            price_upx = data.get("price")
             on_market = data.get("on_market") or {}
-            fiat_raw = on_market.get("fiat", "0.00 FIAT")
-            try:
-                price_usd = float(fiat_raw.split()[0]) if fiat_raw else 0.0
-            except (ValueError, IndexError):
-                price_usd = 0.0
+            currency = on_market.get("currency", "")
+            price_upx = data.get("price") if currency == "UPX" else None
+            price_usd = data.get("price") if currency == "USD" else None
             owner = data.get("owner_username", "")
-            return price_upx, price_usd if price_usd > 0 else None, owner
+            return price_upx, price_usd, currency, owner
     except Exception:
         pass
-    return None, None, None
+    return None, None, "", None
 
 
 def _fetch_prices_batch(candidates):
@@ -63,11 +68,18 @@ def _fetch_prices_batch(candidates):
     lock = threading.Lock()
 
     def enrich(prop):
-        upx, usd, owner = _public_api_price(prop["id"])
+        upx, usd, currency, owner = _public_api_price(prop["id"])
         with lock:
             prop["price_upx"] = upx
             prop["price_usd"] = usd
+            prop["currency"] = currency
             prop["owner_username"] = owner
+            mint = prop.get("mint_price")
+            prop["markup_pct"] = (
+                round((upx - mint) / mint * 100, 1)
+                if currency == "UPX" and mint and upx is not None
+                else None
+            )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
         list(ex.map(enrich, candidates))
@@ -160,8 +172,10 @@ def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
     """
     Find for-sale properties that would qualify for a collection.
 
-    Returns list of dicts sorted by UPX price ascending:
-      {id, address, price_upx, price_usd, city, neighborhood, owner_username}
+    Returns list of dicts sorted by UPX price ascending (all qualifying listings
+    included, not pre-filtered by currency — the UI filters/sorts client-side):
+      {id, address, price_upx, price_usd, currency, markup_pct, mint_price,
+       city, neighborhood, owner_username}
     """
     coll_id = coll_entry["id"]
     cache_path = FORSALE_CACHE_DIR / f"coll_{coll_id}.json"
@@ -214,13 +228,17 @@ def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
             "neighborhood": hood_obj.get("name", "") if isinstance(hood_obj, dict) else str(hood_obj),
             "price_upx": None,
             "price_usd": None,
+            "currency": "",
+            "markup_pct": None,
             "owner_username": None,
             "mint_price": p.get("mintPrice"),
         })
 
     _fetch_prices_batch(normalized)
 
-    # Sort by UPX price ascending (unlisted/null price last)
+    # Default sort: UPX price ascending (unlisted/USD-only listings last).
+    # Currency filtering and markup sorting are done client-side — all listings
+    # are returned here so the UI can re-slice without re-fetching.
     result = sorted(normalized, key=lambda x: (x["price_upx"] is None, x["price_upx"] or 0))
 
     with open(cache_path, "w") as f:
