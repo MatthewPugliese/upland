@@ -98,6 +98,8 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
 
     Returns structured score dict.
     """
+    addr_by_id = {str(p.get("id", "")): p.get("address", "") for p in (props or [])}
+
     total_lu = 0
     su_by_cat = {}
     variety_by_cat = {}
@@ -105,6 +107,9 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
     employment_count = 0
     other_buildings = []
     props_with_structs = 0
+    total_residents = 0
+    empty_residential = []
+    has_residents_data = False
 
     for pid, buildings in structs.items():
         if buildings:
@@ -125,6 +130,17 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
             btype = info.get("type", "")
 
             total_lu += lu
+
+            if "residents" in b:
+                has_residents_data = True
+                residents = b.get("residents") or 0
+                total_residents += residents
+                if btype == "residential" and b.get("constructionStatus") == "completed" and residents == 0:
+                    empty_residential.append({
+                        "prop_id": pid,
+                        "address": addr_by_id.get(pid, ""),
+                        "buildingName": name,
+                    })
 
             if btype in ("factory",) or cat == "employment":
                 employment_count += 1
@@ -183,6 +199,9 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
         "props_with_structs": props_with_structs,
         "density_pct": density_pct,
         "employment_buildings": employment_count,
+        "has_residents_data": has_residents_data,
+        "total_residents": total_residents,
+        "empty_residential": empty_residential,
         "categories": categories,
         "gaps": gaps,
         "inventory": inventory,

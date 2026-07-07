@@ -1175,7 +1175,9 @@ def get_upland_structures(boundary_coords: list) -> set:
 def get_upland_property_structures(props: list, cache_path: Path) -> dict:
     """
     Fetch game structure data for every property via the Upland public API.
-    Returns {prop_id_str: [{"buildingName": ..., "buildingType": ..., ...}, ...]}
+    Returns {prop_id_str: [{"buildingName", "buildingType", "constructionStatus",
+    "buildingImage", "residents", "stepSparks", "minStackedSparks",
+    "maxStackedSparks", "polygon", "lat", "lng", "scale", "rotate"}, ...]}
 
     The public API at https://api.upland.me/properties/{id} returns a `buildings`
     array listing every structure currently placed on that property.
@@ -1252,7 +1254,16 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
                     {"buildingName": b.get("buildingName", ""),
                      "buildingType": b.get("buildingType", ""),
                      "constructionStatus": b.get("constructionStatus", ""),
-                     "buildingImage": b.get("buildingImage", "")}
+                     "buildingImage": b.get("buildingImage", ""),
+                     "residents": b.get("residents", 0),
+                     "stepSparks": (b.get("details") or {}).get("stepSparks"),
+                     "minStackedSparks": (b.get("details") or {}).get("minStackedSparks"),
+                     "maxStackedSparks": (b.get("details") or {}).get("maxStackedSparks"),
+                     "polygon": b.get("polygon"),
+                     "lat": b.get("lat"),
+                     "lng": b.get("lng"),
+                     "scale": b.get("scale"),
+                     "rotate": b.get("rotate")}
                     for b in bldgs
                 ]
         except Exception:

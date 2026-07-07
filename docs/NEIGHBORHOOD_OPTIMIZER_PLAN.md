@@ -228,20 +228,20 @@ dongan_hills_zone_map.py
   - "Buy Opportunities" panel on score dashboard: sorted by SU gain, shows UPX/SU efficiency
   - 1919 Hylan Blvd surfaces as top DH buy (62 SU, Large Court House)
 
-- [ ] **Cache full Upland API response per property** ← do this first, unlocks next 3
-  - Currently `structures_cache.json` stores only `buildingName/Type/Image/constructionStatus`
-  - Confirmed live API has: `building.details.{stepSparks, minStackedSparks, maxStackedSparks}`, `building.residents`, `building.{polygon, lat, lng, scale, rotate}` for footprint
-  - Enhance `get_upland_property_structures()` in `neighborhood_map.py` to store these extra fields; cache schema extension, not a breaking change
+- [x] **Cache full Upland API response per property** — shipped 2026-07-07
+  - `get_upland_property_structures()` in `neighborhood_map.py` now also stores `residents`, `stepSparks`, `minStackedSparks`, `maxStackedSparks`, `polygon`, `lat`, `lng`, `scale`, `rotate` per building
+  - Verified end-to-end against live API; all existing consumers use `.get()` so this is non-breaking
+  - Existing `structures_cache.json` files will pick up the new fields on their next 24h refresh (old caches still work, just without the new fields until refreshed)
 
 - [ ] **Spark hours estimator**
   - Once `details` is cached: given the full recommended build queue, compute total spark hours needed end-to-end
   - Show per-structure spark cost and running total on score dashboard
   - Flag spark-heavy structures relative to their SU gain
 
-- [ ] **Residents tracker**
-  - Once `residents` is cached: surface total residents across user properties
-  - Flag residential buildings with 0 residents (underperforming housing)
-  - Show trend if data is refreshed over time
+- [x] **Residents tracker** — shipped 2026-07-07
+  - `score_calculator.py` sums `total_residents` and flags completed residential buildings with 0 residents (`empty_residential`, shown with in-game address, not raw ID)
+  - Gated on `has_residents_data` (checks whether the `residents` key is actually present, not just falsy) so stale caches built before the schema extension show nothing instead of false-positiving every residential building as "0 residents" — will populate once each neighborhood's structures cache refreshes (24h TTL)
+  - Not yet: trend over time (would need historical snapshots, not just current cache)
 
 - [ ] **Commerce Score layer**
   - Track office structures separately from service structures

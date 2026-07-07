@@ -225,6 +225,12 @@
         <div class="value">{{ score.employment_buildings }}</div>
         <div class="label">Employment buildings</div>
     </div>
+    {% if score.has_residents_data %}
+    <div class="stat-card">
+        <div class="value">{{ score.total_residents }}</div>
+        <div class="label">Residents</div>
+    </div>
+    {% endif %}
 </div>
 
 <h3 class="section-heading">Service Unit Breakdown</h3>
@@ -274,6 +280,19 @@
     </div>
 </div>
 {% endfor %}
+
+{% if score.empty_residential %}
+<h3 class="section-heading">Underperforming Housing ({{ score.empty_residential|length }} with 0 residents)</h3>
+{% for h in score.empty_residential %}
+<div class="gap-item">
+    <div class="gap-badge red">0</div>
+    <div class="gap-text">
+        <h4>{{ h.address or h.prop_id }}</h4>
+        <p>{{ h.buildingName }} — completed, but no residents.</p>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
 
 <h3 class="section-heading">Building Inventory ({{ score.inventory|length }} types)</h3>
 <div class="card" style="padding: 0; overflow: hidden;">
