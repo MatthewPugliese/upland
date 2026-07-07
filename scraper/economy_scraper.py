@@ -98,7 +98,10 @@ BATCH_SIZE    = 100  # actions per API request
 BACKFILL_SLEEP = 0.3 # seconds between backfill requests
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Property cache (prop_id → {address, neighborhood, city})
+# Property cache (prop_id → raw "address, neighborhood, city" string, parsed
+# lazily by prop_meta()). Holds 2.6M+ entries — storing raw strings instead of
+# a per-entry dict avoids ~2.6M extra dict-object allocations, which is the
+# difference between ~550MB and a small fraction of that at this scale.
 # ─────────────────────────────────────────────────────────────────────────────
 
 _prop_cache: dict = {}
@@ -135,12 +138,7 @@ def load_property_cache() -> None:
             with opener(path, "rt") as f:
                 raw = json.load(f)
             for pid, addr in raw.items():
-                parts = [p.strip() for p in addr.split(",")]
-                _prop_cache[str(pid)] = {
-                    "address":      parts[0] if parts else addr,
-                    "neighborhood": parts[1] if len(parts) >= 3 else "",
-                    "city":         parts[-1] if len(parts) >= 2 else "",
-                }
+                _prop_cache[str(pid)] = addr
             print(f"[+] Property cache: {len(_prop_cache):,} entries ({path.name})")
             return
         except Exception as e:
@@ -148,13 +146,22 @@ def load_property_cache() -> None:
     print("[!] No property cache — city/neighborhood will be NULL")
 
 
+def _parse_prop_addr(addr: str) -> dict:
+    parts = [p.strip() for p in addr.split(",")]
+    return {
+        "address":      parts[0] if parts else addr,
+        "neighborhood": parts[1] if len(parts) >= 3 else "",
+        "city":         parts[-1] if len(parts) >= 2 else "",
+    }
+
+
 def prop_meta(prop_id: str) -> dict:
     key = str(prop_id)
     if key in _prop_cache:
-        return _prop_cache[key]
+        return _parse_prop_addr(_prop_cache[key])
     if _live_lookup_enabled and UPLAND_APP_ID and UPLAND_SECRET:
         meta = _api_lookup_property(key)
-        _prop_cache[key] = meta
+        _prop_cache[key] = f"{meta.get('address') or ''}, {meta.get('neighborhood') or ''}, {meta.get('city') or ''}"
         return meta
     return {"address": None, "neighborhood": None, "city": None}
 
