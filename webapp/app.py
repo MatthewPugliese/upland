@@ -176,12 +176,28 @@ def collections_run():
         return render_template("collections.html", error="Both username and EOS account are required.")
 
     try:
+        annual_rate_pct = request.form.get("annual_rate", "12.25").strip()
+        try:
+            annual_rate = float(annual_rate_pct) / 100.0
+        except ValueError:
+            annual_rate = 0.1225
+
         colls = load_collections()
         props = load_user_properties(username, eos_account)
         if not props:
             return render_template("collections.html", error=f"No properties found for {username}.")
         result = analyze_collections(props, colls)
         result["total_properties"] = len(props)
+
+        # Portfolio-level yield baseline, so per-collection completion impact
+        # (added in the template/JS) can be framed as a delta off a known total.
+        total_mint_all = round(sum(p.get("mintPrice") or 0 for p in props))
+        current_monthly_yield = round(total_mint_all * annual_rate / 12)
+        result["total_mint_all"] = total_mint_all
+        result["annual_rate"] = annual_rate
+        result["annual_rate_pct"] = round(annual_rate * 100, 2)
+        result["current_monthly_yield"] = current_monthly_yield
+        result["current_hourly_yield"] = round(current_monthly_yield / (30 * 24), 2)
 
         # Store analysis in session so the forsale endpoint can use it without re-running
         session["coll_analysis"] = {

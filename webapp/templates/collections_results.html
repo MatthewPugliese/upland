@@ -168,6 +168,16 @@
         border: 1px solid #ddd;
         color: #555;
     }
+    .yield-impact {
+        margin-top: 8px;
+        padding: 8px 12px;
+        background: #F4FAF6;
+        border: 1px solid #D5EDDD;
+        border-radius: 8px;
+        font-size: 12px;
+        color: #1E6B3A;
+    }
+    .yield-impact .note { color: #999; font-size: 11px; }
 
     .full-table {
         width: 100%;
@@ -266,6 +276,14 @@
         <div class="value">{{ result.contributing|length }}</div>
         <div class="label">In progress</div>
     </div>
+    <div class="stat-card">
+        <div class="value">{{ "{:,}".format(result.current_monthly_yield) }}</div>
+        <div class="label">Current UPX/month ({{ result.annual_rate_pct }}%)</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ result.current_hourly_yield }}</div>
+        <div class="label">Current UPX/hour</div>
+    </div>
 </div>
 
 {% if result.completable %}
@@ -329,7 +347,9 @@
     </div>
     <div class="coll-need">Need {{ c.gap }} more: {{ c.requirements_text }}</div>
     {% if c.req_type in ("street_city", "street", "neighborhood_city", "neighborhood", "place") %}
-    <button class="btn-forsale" onclick="loadForSale(this, {{ c.id }})">Find listings</button>
+    <button class="btn-forsale" data-boost="{{ c.boost }}" data-owned-mint="{{ c.owned_mint_sum }}"
+            data-gap="{{ c.gap }}" onclick="loadForSale(this, {{ c.id }})">Find listings</button>
+    <div class="yield-impact" id="yield-impact-{{ c.id }}" style="display:none"></div>
     <div class="forsale-results" id="forsale-{{ c.id }}" style="display:none"></div>
     {% endif %}
 </div>
@@ -382,6 +402,57 @@
 
 {% block scripts %}
 <script>
+var ANNUAL_RATE = {{ result.annual_rate }};
+
+function renderYieldImpact(btn, collId, listings) {
+    var container = document.getElementById("yield-impact-" + collId);
+    var boost = parseFloat(btn.dataset.boost);
+    var gap = parseInt(btn.dataset.gap, 10);
+
+    if (!(boost > 1)) {
+        container.style.display = "none";
+        return;
+    }
+
+    var ownedMint = parseFloat(btn.dataset.ownedMint) || 0;
+    var priced = listings
+        .filter(function(l) { return l.price_upx !== null && l.price_upx !== undefined; })
+        .sort(function(a, b) { return a.price_upx - b.price_upx; });
+    var picks = priced.slice(0, gap);
+
+    if (!picks.length) {
+        container.style.display = "block";
+        container.innerHTML = '<span class="note">Yield impact: no UPX-priced listings available to estimate acquisition cost.</span>';
+        return;
+    }
+
+    var cost = picks.reduce(function(s, l) { return s + l.price_upx; }, 0);
+    var addedMint = picks.reduce(function(s, l) { return s + (l.mint_price || 0); }, 0);
+    var totalMint = ownedMint + addedMint;
+    var monthlyGain = totalMint * ANNUAL_RATE * (boost - 1) / 12;
+    var hourlyGain = monthlyGain / (30 * 24);
+    var partial = picks.length < gap;
+
+    var html = '💰 Completing this collection: +' + Math.round(monthlyGain).toLocaleString() + ' UPX/mo'
+        + ' (+' + hourlyGain.toFixed(2) + ' UPX/hr)'
+        + ' · Cost to acquire: ' + Math.round(cost).toLocaleString() + ' UPX';
+
+    if (hourlyGain > 0) {
+        var paybackHours = cost / hourlyGain;
+        var paybackDays = paybackHours / 24;
+        html += ' · Payback: ~' + (paybackDays < 1
+            ? Math.round(paybackHours) + 'h'
+            : Math.round(paybackDays) + ' days');
+    }
+
+    if (partial) {
+        html += ' <span class="note">(estimate based on ' + picks.length + '/' + gap + ' UPX-priced listings)</span>';
+    }
+
+    container.style.display = "block";
+    container.innerHTML = html;
+}
+
 function filterTable() {
     var q = document.getElementById("filterInput").value.toLowerCase();
     var rows = document.querySelectorAll("#contribTable tbody tr");
@@ -490,6 +561,7 @@ function loadForSale(btn, collId) {
             }
             container._listings = listings;
             renderForSaleListings(container);
+            renderYieldImpact(btn, collId, listings);
             btn.textContent = listings.length + " listing" + (listings.length !== 1 ? "s" : "") + " found";
         })
         .catch(function(e) {

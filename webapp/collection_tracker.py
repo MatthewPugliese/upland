@@ -46,6 +46,7 @@ def analyze_collections(user_props: list, all_collections: list) -> dict:
         if owned_count == 0:
             continue
 
+        owned_props = eligible[:required]
         rarity_level = coll.get("rarityLevel", 1)
         entry = {
             "id": coll["id"],
@@ -58,7 +59,8 @@ def analyze_collections(user_props: list, all_collections: list) -> dict:
             "owned": owned_count,
             "gap": gap,
             "pct": round(owned_count / required * 100),
-            "owned_props": eligible[:required],
+            "owned_props": owned_props,
+            "owned_mint_sum": round(sum(p.get("mintPrice") or 0 for p in owned_props)),
             "requirements_text": coll.get("requirements", "").rstrip("."),
             "req_type": req_type,
             "parsed_req": parsed,

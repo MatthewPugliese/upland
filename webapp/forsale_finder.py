@@ -134,14 +134,14 @@ def _get_neighborhood_candidates(parsed_req: dict, city_id: int) -> list:
     max_pages = min(30, -(-total // 100))  # cap at 3000 props to avoid slow scans
 
     for p in first.get("results", []):
-        nh = (p.get("neighborhood") or {}).get("name", "").upper()
+        nh = ((p.get("neighborhood") or {}).get("name") or "").upper()
         if hood_upper in nh or nh in hood_upper:
             found.append(p)
 
     for page in range(2, max_pages + 1):
         data = upland_get("/properties", {"cityId": city_id, "currentPage": page, "pageSize": 100})
         for p in data.get("results", []):
-            nh = (p.get("neighborhood") or {}).get("name", "").upper()
+            nh = ((p.get("neighborhood") or {}).get("name") or "").upper()
             if hood_upper in nh or nh in hood_upper:
                 found.append(p)
         if not data.get("results"):

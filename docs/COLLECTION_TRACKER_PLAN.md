@@ -28,6 +28,21 @@ Results are bucketed into three sections:
 
 "Find listings" button on each 1–2 away collection. Fetches async, shows matching for-sale props sorted by UPX price with address, owner, and USD price if applicable.
 
+### Phase 4 — Yield Impact Calculator ✅ DONE (2026-07-08)
+
+| Component | File | Status |
+|---|---|---|
+| Portfolio yield baseline (backend) | `webapp/app.py` `collections_run()` | **Done** |
+| Owned mint sum per collection (backend) | `webapp/collection_tracker.py` `analyze_collections()` | **Done** |
+| Annual yield rate input | `webapp/templates/collections.html` | **Done** |
+| Yield impact panel (frontend) | `webapp/templates/collections_results.html` `renderYieldImpact()` | **Done** |
+
+Reuses the yield model already proven in `collection_optimizer.py` (`monthly_gain = total_mint * annual_rate * (boost - 1) / 12`) instead of inventing a second one. `collections_run()` now computes the portfolio's current total mint value and current monthly/hourly UPX yield (shown as new stat cards) using a user-adjustable annual rate (defaults to 12.25%, same default as the Optimizer page). `analyze_collections()` adds `owned_mint_sum` per collection entry (sum of `mintPrice` across the properties the user already owns toward that collection).
+
+For each "almost complete" collection, once the user clicks "Find listings," `renderYieldImpact()` picks the `gap` cheapest UPX-priced listings from the results, sums their cost and mint price, and shows: projected monthly/hourly UPX gain from completing the collection, total UPX cost to acquire the missing properties at current ask prices, and a payback period in days (or hours, if under a day). Handles three edge cases: collections with no yield boost (reward-only) hide the panel entirely; when fewer UPX-priced listings exist than the gap requires, the estimate is flagged as partial; when no UPX-priced listings exist at all, shows a note instead of a bogus $0 estimate.
+
+Verified: Jinja renders without errors (with fake collection data through a real Flask app context), JS passes `node --check`, and `renderYieldImpact()` was unit-tested standalone for the full-data, partial-data, no-boost, and no-listings cases.
+
 ### Phase 3 — Markup & Currency Filtering ✅ DONE (2026-07-07)
 
 | Component | File | Status |
@@ -89,7 +104,7 @@ Upland has hundreds of collections. Players typically:
   - Filter listings by currency: UPX only / USD only / both
   - Also fixed a bug along the way where USD-only listings were mislabeled as UPX prices
 
-- [ ] **Yield impact calculator**
+- [x] **Yield impact calculator** — shipped 2026-07-08 (see Phase 4 above)
   - Current total yield/hour across all your properties
   - Projected yield/hour after completing collection X
   - Payback period: how many hours of yield does the acquisition cost represent
