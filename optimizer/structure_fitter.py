@@ -404,7 +404,7 @@ def main():
         pid = str(p["id"])
         size = get_size(addr)
         current = structs.get(pid, [])
-        fits = structures_that_fit(size["up2"]) if size else []
+        fits = structures_that_fit(size["up2"], size["width_up"], size["depth_up"]) if size else []
 
         entry = {
             "id": pid,
@@ -452,19 +452,29 @@ def main():
             print(f"Available: {', '.join(sorted(STRUCTURES.keys()))}")
             sys.exit(1)
 
-        can_fit = [e for e in enriched if (e["up2"] or 0) >= sinfo["min_up2"]]
-        cannot_fit = [e for e in enriched if (e["up2"] or 0) < sinfo["min_up2"]]
+        def _fits(e):
+            if (e["up2"] or 0) < sinfo["min_up2"]:
+                return False
+            if sinfo.get("min_width", 0) and (e["width_up"] or 0) < sinfo["min_width"]:
+                return False
+            if sinfo.get("min_depth", 0) and (e["depth_up"] or 0) < sinfo["min_depth"]:
+                return False
+            return True
 
-        print(f"\n=== Properties that CAN fit: {target_struct} (needs {sinfo['min_up2']}+ UP2) ===\n")
+        can_fit = [e for e in enriched if _fits(e)]
+        cannot_fit = [e for e in enriched if not _fits(e)]
+
+        print(f"\n=== Properties that CAN fit: {target_struct} (needs {sinfo['min_up2']}+ UP2, {sinfo.get('min_width', 0)}+ UP width) ===\n")
         for e in can_fit:
             current = ", ".join(e["current_structures"]) or "empty"
             print(f"  {e['address']:<30} {e['up2']:>4} UP2  [{current}]")
         print(f"\n  {len(can_fit)} of {len(enriched)} properties can fit this structure")
 
         if cannot_fit:
-            print(f"\n=== TOO SMALL ({len(cannot_fit)} properties) ===\n")
+            print(f"\n=== TOO SMALL / TOO NARROW ({len(cannot_fit)} properties) ===\n")
             for e in cannot_fit[:10]:
-                print(f"  {e['address']:<30} {e['up2']:>4} UP2  (needs {sinfo['min_up2'] - (e['up2'] or 0):.0f} more)")
+                reason = "area" if (e["up2"] or 0) < sinfo["min_up2"] else "width"
+                print(f"  {e['address']:<30} {e['up2']:>4} UP2 ({e['width_up']}^ wide)  [too little {reason}]")
         return
 
     # Output
