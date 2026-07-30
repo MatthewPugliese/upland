@@ -180,6 +180,46 @@
     }
     .rec-loading { text-align: center; padding: 24px; color: #aaa; font-size: 13px; }
     .rec-addon { font-size: 10px; color: #888; font-style: italic; }
+
+    .spark-panel {
+        background: #F8F5EE;
+        border: 1px solid #E8DFC8;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    }
+    .spark-panel-title {
+        font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px;
+    }
+    .spark-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .spark-stat {
+        background: white; border-radius: 8px; padding: 10px 12px; text-align: center;
+        border: 1px solid #EFE8D8;
+    }
+    .spark-stat .value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+    .spark-stat .label { font-size: 10px; color: #888; margin-top: 2px; }
+    .spark-stat.highlight .value { color: #B8860B; }
+    .spark-note { font-size: 11px; color: #999; line-height: 1.4; }
+    .spark-picks { margin-top: 10px; font-size: 12px; color: #555; }
+    .spark-picks strong { color: #1a1a2e; }
+    .spark-hours-pill {
+        display: inline-block; padding: 1px 7px; border-radius: 10px;
+        font-size: 11px; font-weight: 600; background: #FEF3C7; color: #92400E;
+    }
+    .spark-hours-pill.est { background: #F3F4F6; color: #6B7280; }
+    .spark-hours-pill.heavy { background: #FEE2E2; color: #B91C1C; }
+    .su-hr-pill {
+        display: inline-block; padding: 1px 7px; border-radius: 10px;
+        font-size: 11px; font-weight: 600; background: #ECFDF5; color: #065F46;
+    }
+    .su-hr-pill.heavy { background: #FEE2E2; color: #B91C1C; }
+    .su-hr-pill.zero { background: #f4f5f7; color: #aaa; }
+    .est-tag { font-size: 9px; color: #aaa; font-weight: 500; margin-left: 2px; }
 </style>
 {% endblock %}
 
@@ -225,12 +265,63 @@
         <div class="value">{{ score.employment_buildings }}</div>
         <div class="label">Employment buildings</div>
     </div>
+    <div class="stat-card">
+        <div class="value">{{ score.office_count | default(0) }}</div>
+        <div class="label">Offices (Commerce)</div>
+    </div>
     {% if score.has_residents_data %}
     <div class="stat-card">
         <div class="value">{{ score.total_residents }}</div>
         <div class="label">Residents</div>
     </div>
     {% endif %}
+</div>
+
+<!-- Plan completion + commerce filled from /api/score/report -->
+<div id="plan-progress-panel" class="spark-panel" style="display:none;background:#F0F7F4;border-color:#C8E0D5">
+    <div class="spark-panel-title">📋 Plan Completion <span style="font-weight:400;color:#999;font-size:11px">(owned recommended actions)</span></div>
+    <div class="spark-stats">
+        <div class="spark-stat highlight">
+            <div class="value" id="plan-pct">—</div>
+            <div class="label">% complete</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="plan-done">—</div>
+            <div class="label">Done</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="plan-remaining">—</div>
+            <div class="label">Remaining</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="plan-su-left">—</div>
+            <div class="label">SU still available</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="plan-spark-left">—</div>
+            <div class="label">Spark hrs left</div>
+        </div>
+    </div>
+    <div class="progress-wrap" style="height:10px;margin-bottom:8px">
+        <div class="progress-fill green" id="plan-bar" style="width:0%"></div>
+    </div>
+    <div class="spark-picks" id="plan-breakdown"></div>
+</div>
+
+<div id="commerce-panel" class="spark-panel" style="display:none;background:#F5F0FA;border-color:#D9C8E8">
+    <div class="spark-panel-title">🏢 Commerce Score <span style="font-weight:400;color:#999;font-size:11px">(offices — 0 Resident SU)</span></div>
+    <div class="spark-stats">
+        <div class="spark-stat">
+            <div class="value" id="commerce-offices">—</div>
+            <div class="label">Your offices</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="commerce-opps">—</div>
+            <div class="label">Office opportunities</div>
+        </div>
+    </div>
+    <div class="spark-picks" id="commerce-list"></div>
+    <div class="spark-note" id="commerce-note"></div>
 </div>
 
 <h3 class="section-heading">Service Unit Breakdown</h3>
@@ -358,6 +449,34 @@
 <!-- ── Recommendations ──────────────────────────────────────────────────── -->
 <h3 class="section-heading">Recommendations</h3>
 
+<div id="spark-panel" class="spark-panel" style="display:none">
+    <div class="spark-panel-title">⚡ Spark Hours Estimator <span style="font-weight:400;color:#999;font-size:11px">(time @ min stack)</span></div>
+    <div class="spark-stats">
+        <div class="spark-stat highlight">
+            <div class="value" id="spark-total-hrs">—</div>
+            <div class="label">Total spark hours</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="spark-action-count">—</div>
+            <div class="label">Build actions</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="spark-total-su">—</div>
+            <div class="label">Total SU gain</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="spark-su-per-hr">—</div>
+            <div class="label">SU / spark hour</div>
+        </div>
+        <div class="spark-stat">
+            <div class="value" id="spark-est-split">—</div>
+            <div class="label">Measured / estimated</div>
+        </div>
+    </div>
+    <div class="spark-picks" id="spark-best"></div>
+    <div class="spark-note" id="spark-note"></div>
+</div>
+
 <div class="rec-filters" id="rec-filters">
     <button class="rec-filter-btn active" data-filter="mine" onclick="setMineFilter(true)">My properties</button>
     <button class="rec-filter-btn" data-filter="all" onclick="setMineFilter(false)">All properties</button>
@@ -381,6 +500,8 @@
             <th onclick="sortBy('action')" class="sort-none" data-col="action">Action <span class="sort-arrow"></span></th>
             <th onclick="sortBy('recommended_name')" class="sort-none" data-col="recommended_name">Recommended Structure <span class="sort-arrow"></span></th>
             <th onclick="sortBy('su_gain')" class="sort-desc" data-col="su_gain" style="text-align:right">SU Gain <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('spark_hours')" class="sort-none" data-col="spark_hours" style="text-align:right">Spark hrs <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('su_per_spark_hour')" class="sort-none" data-col="su_per_spark_hour" style="text-align:right">SU / hr <span class="sort-arrow"></span></th>
             <th>Current Structures</th>
         </tr>
     </thead>
@@ -404,6 +525,9 @@ let _mineOnly = true;
 let _actionFilter = '';
 let _sortCol = 'su_gain';
 let _sortDir = 'desc';
+let _sparkNote = '';
+let _planProgress = null;
+let _commerce = null;
 
 function actionBadge(action) {
     if (action.startsWith('DEMOLISH')) return `<span class="action-badge demolish">DEMOLISH → BUILD</span>`;
@@ -416,28 +540,96 @@ function suGainPill(gain, action) {
     return `<span class="su-gain-pill">+${gain}</span>`;
 }
 
-function renderRows() {
+function sparkHoursPill(r) {
+    if (r.spark_hours == null || r.action === 'KEEP') return `<span class="spark-hours-pill est">—</span>`;
+    const cls = r.spark_heavy ? 'heavy' : (r.spark_estimated ? 'est' : '');
+    const est = r.spark_estimated ? '<span class="est-tag">est</span>' : '';
+    return `<span class="spark-hours-pill ${cls}">${r.spark_hours}${est}</span>`;
+}
+
+function suPerHourPill(r) {
+    if (r.su_per_spark_hour == null || r.action === 'KEEP') return `<span class="su-hr-pill zero">—</span>`;
+    const cls = r.spark_heavy ? 'heavy' : '';
+    return `<span class="su-hr-pill ${cls}">${r.su_per_spark_hour}</span>`;
+}
+
+function filteredRows() {
     let rows = _allRows;
     if (_mineOnly) rows = rows.filter(r => r.is_mine);
     if (_actionFilter) rows = rows.filter(r => r.action === _actionFilter);
+    return rows;
+}
+
+function renderSparkSummary(rows) {
+    const panel = document.getElementById('spark-panel');
+    // Queue = actionable builds only (BUILD / DEMOLISH), respecting current filters
+    const actionable = rows.filter(r =>
+        (r.action === 'BUILD' || r.action === 'DEMOLISH → BUILD') && r.spark_hours != null
+    );
+    if (!actionable.length) {
+        panel.style.display = 'none';
+        return;
+    }
+    panel.style.display = '';
+
+    const totalHrs = actionable.reduce((s, r) => s + (r.spark_hours || 0), 0);
+    const totalSu = actionable.reduce((s, r) => s + (r.su_gain || 0), 0);
+    const measured = actionable.filter(r => !r.spark_estimated).length;
+    const estimated = actionable.filter(r => r.spark_estimated).length;
+    const suPerHr = totalHrs > 0 ? (totalSu / totalHrs) : null;
+
+    document.getElementById('spark-total-hrs').textContent = totalHrs.toFixed(1);
+    document.getElementById('spark-action-count').textContent = actionable.length;
+    document.getElementById('spark-total-su').textContent = totalSu % 1 ? totalSu.toFixed(1) : totalSu;
+    document.getElementById('spark-su-per-hr').textContent = suPerHr != null ? suPerHr.toFixed(3) : '—';
+    document.getElementById('spark-est-split').textContent = `${measured} / ${estimated}`;
+
+    const ranked = [...actionable]
+        .filter(r => r.su_per_spark_hour != null)
+        .sort((a, b) => b.su_per_spark_hour - a.su_per_spark_hour);
+    const best = ranked.slice(0, 3);
+    if (best.length) {
+        document.getElementById('spark-best').innerHTML =
+            '<strong>Best SU / spark hour:</strong> ' +
+            best.map(r =>
+                `${r.address} → ${r.recommended_name} (+${r.su_gain} SU / ${r.spark_hours}h)`
+            ).join(' · ');
+    } else {
+        document.getElementById('spark-best').textContent = '';
+    }
+    document.getElementById('spark-note').textContent = _sparkNote ||
+        'Hours = totalSparksRequired ÷ minStackedSparks ÷ 3600 (finish time at minimum stack). Stack more sparks to finish faster. “est” = calibrated estimate when exact construction totals have not been observed live.';
+}
+
+function renderRows() {
+    let rows = filteredRows();
 
     // Sort
     rows = [...rows].sort((a, b) => {
         let av = a[_sortCol], bv = b[_sortCol];
-        if (av == null) av = _sortDir === 'asc' ? Infinity : -Infinity;
-        if (bv == null) bv = _sortDir === 'asc' ? Infinity : -Infinity;
-        if (typeof av === 'string') av = av.toLowerCase();
-        if (typeof bv === 'string') bv = bv.toLowerCase();
+        // Numeric columns: nulls sort last regardless of direction
+        const numericCols = new Set(['su_gain', 'spark_hours', 'su_per_spark_hour', 'up2', 'eff_width']);
+        if (numericCols.has(_sortCol)) {
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+        } else {
+            if (av == null) av = '';
+            if (bv == null) bv = '';
+            if (typeof av === 'string') av = av.toLowerCase();
+            if (typeof bv === 'string') bv = bv.toLowerCase();
+        }
         if (av < bv) return _sortDir === 'asc' ? -1 : 1;
         if (av > bv) return _sortDir === 'asc' ? 1 : -1;
         return 0;
     });
 
     document.getElementById('rec-count').textContent = `${rows.length} properties`;
+    renderSparkSummary(rows);
 
     const tbody = document.getElementById('rec-tbody');
     if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#aaa">No properties match the current filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#aaa">No properties match the current filter.</td></tr>';
         return;
     }
 
@@ -462,6 +654,8 @@ function renderRows() {
             <td style="white-space:nowrap">${actionBadge(r.action)}</td>
             <td>${r.recommended_name || '<span style="color:#bbb">—</span>'}${addons}</td>
             <td style="text-align:right">${suGainPill(r.su_gain, r.action)}</td>
+            <td style="text-align:right">${sparkHoursPill(r)}</td>
+            <td style="text-align:right">${suPerHourPill(r)}</td>
             <td>${current}</td>
         </tr>`;
     }).join('');
@@ -493,11 +687,65 @@ function sortBy(col) {
         _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
     } else {
         _sortCol = col;
-        _sortDir = col === 'su_gain' ? 'desc' : 'asc';
+        _sortDir = (col === 'su_gain' || col === 'su_per_spark_hour') ? 'desc' : 'asc';
     }
     th.classList.remove('sort-none');
     th.classList.add(_sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
     renderRows();
+}
+
+function renderPlanProgress(pp) {
+    const panel = document.getElementById('plan-progress-panel');
+    if (!pp || !pp.total_actions) {
+        panel.style.display = 'none';
+        return;
+    }
+    panel.style.display = '';
+    document.getElementById('plan-pct').textContent = pp.pct_complete + '%';
+    document.getElementById('plan-done').textContent = pp.done;
+    document.getElementById('plan-remaining').textContent = pp.remaining;
+    document.getElementById('plan-su-left').textContent = pp.remaining_su_gain != null ? pp.remaining_su_gain : '—';
+    document.getElementById('plan-spark-left').textContent =
+        pp.remaining_spark_hours != null ? pp.remaining_spark_hours : '—';
+    document.getElementById('plan-bar').style.width = Math.min(100, pp.pct_complete) + '%';
+    const by = pp.remaining_by_action || {};
+    const parts = [];
+    if (by['DEMOLISH → BUILD']) parts.push(by['DEMOLISH → BUILD'] + ' demolish');
+    if (by['BUILD']) parts.push(by['BUILD'] + ' build');
+    const next = (pp.remaining_actions || []).slice(0, 3)
+        .map(a => a.address + ' → ' + a.recommended_name).join(' · ');
+    document.getElementById('plan-breakdown').innerHTML =
+        (parts.length ? '<strong>Left:</strong> ' + parts.join(', ') + '. ' : '') +
+        (next ? '<strong>Next up:</strong> ' + next : '');
+}
+
+function renderCommerce(c) {
+    const panel = document.getElementById('commerce-panel');
+    if (!c) {
+        panel.style.display = 'none';
+        return;
+    }
+    panel.style.display = '';
+    document.getElementById('commerce-offices').textContent = c.office_count || 0;
+    document.getElementById('commerce-opps').textContent = c.opportunity_count || 0;
+    document.getElementById('commerce-note').textContent = c.note || '';
+    const opps = c.opportunities || [];
+    if (opps.length) {
+        document.getElementById('commerce-list').innerHTML =
+            '<strong>Best office fits:</strong> ' +
+            opps.slice(0, 5).map(o =>
+                `${o.address} → ${o.best_office}` + (o.is_empty ? ' (empty)' : '')
+            ).join(' · ');
+    } else if ((c.office_types || c.offices || []).length) {
+        const types = c.offices || [];
+        document.getElementById('commerce-list').innerHTML =
+            types.length
+                ? '<strong>Built:</strong> ' + types.map(o => o.buildingName).join(', ')
+                : 'No empty commerce-zone lots fit an office right now.';
+    } else {
+        document.getElementById('commerce-list').textContent =
+            'No offices built yet and no clear empty-lot office opportunities on owned commerce/industrial lots.';
+    }
 }
 
 async function loadReport() {
@@ -505,8 +753,13 @@ async function loadReport() {
         const resp = await fetch(`/api/score/report?neighborhood=${encodeURIComponent(NEIGHBORHOOD)}&mine_only=false`);
         const data = await resp.json();
         _allRows = data.rows || [];
+        _sparkNote = (data.spark_summary && data.spark_summary.note) || '';
+        _planProgress = data.plan_progress || null;
+        _commerce = data.commerce || null;
         document.getElementById('rec-loading').style.display = 'none';
         document.getElementById('rec-table').style.display = '';
+        renderPlanProgress(_planProgress);
+        renderCommerce(_commerce);
         renderRows();
     } catch(e) {
         document.getElementById('rec-loading').textContent = 'Failed to load recommendations.';

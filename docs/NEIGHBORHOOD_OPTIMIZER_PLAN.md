@@ -1,7 +1,7 @@
 # Upland Neighborhood Optimizer — Project Plan
 
-**Last updated:** 2026-06-30  
-**Primary working dir:** `/Users/matt.pugliese/projects/local/upland/neighborhood-map/`  
+**Last updated:** 2026-07-27  
+**Primary working dir:** `/Users/matt.pugliese/projects/local/upland/optimizer/`  
 **Ultimate goal:** A web app where any Upland player inputs a neighborhood + optional username and gets a fully personalized, shape-aware building recommendation breakdown for maximizing their **Neighborhood Score** (Resident Score + Commerce Score + Influence Score).
 
 ---
@@ -81,6 +81,7 @@ The old "Neighborhood Score" was retired in late 2025. The current primary metri
 | `dongan_hills_zone_map.py` | Dongan Hills–specific zone map (hardcoded STREET_ZONES + MANUAL_OVERRIDES). Kept for DH precision. |
 | `structure_fitter.py` | Structure database (min_up2, min_width, min_depth, SU, variety category) + fitting logic. |
 | `recommender.py` | `auto_recommend()`, `_rule_based_action()` (portable Showroom/unknown-structure KEEP logic). |
+| `spark_estimator.py` | Construction spark-hour cost model + queue summary (SU per spark hour). |
 | `cache/` | Per-run caches: props, structures, pluto, geocode, blockchain, API dims, OSM zone map. |
 | `DONGAN_HILLS_OPTIMIZATION.md` | Legacy zone plan + build priority reference. |
 
@@ -233,31 +234,34 @@ dongan_hills_zone_map.py
   - Verified end-to-end against live API; all existing consumers use `.get()` so this is non-breaking
   - Existing `structures_cache.json` files will pick up the new fields on their next 24h refresh (old caches still work, just without the new fields until refreshed)
 
-- [ ] **Spark hours estimator**
-  - Once `details` is cached: given the full recommended build queue, compute total spark hours needed end-to-end
-  - Show per-structure spark cost and running total on score dashboard
-  - Flag spark-heavy structures relative to their SU gain
+- [x] **Spark hours estimator** — shipped 2026-07-26
+  - `optimizer/spark_estimator.py` — construction cost model from live API fields (`totalSparksRequired`, `minStackedSparks`, `stepSparks`)
+  - Formula: `spark_hours_at_min = totalSparksRequired / minStackedSparks / 3600` (finish time at minimum stack)
+  - Measured totals from live in-progress builds (Micro House, Town House, Dollar Store, etc.); ratio/size fallbacks when not observed
+  - `recommender.generate_report()` enriches every BUILD/DEMOLISH row with `spark_hours`, `su_per_spark_hour`, `spark_heavy` (bottom-quartile efficiency)
+  - Score dashboard: summary panel (total hours, SU gain, SU/hr, measured vs estimated) + sortable Spark hrs / SU per hr columns
+  - Caveat: most DH queue structures are still estimated — re-run against live construction objects to grow the measured set
 
 - [x] **Residents tracker** — shipped 2026-07-07
   - `score_calculator.py` sums `total_residents` and flags completed residential buildings with 0 residents (`empty_residential`, shown with in-game address, not raw ID)
   - Gated on `has_residents_data` (checks whether the `residents` key is actually present, not just falsy) so stale caches built before the schema extension show nothing instead of false-positiving every residential building as "0 residents" — will populate once each neighborhood's structures cache refreshes (24h TTL)
   - Not yet: trend over time (would need historical snapshots, not just current cache)
 
-- [ ] **Commerce Score layer**
-  - Track office structures separately from service structures
-  - Show a "Commerce" section in the recommendation report
-  - Recommend: best office building that fits on industrial/commercial zone lots
-  - Note: Commerce Score feeds Resident Score over time (not direct SU)
+- [x] **Commerce Score layer** — shipped 2026-07-27
+  - `recommender.compute_commerce_summary()` — owned office inventory + empty commerce/industrial lots that fit an office
+  - Score dashboard: office count stat card + Commerce panel (opportunities ranked by lot size)
+  - `score_calculator` tracks `office_count` / `office_types` separately from Resident SU
+  - Note: offices grant 0 Resident SU; Commerce feeds Resident Score over time
 
 - [ ] **Greenery recommendations**
   - After residential structure is placed, recommend STEM plants based on city climate zone
   - NYC = cold zone: Maple, Pine, Weeping Willow, Roses, Tulips
   - Flag residential properties with 0 greenery
 
-- [ ] **Plan completion tracker**
-  - Compute % of recommended actions completed (BUILD done, DEMOLISH done) vs total in plan
-  - Show at the top of the Score Breakdown tab: "32% of plan complete — 58 actions remaining"
-  - Break down by phase: Phase 1 (X/10 done), Phase 2 (X/Y done)
+- [x] **Plan completion tracker** — shipped 2026-07-27
+  - `recommender.compute_plan_progress()` — BUILD/DEMOLISH done when recommended structure is already on the lot
+  - Score dashboard panel: % complete, remaining by action, SU + spark hours still on the table, next-up list
+  - DH baseline after v3 regen: 0% (50 actions remaining, ~42.7 SU / ~592 spark hrs)
 
 - [ ] **Build cost planner**
   - For every recommended structure in the action queue, surface its real-money cost (from structure DB) and spark hours estimate

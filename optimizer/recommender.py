@@ -514,8 +514,171 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
         )
 
     rows.sort(key=_sort_key)
+
+    # Annotate BUILD/DEMOLISH rows with spark-hour cost + SU-per-hour efficiency
+    try:
+        from spark_estimator import enrich_rows, summarize_queue
+        enrich_rows(rows)
+        spark_summary = summarize_queue(rows, mine_only=True)
+    except Exception:
+        spark_summary = None
+
+    # Plan completion: which owned recommended actions are already done
+    plan_progress = compute_plan_progress(rows, mine_only=True)
+
+    # Commerce Score: office inventory + empty lots that could host offices
+    commerce = compute_commerce_summary(rows, structures, user_ids)
+
     return {
         "rows": rows,
         "lu_balance": lu_balance,
         "neighborhood_counts": neighborhood_counts,
+        "spark_summary": spark_summary,
+        "plan_progress": plan_progress,
+        "commerce": commerce,
+    }
+
+
+def compute_plan_progress(rows: list[dict], mine_only: bool = True) -> dict:
+    """
+    Compare recommended actions vs currently built structures on owned lots.
+
+    A BUILD action is "done" if the recommended structure is already present.
+    A DEMOLISH → BUILD is "done" if the recommended structure is present
+    (implies the old low-value structure was replaced).
+    KEEP rows are not part of the plan queue.
+
+    Returns counts, % complete, and remaining action lists broken down by type.
+    """
+    actionable = []
+    for r in rows:
+        if mine_only and not r.get("is_mine"):
+            continue
+        action = r.get("action") or ""
+        if action not in ("BUILD", "DEMOLISH → BUILD"):
+            continue
+        rec_name = r.get("recommended_name")
+        if not rec_name:
+            continue
+        current = set(r.get("current_names") or [])
+        done = rec_name in current
+        entry = {
+            "address": r.get("address"),
+            "action": action,
+            "recommended_name": rec_name,
+            "su_gain": r.get("su_gain") or 0,
+            "spark_hours": r.get("spark_hours"),
+            "done": done,
+            "current_names": r.get("current_names") or [],
+        }
+        actionable.append(entry)
+
+    done_list = [a for a in actionable if a["done"]]
+    remaining = [a for a in actionable if not a["done"]]
+    by_action = {
+        "BUILD": sum(1 for a in remaining if a["action"] == "BUILD"),
+        "DEMOLISH → BUILD": sum(1 for a in remaining if a["action"] == "DEMOLISH → BUILD"),
+    }
+    total = len(actionable)
+    done_n = len(done_list)
+    remaining_su = round(sum(a["su_gain"] for a in remaining), 1)
+    remaining_spark = round(
+        sum(a["spark_hours"] or 0 for a in remaining), 1
+    )
+
+    return {
+        "total_actions": total,
+        "done": done_n,
+        "remaining": len(remaining),
+        "pct_complete": round(done_n / total * 100) if total else 100,
+        "remaining_by_action": by_action,
+        "remaining_su_gain": remaining_su,
+        "remaining_spark_hours": remaining_spark if any(a.get("spark_hours") for a in remaining) else None,
+        "remaining_actions": remaining[:25],  # cap for API payload
+        "done_actions": done_list[:10],
+    }
+
+
+def compute_commerce_summary(rows: list[dict], structures: dict, user_ids: set) -> dict:
+    """
+    Commerce Score layer: offices don't grant Resident SU but feed Commerce Score.
+
+    - Count office structures on owned properties
+    - Flag empty/underused owned lots in commercial/industrial zones that fit an office
+    - Surface best office fit per such lot
+    """
+    from structure_fitter import STRUCTURES, structures_that_fit
+
+    office_names = {
+        n for n, info in STRUCTURES.items() if info.get("type") == "office"
+    }
+    # Zones where offices make sense
+    commerce_zones = {"Zone 1", "Zone 5", "commercial", "industrial", "mixed", "Zone 4"}
+
+    owned_offices = []
+    office_lots = 0
+    for pid in user_ids:
+        for b in structures.get(str(pid), []) or []:
+            name = b.get("buildingName") or ""
+            if name in office_names or "Office" in name:
+                owned_offices.append({"prop_id": str(pid), "buildingName": name})
+                office_lots += 1
+
+    # Empty owned lots in commerce-friendly zones that can fit an office
+    opportunities = []
+    for r in rows:
+        if not r.get("is_mine"):
+            continue
+        if r.get("zone") not in commerce_zones:
+            continue
+        current = r.get("current_names") or []
+        # Skip if already has an office or is a protected MetaVenture
+        if any(n in office_names or "Office" in n or "Showroom" in n for n in current):
+            continue
+        up2 = r.get("up2")
+        width = r.get("eff_width") or r.get("width_up") or 0
+        if not up2 or not width:
+            continue
+        offices = [
+            s for s in structures_that_fit(up2, width, r.get("depth_up") or 0)
+            if s.get("type") == "office"
+        ]
+        if not offices:
+            continue
+        # Prefer largest office that fits
+        best = max(offices, key=lambda s: s.get("min_up2", 0))
+        # Only surface if lot is empty or only has low-value residential
+        is_empty = len(current) == 0
+        only_low = all(n in _LOW_VALUE_TYPES for n in current) if current else False
+        if not (is_empty or only_low or r.get("action") in ("BUILD", "DEMOLISH → BUILD")):
+            # Still note as optional commerce addon if lot has headroom
+            if r.get("action") != "KEEP":
+                continue
+            # KEEP with headroom — skip unless empty-ish
+            if current and not only_low:
+                continue
+        opportunities.append({
+            "address": r.get("address"),
+            "zone": r.get("zone"),
+            "up2": up2,
+            "eff_width": width,
+            "best_office": best["name"],
+            "current_names": current,
+            "is_empty": is_empty,
+            "action": r.get("action"),
+        })
+
+    # Sort: empty first, then by office size desc
+    opportunities.sort(key=lambda o: (0 if o["is_empty"] else 1, -(o.get("up2") or 0)))
+
+    return {
+        "office_count": len(owned_offices),
+        "office_lots": office_lots,
+        "offices": owned_offices[:20],
+        "opportunity_count": len(opportunities),
+        "opportunities": opportunities[:15],
+        "note": (
+            "Offices grant 0 Resident SU but feed Commerce Score (office units + bonds). "
+            "Place on commercial/industrial lots when service coverage is already healthy."
+        ),
     }

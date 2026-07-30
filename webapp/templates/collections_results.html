@@ -243,6 +243,34 @@
         border-radius: 8px;
         font-size: 13px;
     }
+
+    .budget-panel {
+        background: #F8F5EE;
+        border: 1px solid #E8DFC8;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 8px 0 20px;
+    }
+    .budget-row {
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;
+    }
+    .budget-row input {
+        width: 140px; padding: 7px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px;
+    }
+    .budget-row button {
+        background: #1a1a2e; color: #D4A017; border: none; border-radius: 8px;
+        padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .budget-row button:disabled { opacity: 0.5; cursor: default; }
+    .budget-row label { font-size: 13px; color: #555; }
+    .budget-result { font-size: 13px; color: #333; margin-top: 8px; }
+    .budget-result .muted { color: #888; font-size: 12px; }
+    .budget-pick {
+        background: white; border: 1px solid #EFE8D8; border-radius: 8px;
+        padding: 8px 12px; margin: 6px 0; display: flex; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap; font-size: 12px;
+    }
+    .budget-pick strong { color: #1a1a2e; }
 </style>
 {% endblock %}
 
@@ -285,6 +313,33 @@
         <div class="label">Current UPX/hour</div>
     </div>
 </div>
+
+{% if result.almost %}
+<div class="budget-panel" id="budget-panel">
+    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:8px">
+        💰 Multi-collection budget optimizer
+        <span style="font-weight:400;color:#999;font-size:11px">
+            ({{ result.almost|length }} near-complete · maximize yield / UPX spent)
+        </span>
+    </div>
+    <div class="budget-row">
+        <label for="budget-upx">UPX budget</label>
+        <input type="number" id="budget-upx" min="1000" step="1000" value="50000" placeholder="50000">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px">
+            <input type="checkbox" id="budget-fetch" checked>
+            Auto-fetch missing listings
+        </label>
+        <button type="button" id="budget-run" onclick="runBudgetOptimize()">Optimize</button>
+    </div>
+    <div class="muted" style="font-size:11px;color:#999;margin-bottom:6px">
+        Uses for-sale listings already loaded via “Find listings”, or fetches all almost-complete
+        collections when auto-fetch is on (slower). Heavy markups often make payback years long —
+        treat this as a ranking tool, not a buy signal.
+    </div>
+    <div id="budget-status" class="muted" style="font-size:12px;color:#888"></div>
+    <div id="budget-result" class="budget-result" style="display:none"></div>
+</div>
+{% endif %}
 
 {% if result.completable %}
 <div class="section-heading">
@@ -589,6 +644,84 @@ function sortTable(col) {
     });
 
     rows.forEach(function(r) { tbody.appendChild(r); });
+}
+
+function runBudgetOptimize() {
+    var budgetEl = document.getElementById("budget-upx");
+    var btn = document.getElementById("budget-run");
+    var status = document.getElementById("budget-status");
+    var resultEl = document.getElementById("budget-result");
+    var budget = parseFloat(budgetEl.value);
+    if (!(budget > 0)) {
+        status.textContent = "Enter a UPX budget greater than 0.";
+        return;
+    }
+    var fetchMissing = document.getElementById("budget-fetch").checked;
+    btn.disabled = true;
+    status.textContent = fetchMissing
+        ? "Fetching listings for near-complete collections and optimizing…"
+        : "Optimizing with cached listings…";
+    resultEl.style.display = "none";
+
+    var url = "/api/collections/budget-optimize?budget=" + encodeURIComponent(budget)
+        + (fetchMissing ? "&fetch=true" : "");
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            if (data.error) {
+                status.textContent = "Error: " + data.error;
+                return;
+            }
+            status.textContent = (data.viable_count || 0) + " of " + (data.almost_count || 0)
+                + " near-complete collections have priced UPX listings within budget"
+                + " (" + (data.listings_cached || 0) + " listing sets cached).";
+
+            if (!data.collection_count) {
+                resultEl.style.display = "block";
+                resultEl.innerHTML = '<span class="muted">Nothing fits this budget with current listings. '
+                    + 'Try a higher budget, click Find listings on individual collections first, '
+                    + 'or enable auto-fetch. Remember: many near-complete collections have no UPX listings at all.</span>';
+                return;
+            }
+
+            var html = '<div><strong>Recommended combo:</strong> '
+                + data.collection_count + ' collection' + (data.collection_count !== 1 ? 's' : '')
+                + ' · spend ' + Math.round(data.spent_upx).toLocaleString() + ' UPX'
+                + ' · +' + data.total_monthly_yield_gain.toLocaleString() + ' UPX/mo'
+                + ' (+' + data.total_hourly_yield_gain + ' UPX/hr)</div>';
+
+            (data.collections || []).forEach(function(c) {
+                html += '<div class="budget-pick">'
+                    + '<div><strong>' + c.name + '</strong> · ' + c.boost + 'x'
+                    + (c.partial ? ' <span class="muted">(partial listings)</span>' : '')
+                    + '</div>'
+                    + '<div>' + Math.round(c.cost_upx).toLocaleString() + ' UPX'
+                    + ' · +' + c.monthly_yield_gain + '/mo'
+                    + (c.payback_days != null ? ' · payback ~' + c.payback_days + 'd' : '')
+                    + '</div></div>';
+            });
+
+            if (data.single_best) {
+                var sb = data.single_best;
+                html += '<div class="muted" style="margin-top:8px">Single best alone: <strong>'
+                    + sb.name + '</strong> for ' + Math.round(sb.cost_upx).toLocaleString()
+                    + ' UPX → +' + sb.monthly_yield_gain + ' UPX/mo'
+                    + (data.combo_beats_single
+                        ? ' — combo wins.'
+                        : ' — single is competitive or better on pure monthly gain.')
+                    + '</div>';
+            }
+            if (data.note) {
+                html += '<div class="muted" style="margin-top:6px">' + data.note + '</div>';
+            }
+            resultEl.style.display = "block";
+            resultEl.innerHTML = html;
+        })
+        .catch(function() {
+            btn.disabled = false;
+            status.textContent = "Request failed.";
+        });
 }
 </script>
 {% endblock %}

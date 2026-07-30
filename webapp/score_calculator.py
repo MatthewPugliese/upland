@@ -105,6 +105,8 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
     variety_by_cat = {}
     bldg_counts = {}
     employment_count = 0
+    office_count = 0
+    office_types = {}
     other_buildings = []
     props_with_structs = 0
     total_residents = 0
@@ -145,7 +147,11 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
             if btype in ("factory",) or cat == "employment":
                 employment_count += 1
 
-            if su and cat and cat != "employment":
+            if btype == "office" or cat == "commerce" or "Office" in name:
+                office_count += 1
+                office_types[name] = office_types.get(name, 0) + 1
+
+            if su and cat and cat not in ("employment", "commerce"):
                 su_by_cat[cat] = su_by_cat.get(cat, 0) + su
                 variety_by_cat.setdefault(cat, set()).add(name)
 
@@ -199,6 +205,11 @@ def compute_score(hood_name: str, structs: dict, props: list = None) -> dict:
         "props_with_structs": props_with_structs,
         "density_pct": density_pct,
         "employment_buildings": employment_count,
+        "office_count": office_count,
+        "office_types": [
+            {"name": n, "count": c}
+            for n, c in sorted(office_types.items(), key=lambda x: -x[1])
+        ],
         "has_residents_data": has_residents_data,
         "total_residents": total_residents,
         "empty_residential": empty_residential,

@@ -204,6 +204,7 @@ def collections_run():
             "user_prop_ids": [p["id"] for p in props],
             "almost": result["almost"],
             "completable": result["completable"],
+            "annual_rate": annual_rate,
         }
 
         return render_template("collections_results.html", result=result, username=username)
@@ -233,11 +234,87 @@ def api_collections_forsale():
     try:
         find_forsale_for_collection = _forsale()
         listings = find_forsale_for_collection(coll_entry, user_prop_ids)
+        # Cache listings on the session so the budget optimizer can reuse them
+        cached = session.get("coll_listings") or {}
+        cached[str(coll_id)] = listings
+        session["coll_listings"] = cached
         return jsonify({"listings": listings, "count": len(listings)})
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/collections/budget-optimize")
+def api_collections_budget_optimize():
+    """
+    Multi-collection knapsack: given a UPX budget, pick the combination of
+    near-complete collections (with known for-sale listings) that maximizes
+    projected monthly yield gain.
+
+    Query params:
+      budget — UPX budget (required)
+      fetch  — if "true", auto-fetch for-sale listings for all almost-complete
+               collections that aren't already cached in the session (slower)
+    """
+    budget_raw = request.args.get("budget", "").strip()
+    try:
+        budget = float(budget_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "budget (UPX number) required"}), 400
+    if budget <= 0:
+        return jsonify({"error": "budget must be > 0"}), 400
+
+    analysis = session.get("coll_analysis")
+    if not analysis:
+        return jsonify({"error": "No active session — run analysis first"}), 400
+
+    almost = analysis.get("almost") or []
+    annual_rate = analysis.get("annual_rate") or 0.1225
+    listings_by_id = dict(session.get("coll_listings") or {})
+    user_prop_ids = set(str(x) for x in analysis.get("user_prop_ids", []))
+
+    auto_fetch = request.args.get("fetch", "false").lower() == "true"
+    if auto_fetch:
+        find_forsale_for_collection = _forsale()
+        for coll in almost:
+            cid = str(coll["id"])
+            if cid in listings_by_id:
+                continue
+            try:
+                listings_by_id[cid] = find_forsale_for_collection(coll, user_prop_ids)
+            except Exception:
+                listings_by_id[cid] = []
+        session["coll_listings"] = listings_by_id
+
+    from multi_collection_optimizer import build_options_from_almost, optimize_budget
+    # keys may be str or int depending on session serialization
+    normalized = {}
+    for k, v in listings_by_id.items():
+        try:
+            normalized[int(k)] = v
+        except (TypeError, ValueError):
+            normalized[k] = v
+
+    options = build_options_from_almost(almost, normalized, annual_rate)
+    result = optimize_budget(options, budget)
+    result["options"] = [
+        {
+            "id": o["id"],
+            "name": o["name"],
+            "boost": o["boost"],
+            "cost_upx": o["cost_upx"],
+            "monthly_yield_gain": o["monthly_yield_gain"],
+            "payback_days": o["payback_days"],
+            "efficiency": o["efficiency"],
+            "partial": o["partial"],
+            "gap": o["gap"],
+        }
+        for o in options[:20]
+    ]
+    result["listings_cached"] = len(listings_by_id)
+    result["almost_count"] = len(almost)
+    return jsonify(result)
 
 
 # ── Neighborhood Score Dashboard ───────────────────────────────────────────
@@ -260,9 +337,31 @@ def score_report():
     result = generate_report(hood_key)
     rows = result.get("rows", []) if isinstance(result, dict) else (result or [])
     lu_balance = result.get("lu_balance") if isinstance(result, dict) else None
+    spark_summary = result.get("spark_summary") if isinstance(result, dict) else None
+    plan_progress = result.get("plan_progress") if isinstance(result, dict) else None
+    commerce = result.get("commerce") if isinstance(result, dict) else None
     if mine_only:
         rows = [r for r in rows if r["is_mine"]]
-    return jsonify({"rows": rows, "neighborhood": hood, "total": len(rows), "lu_balance": lu_balance})
+        # Recompute summaries for the filtered set so mine_only=true stays accurate
+        try:
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "optimizer"))
+            from spark_estimator import summarize_queue
+            from recommender import compute_plan_progress
+            spark_summary = summarize_queue(rows, mine_only=False)
+            plan_progress = compute_plan_progress(rows, mine_only=False)
+        except Exception:
+            pass
+    return jsonify({
+        "rows": rows,
+        "neighborhood": hood,
+        "total": len(rows),
+        "lu_balance": lu_balance,
+        "spark_summary": spark_summary,
+        "plan_progress": plan_progress,
+        "commerce": commerce,
+    })
 
 
 @app.route("/api/score/forsale")

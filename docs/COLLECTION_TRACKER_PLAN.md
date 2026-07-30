@@ -113,9 +113,13 @@ Upland has hundreds of collections. Players typically:
   - For collections where all properties are in one geographic area (neighborhood or city collections), show them on a map
   - Color: owned (green), missing + listed (yellow), missing + unlisted (red)
 
-- [ ] **Multi-collection optimizer**
-  - Given a UPX budget, find the combination of collection completions that maximizes yield/hour gain
-  - E.g., "With 50,000 UPX you can complete Collection A (+12% yield) or collections B+C (+8% + +6%) — B+C wins"
+- [x] **Multi-collection optimizer** — shipped 2026-07-27
+  - `webapp/multi_collection_optimizer.py` — knapsack over near-complete collections with live for-sale costs
+  - Scores each option: monthly yield gain / UPX cost (same yield model as Phase 4)
+  - Exact subset search for ≤14 viable options; greedy+pair polish otherwise
+  - API: `GET /api/collections/budget-optimize?budget=50000&fetch=true`
+  - UI panel on collections results: budget input, auto-fetch listings, combo vs single-best comparison
+  - Caveat from markup-reality memory: paybacks are often years — optimizer ranks, does not endorse buys
 
 ---
 
