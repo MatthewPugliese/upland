@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Floor Price Tracker — UplandScope{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Floor Price Tracker</h2>
+    <p class="card-subtitle">See the cheapest currently-listed property in any neighborhood, and every other active listing sorted by price.</p>
+
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
+
+    <form action="/floor/run" method="POST" id="floorForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="neighborhood">Neighborhood</label>
+                <input type="text" id="neighborhood" name="neighborhood"
+                       placeholder="e.g. Dongan Hills" value="{{ neighborhood or '' }}" required>
+            </div>
+        </div>
+        <p class="field-note">Pulls every property currently "For sale" in the neighborhood and fetches live prices (up to 60 listings). Results cached 30 minutes.</p>
+        <button type="submit" class="btn-primary" id="submitBtn">Find Floor Price</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("floorForm").addEventListener("submit", function() {
+    var btn = document.getElementById("submitBtn");
+    btn.disabled = true;
+    btn.textContent = "Scanning...";
+});
+</script>
+{% endblock %}

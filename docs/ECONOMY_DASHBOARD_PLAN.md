@@ -355,10 +355,15 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   - Instantly shows which neighborhoods are hot vs depressed
   - Data already available from `transactions` table joined to property_cache
 
-- [ ] **Floor price tracker**
-  - For each neighborhood, track the lowest current active listing (from `n2` events in `pending_usd_listings` + open UPX listings)
-  - Show: neighborhood | floor price UPX | floor price USD | # properties listed | last updated
-  - Update live as `n2`/`n4` events arrive
+- [x] **Floor price tracker** — shipped at `/floor` (2026-08-16, `webapp/floor_price.py`). Given a
+  neighborhood, shows the floor UPX and USD asking price plus every active listing sorted by
+  price. Built without the `n2`/`n4` ingestion originally planned here — the scraper doesn't
+  ingest listing events at all (only `n5`/`n52`/`n111`/`n112`, confirmed empty query on `transactions`
+  for `n2`/`n4`), so this reuses `forsale_finder.py`'s existing live-listing lookup (webapp's
+  precached `{hood}_props_cache.json`, ~1,900 neighborhoods already have one, else falls back to
+  a live Developers API scan) plus a live price fetch per listing, cached 30 min. This is a
+  point-in-time snapshot on request, not a live-updating tracker — true "update live as events
+  arrive" still needs `n2`/`n4` ingestion, which would be a scraper change, not just a webapp one.
 
 - [ ] **Days-on-market analysis**
   - Compute time between `n2` (listed) and `n5`/`n52` (sold) or `n4` (unlisted) for each property

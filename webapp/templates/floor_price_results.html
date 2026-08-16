@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Floor Price — {{ result.neighborhood }} — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .results-header {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .stat-card { background: #f8f9fa; border-radius: 10px; padding: 14px 16px; text-align: center; }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 2px; }
+    .stat-card .sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+    .stat-card.green { background: #EAFAF1; border: 1px solid #A9DFBF; }
+    .stat-card.green .value { color: #1E8449; }
+
+    .section-heading {
+        font-size: 16px; font-weight: 700; color: #1a1a2e;
+        margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e0e0e0;
+    }
+    .section-count { font-size: 13px; font-weight: 400; color: #999; }
+
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .full-table tr:last-child td { border-bottom: none; }
+    .full-table tr:hover td { background: #fafafa; }
+    .full-table tr:first-child td { font-weight: 600; }
+
+    .markup-neg { color: #1E8449; }
+    .markup-pos { color: #C0392B; }
+    .no-comps { color: #999; font-style: italic; padding: 12px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{{ result.neighborhood }}</h2>
+    <p class="card-subtitle">{{ result.city }} &middot; {{ result.total_for_sale }} propert{{ 'y' if result.total_for_sale == 1 else 'ies' }} currently for sale{% if result.truncated %} (priced the first {{ result.priced_count }}){% endif %}</p>
+
+    <div class="results-header">
+        <div class="stat-card green">
+            <div class="value">{% if result.floor_upx %}{{ "{:,}".format(result.floor_upx|round|int) }}{% else %}—{% endif %}</div>
+            <div class="label">Floor Price (UPX)</div>
+            {% if result.floor_upx_address %}<div class="sub">{{ result.floor_upx_address }}</div>{% endif %}
+        </div>
+        <div class="stat-card green">
+            <div class="value">{% if result.floor_usd %}${{ "%.2f"|format(result.floor_usd) }}{% else %}—{% endif %}</div>
+            <div class="label">Floor Price (USD)</div>
+            {% if result.floor_usd_address %}<div class="sub">{{ result.floor_usd_address }}</div>{% endif %}
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ result.upx_listings|length }}</div>
+            <div class="label">UPX Listings</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ result.usd_listings|length }}</div>
+            <div class="label">USD Listings</div>
+        </div>
+    </div>
+
+    <div class="section-heading">
+        UPX Listings
+        <span class="section-count">(sorted by price ascending)</span>
+    </div>
+    {% if result.upx_listings %}
+    <table class="full-table">
+        <thead>
+            <tr><th>Address</th><th>Price (UPX)</th><th>Mint Price</th><th>Markup</th><th>Owner</th></tr>
+        </thead>
+        <tbody>
+        {% for l in result.upx_listings %}
+            <tr>
+                <td>{{ l.address }}</td>
+                <td>{{ "{:,}".format(l.price|round|int) }}</td>
+                <td>{{ "{:,}".format(l.mint_price|round|int) if l.mint_price else "—" }}</td>
+                <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">
+                    {{ "%+.1f%%"|format(l.markup_pct) if l.markup_pct is not none else "—" }}
+                </td>
+                <td>{{ l.owner_username or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-comps">No UPX listings currently for sale here.</p>
+    {% endif %}
+
+    <div class="section-heading">
+        USD Listings
+        <span class="section-count">(sorted by price ascending)</span>
+    </div>
+    {% if result.usd_listings %}
+    <table class="full-table">
+        <thead>
+            <tr><th>Address</th><th>Price (USD)</th><th>Mint Price</th><th>Markup</th><th>Owner</th></tr>
+        </thead>
+        <tbody>
+        {% for l in result.usd_listings %}
+            <tr>
+                <td>{{ l.address }}</td>
+                <td>${{ "%.2f"|format(l.price) }}</td>
+                <td>{{ "{:,}".format(l.mint_price|round|int) if l.mint_price else "—" }}</td>
+                <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">
+                    {{ "%+.1f%%"|format(l.markup_pct) if l.markup_pct is not none else "—" }}
+                </td>
+                <td>{{ l.owner_username or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-comps">No USD listings currently for sale here.</p>
+    {% endif %}
+</div>
+{% endblock %}

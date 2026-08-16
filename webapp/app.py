@@ -44,6 +44,10 @@ def _valuation_batch():
     from valuation import estimate_batch, MAX_BATCH_ITEMS
     return estimate_batch, MAX_BATCH_ITEMS
 
+def _floor_price():
+    from floor_price import get_floor_prices
+    return get_floor_prices
+
 def _report():
     import sys
     from pathlib import Path
@@ -416,6 +420,30 @@ def valuation_batch_run():
         import traceback
         traceback.print_exc()
         return render_template("valuation_batch.html", error=f"Error: {e}", raw_queries=raw)
+
+
+@app.route("/floor")
+def floor_price():
+    return render_template("floor_price.html")
+
+
+@app.route("/floor/run", methods=["POST"])
+def floor_price_run():
+    get_floor_prices = _floor_price()
+    neighborhood = request.form.get("neighborhood", "").strip()
+
+    if not neighborhood:
+        return render_template("floor_price.html", error="Enter a neighborhood name.")
+
+    try:
+        result = get_floor_prices(neighborhood)
+        if result.get("error"):
+            return render_template("floor_price.html", error=result["error"], neighborhood=neighborhood)
+        return render_template("floor_price_results.html", result=result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render_template("floor_price.html", error=f"Error: {e}", neighborhood=neighborhood)
 
 
 # ── Neighborhood Score Dashboard ───────────────────────────────────────────
