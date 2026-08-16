@@ -273,7 +273,7 @@ def structures_that_fit(up2: float, width_up: float = 0, depth_up: float = 0) ->
 
 
 def best_service_for_zone(up2: float, width_up: float, zone: str,
-                          neighborhood_counts: dict = None) -> dict | None:
+                          neighborhood_counts: dict = None, depth_up: float = 0) -> dict | None:
     """
     Return the single best service structure for a lot in the given zone,
     considering area/width constraints and neighborhood variety.
@@ -307,7 +307,7 @@ def best_service_for_zone(up2: float, width_up: float, zone: str,
         "Zone 6":      ["public", "essential", "entertainment"],
     }
     cats = PRIORITY.get(zone, ["essential", "entertainment", "public"])
-    fits = [s for s in structures_that_fit(up2, width_up) if s["type"] == "service" and s["su"] > 0]
+    fits = [s for s in structures_that_fit(up2, width_up, depth_up) if s["type"] == "service" and s["su"] > 0]
     if not fits:
         return None
 

@@ -256,7 +256,7 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
     current_names = [s.get("buildingName", "") for s in current_structs if s.get("buildingName")]
     current_su = sum(STRUCTURES.get(n, {}).get("su", 0) for n in current_names)
 
-    best_svc = best_service_for_zone(up2, width_up, zone, neighborhood_counts)
+    best_svc = best_service_for_zone(up2, width_up, zone, neighborhood_counts, depth_up)
     best_su = best_svc["su"] if best_svc else 0
     best_name = best_svc["name"] if best_svc else None
 
