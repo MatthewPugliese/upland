@@ -27,6 +27,7 @@ import base64
 import json
 import math
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -1081,7 +1082,7 @@ out skel qt;
                 continue
             b_base = _addr_base(b_num)
             num_match = (b_num == an_num) or (b_base == an_base and an_base != "")
-            street_match = (b_street == an_street) or (b_street in an_street) or (an_street in b_street)
+            street_match = fuzzy_street_match(b_street, an_street)
             if num_match and street_match:
                 already_matched = True
                 break
@@ -1309,6 +1310,23 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
 # Address matching: Upland properties ↔ OSM buildings
 # ─────────────────────────────────────────────────────────────────────────────
 
+def fuzzy_street_match(a: str, b: str) -> bool:
+    """
+    True if two normalized street strings likely refer to the same street,
+    allowing one to be a substring of the other (e.g. abbreviation/variant
+    differences) — but only on a word boundary, not mid-token. Plain
+    substring containment (`a in b`) would wrongly match numbered streets
+    like "1ST AVE" inside "21ST AVE", since digits and letters are both
+    "word" characters with no natural boundary between them.
+    """
+    if a == b:
+        return True
+    if not a or not b:
+        return False
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    return re.search(rf"\b{re.escape(shorter)}\b", longer) is not None
+
+
 def _normalize(addr: str) -> tuple[str, str]:
     """
     Split address into (house_number, normalized_street).
@@ -1387,7 +1405,7 @@ def match_to_buildings(props: list, buildings: list) -> tuple[dict, list]:
         return n.rstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 
     def _street_match(a: str, b: str) -> bool:
-        return a == b or a in b or b in a
+        return fuzzy_street_match(a, b)
 
     # prop_id → list of matching buildings
     prop_buildings: dict = defaultdict(list)

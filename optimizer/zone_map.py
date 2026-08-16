@@ -54,6 +54,7 @@ from neighborhood_map import (
     _poly_to_overpass_str,
     _overpass_query,
     _STREET_ABBREV,
+    fuzzy_street_match,
     DEFAULT_USERNAME,
     DEFAULT_EOS_ACCOUNT,
 )
@@ -213,9 +214,9 @@ def assign_zone(address: str, street_zones: dict[str, str]) -> str:
     norm = " ".join(tokens)
     if norm in street_zones:
         return street_zones[norm]
-    # Partial match: check if any known key is a substring of this one
+    # Partial match: check if any known key refers to the same street
     for known, zone in street_zones.items():
-        if known in norm or norm in known:
+        if fuzzy_street_match(known, norm):
             return zone
     return "mixed"
 
