@@ -41,6 +41,11 @@ _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 _semaphore = threading.Semaphore(MAX_CONCURRENT_GENERATIONS)
 
+# Jobs older than this are pruned on each update — otherwise every unique
+# (neighborhood, username, mode) combination ever requested stays in memory
+# forever for the life of the server process.
+_JOB_MAX_AGE_SECONDS = MAP_TTL_HOURS * 3600
+
 
 def _map_key(neighborhood: str, username: str, mode: str, zones: bool = False) -> str:
     slug = "".join(
@@ -58,11 +63,39 @@ def get_job(key: str) -> dict | None:
         return _jobs.get(key, {}).copy()
 
 
+def _prune_stale_jobs_locked() -> None:
+    """Caller must already hold _jobs_lock. Drops jobs not updated recently —
+    an actively-generating job keeps getting progress updates so its
+    timestamp stays fresh; only abandoned/finished-long-ago jobs get swept."""
+    now = time.time()
+    stale = [k for k, v in _jobs.items() if now - v.get("_ts", now) > _JOB_MAX_AGE_SECONDS]
+    for k in stale:
+        del _jobs[k]
+
+
 def _update_job(key: str, **kwargs):
     with _jobs_lock:
         if key not in _jobs:
             _jobs[key] = {}
         _jobs[key].update(kwargs)
+        _jobs[key]["_ts"] = time.time()
+        _prune_stale_jobs_locked()
+
+
+def _try_start_generating(key: str) -> bool:
+    """Atomically check-and-set so two near-simultaneous requests for the
+    same key can't both see "not generating" and both spawn a generation
+    thread against the same output file. Returns True if this call is the
+    one that should start generation."""
+    with _jobs_lock:
+        if _jobs.get(key, {}).get("status") == "generating":
+            return False
+        if key not in _jobs:
+            _jobs[key] = {}
+        _jobs[key].update(status="generating", progress="Starting...", path=None, error=None)
+        _jobs[key]["_ts"] = time.time()
+        _prune_stale_jobs_locked()
+        return True
 
 
 # ── Cached map check ──────────────────────────────────────────────────────
@@ -94,13 +127,11 @@ def request_map(neighborhood: str, city_hint: str | None,
         _update_job(key, status="ready", path=str(cached), progress="Cached")
         return key
 
-    # Check if already generating
-    job = get_job(key)
-    if job and job.get("status") == "generating":
+    # Atomically check-and-start: avoids a race where two near-simultaneous
+    # requests for the same key both see "not generating" and both spawn a
+    # generation thread against the same output file.
+    if not _try_start_generating(key):
         return key
-
-    # Start generation
-    _update_job(key, status="generating", progress="Starting...", path=None, error=None)
 
     t = threading.Thread(
         target=_generate_map_thread,

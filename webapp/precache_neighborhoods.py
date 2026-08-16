@@ -94,13 +94,18 @@ def main():
         parts = [p.strip() for p in full_addr.split(",")]
         if len(parts) >= 2:
             hood_name = parts[1].upper()
+            # For a 2-part address ("STREET, CITY" — no distinct neighborhood tier),
+            # this segment doubles as both neighborhood and city, matching the
+            # convention collection_optimizer.load_user_properties already uses for
+            # the same address format — don't drop city to "" in that case.
+            city_name = parts[2] if len(parts) >= 3 else hood_name
             by_hood[hood_name].append({
                 "id": prop_id,
                 "address": parts[0],
                 "status": "Unknown",
                 "mintPrice": None,
                 "neighborhood": {"name": hood_name},
-                "city": {"name": parts[2] if len(parts) >= 3 else ""},
+                "city": {"name": city_name},
             })
 
     print(f"[+] Indexed {len(by_hood)} unique neighborhood names")
