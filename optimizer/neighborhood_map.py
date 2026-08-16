@@ -696,8 +696,8 @@ def get_neighborhood_properties(
 
     Priority order:
       1. Local neighborhood cache (fast, from previous run)
-      2. Shared property_cache.json from listings.py (large cache, local)
-         → extract properties by neighborhood name in address string
+      2. Shared property_cache.db (SQLite, built from listings.py's cache)
+         → indexed lookup by neighborhood name
          → enrich with live API data (status, mintPrice, collection)
       3. OSM street names → Upland textSearch (for large cities w/o shared cache)
       4. Simple page scan (fallback for small cities)
