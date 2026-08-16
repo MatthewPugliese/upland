@@ -86,6 +86,7 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -267,7 +268,8 @@ def process_page(conn: sqlite3.Connection, raw_actions: list) -> int:
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1
-                    _upsert_hourly(conn, timestamp, "upx", upx or 0)
+                    if upx:
+                        _upsert_hourly(conn, timestamp, "upx", upx)
             except Exception as e:
                 print(f"  [!] n5 insert: {e}", flush=True)
 
@@ -299,7 +301,8 @@ def process_page(conn: sqlite3.Connection, raw_actions: list) -> int:
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1
-                    _upsert_hourly(conn, timestamp, "usd", usd_price or 0)
+                    if usd_price:
+                        _upsert_hourly(conn, timestamp, "usd", usd_price)
             except Exception as e:
                 print(f"  [!] n52 insert: {e}", flush=True)
 
@@ -320,7 +323,8 @@ def process_page(conn: sqlite3.Connection, raw_actions: list) -> int:
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1
-                    _upsert_hourly(conn, timestamp, "upx", upx or 0)
+                    if upx:
+                        _upsert_hourly(conn, timestamp, "upx", upx)
             except Exception as e:
                 print(f"  [!] {name} insert: {e}", flush=True)
 
@@ -359,19 +363,24 @@ def backfill(conn: sqlite3.Connection) -> None:
             batch = [pos + i * PAGE_SIZE for i in range(WINDOW) if pos + i * PAGE_SIZE < END_POS]
             futures = [executor.submit(fetch_page, p) for p in batch]
 
+            interrupted = False
+            last_completed_pos = None
             for fut in futures:
                 if _stop:
+                    interrupted = True
                     break
                 page_pos, actions = fut.result()
 
                 if actions is None:
                     print(f"  [!] Skipping pos {page_pos:,} (fetch failed)", flush=True)
+                    last_completed_pos = page_pos
                     continue
 
                 if actions:
                     n = process_page(conn, actions)
                     total_inserted += n
 
+                last_completed_pos = page_pos
                 pages_done += 1
                 last_ts = (
                     actions[-1].get("action_trace", {}).get("block_time", "")[:10]
@@ -389,6 +398,14 @@ def backfill(conn: sqlite3.Connection) -> None:
                         f"~{remaining/86400:.1f}d remaining",
                         flush=True,
                     )
+
+            if interrupted:
+                # Resume from right after the last page actually processed in this
+                # window, not the whole window's end — otherwise any pages submitted
+                # but not yet .result()'d when _stop fired are permanently skipped.
+                pos = (last_completed_pos + PAGE_SIZE) if last_completed_pos is not None else pos
+                set_state(conn, STATE_KEY, str(pos))
+                break
 
             pos += WINDOW * PAGE_SIZE
             set_state(conn, STATE_KEY, str(pos))

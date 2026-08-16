@@ -82,7 +82,7 @@ def lookup(prop_id: str) -> dict | None:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return {"address": None, "neighborhood": None, "city": None}
-        raise
+        return None  # rate-limit/server error — transient, caller will retry
     except Exception:
         return None  # transient error — caller will retry
 

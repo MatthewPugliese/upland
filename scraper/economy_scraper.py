@@ -176,6 +176,7 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -412,7 +413,8 @@ def process_actions(conn: sqlite3.Connection, actions: list, base_url: str) -> i
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1
-                    _upsert_hourly(conn, timestamp, "upx", upx or 0)
+                    if upx:
+                        _upsert_hourly(conn, timestamp, "upx", upx)
                 conn.commit()
             except Exception as e:
                 print(f"    [!] n5 insert: {e}")
@@ -449,7 +451,8 @@ def process_actions(conn: sqlite3.Connection, actions: list, base_url: str) -> i
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1
-                    _upsert_hourly(conn, timestamp, "usd", usd_price or 0)
+                    if usd_price:
+                        _upsert_hourly(conn, timestamp, "usd", usd_price)
                 conn.commit()
             except Exception as e:
                 print(f"    [!] n52 insert: {e}")
@@ -471,7 +474,8 @@ def process_actions(conn: sqlite3.Connection, actions: list, base_url: str) -> i
                 )
                 if conn.execute("SELECT changes()").fetchone()[0]:
                     inserted += 1
-                    _upsert_hourly(conn, timestamp, "upx", upx or 0)
+                    if upx:
+                        _upsert_hourly(conn, timestamp, "upx", upx)
                 conn.commit()
             except Exception as e:
                 print(f"    [!] {name} insert: {e}")
