@@ -1,0 +1,22 @@
+**/__pycache__/
+**/*.pyc
+.git
+.venv/
+venv/
+
+# webapp/cache and webapp/maps are volume-mounted at runtime for the webapp
+# service (see docker-compose.yml: ./data/cache and ./data/maps) — the image
+# copy is always shadowed, so excluding it just avoids bloating build context/
+# image size with local dev-time cache (was ~700MB on this machine).
+webapp/cache/
+webapp/maps/
+
+# economy.db and friends are volume-mounted (./data:/app/data) for both
+# services — never read from the image copy.
+data/
+
+# NOTE: deliberately NOT excluding optimizer/cache/ or scraper/property_cache.*
+# — both are baked into the webapp image via COPY with no volume-mount
+# fallback (confirmed via `docker exec upland-webapp-1 ls ...` on the Pi) and
+# are read directly by webapp code (score_forsale route, valuation.py,
+# floor_price.py). Excluding them would break those features on next deploy.
