@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Portfolio Analyzer — UplandScope{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Portfolio Analyzer</h2>
+    <p class="card-subtitle">Full breakdown of your Upland portfolio: properties owned, mint value, UP², neighborhoods, and what's still undeveloped.</p>
+
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
+
+    <form action="/portfolio/run" method="POST" id="portfolioForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="username">Upland Username</label>
+                <input type="text" id="username" name="username"
+                       placeholder="e.g. pugs08" value="pugs08" required>
+            </div>
+            <div class="form-group">
+                <label for="eos_account">EOS Account</label>
+                <input type="text" id="eos_account" name="eos_account"
+                       placeholder="e.g. vo1dsqp3qmce" value="vo1dsqp3qmce" required>
+            </div>
+            <div class="form-group" style="max-width:140px">
+                <label for="annual_rate">Annual Yield Rate (%)</label>
+                <input type="number" id="annual_rate" name="annual_rate"
+                       placeholder="12.25" value="12.25" step="0.01" min="1" max="50">
+            </div>
+        </div>
+        <p class="field-note">Pulls your full property list from blockchain ownership history, then fetches UP² and placed structures per property from the Upland API. Yield figures are a flat-rate estimate against mint value (same model used by the Collection Tracker) — not a real per-property income figure.</p>
+        <button type="submit" class="btn-primary" id="submitBtn">Analyze Portfolio</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("portfolioForm").addEventListener("submit", function() {
+    var btn = document.getElementById("submitBtn");
+    btn.disabled = true;
+    btn.textContent = "Analyzing...";
+});
+</script>
+{% endblock %}

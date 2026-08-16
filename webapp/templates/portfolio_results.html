@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Portfolio — {{ username }} — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .results-header {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-align: center;
+    }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 2px; }
+    .stat-card.highlight { background: #EBF5FB; border: 1px solid #AED6F1; }
+    .stat-card.highlight .value { color: #1B4F72; }
+    .stat-card.green { background: #EAFAF1; border: 1px solid #A9DFBF; }
+    .stat-card.green .value { color: #1E8449; }
+    .stat-card.amber { background: #FEF9E7; border: 1px solid #F9E79F; }
+    .stat-card.amber .value { color: #9A7D0A; }
+
+    .section-heading {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin: 24px 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .section-count { font-size: 13px; font-weight: 400; color: #999; }
+    .yield-note { font-size: 12px; color: #999; font-style: italic; margin-top: -6px; margin-bottom: 16px; }
+
+    .full-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+    .full-table th {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 2px solid #e0e0e0;
+        color: #555;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .full-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid #f0f0f0;
+        vertical-align: middle;
+    }
+    .full-table tr:last-child td { border-bottom: none; }
+    .full-table tr:hover td { background: #fafafa; }
+
+    .pct-cell { font-weight: 600; }
+    .pct-high { color: #27AE60; }
+    .pct-mid  { color: #E67E22; }
+    .pct-low  { color: #C0392B; }
+
+    .addr-cell { color: #333; }
+    .addr-cell .city { color: #aaa; font-size: 11px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Portfolio — {{ username }}</h2>
+    <p class="card-subtitle">{{ result.summary.total_properties }} properties across {{ result.summary.neighborhood_count }} neighborhoods.</p>
+
+    <div class="results-header">
+        <div class="stat-card highlight">
+            <div class="value">{{ result.summary.total_properties }}</div>
+            <div class="label">Properties</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ "{:,}".format(result.summary.total_mint_value) }}</div>
+            <div class="label">Total Mint Value (UPX)</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ result.summary.total_up2 }}</div>
+            <div class="label">Total UP²</div>
+        </div>
+        <div class="stat-card {% if result.summary.pct_developed >= 75 %}green{% elif result.summary.pct_developed >= 40 %}amber{% endif %}">
+            <div class="value">{{ result.summary.pct_developed }}%</div>
+            <div class="label">Developed ({{ result.summary.developed_count }}/{{ result.summary.total_properties }})</div>
+        </div>
+        <div class="stat-card green">
+            <div class="value">{{ "{:,}".format(result.summary.est_monthly_yield) }}</div>
+            <div class="label">Est. Monthly Yield (UPX)</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ result.summary.est_hourly_yield }}</div>
+            <div class="label">Est. Hourly Yield (UPX)</div>
+        </div>
+    </div>
+    <p class="yield-note">Yield figures assume a flat {{ result.summary.annual_rate_pct }}% annual rate against mint value (same model as the Collection Tracker) — a portfolio-level estimate, not a measured per-property income figure.</p>
+
+    <div class="section-heading">
+        Neighborhood Breakdown
+        <span class="section-count">({{ result.neighborhoods|length }})</span>
+    </div>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Neighborhood</th>
+                <th>Properties</th>
+                <th>Mint Value (UPX)</th>
+                <th>UP²</th>
+                <th>Developed</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for h in result.neighborhoods %}
+            <tr>
+                <td><strong>{{ h.neighborhood }}</strong></td>
+                <td>{{ h.count }}</td>
+                <td>{{ "{:,}".format(h.mint) }}</td>
+                <td>{{ h.up2 }}</td>
+                <td>
+                    <span class="pct-cell {% if h.pct_developed >= 75 %}pct-high{% elif h.pct_developed >= 40 %}pct-mid{% else %}pct-low{% endif %}">
+                        {{ h.developed }}/{{ h.count }}
+                    </span>
+                    <span style="color:#bbb;font-size:11px">({{ h.pct_developed }}%)</span>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if result.structures %}
+    <div class="section-heading">
+        Structure Inventory
+        <span class="section-count">({{ result.structures|length }} types)</span>
+    </div>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Structure</th>
+                <th>Count</th>
+                <th>Total SU</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in result.structures %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td>{{ s.count }}</td>
+                <td>{{ s.su }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if result.undeveloped %}
+    <div class="section-heading">
+        Undeveloped Properties
+        <span class="section-count">({{ result.undeveloped|length }} — no structures placed)</span>
+    </div>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>Mint Value (UPX)</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in result.undeveloped %}
+            <tr>
+                <td class="addr-cell">{{ p.address }} <span class="city">{{ p.city }}</span></td>
+                <td>{{ p.neighborhood }}</td>
+                <td>{{ "{:,}".format(p.mintPrice or 0) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

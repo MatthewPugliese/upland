@@ -32,6 +32,10 @@ def _score():
     from score_calculator import get_neighborhood_score, list_cached_neighborhoods
     return get_neighborhood_score, list_cached_neighborhoods
 
+def _portfolio():
+    from portfolio_analyzer import build_portfolio
+    return build_portfolio
+
 def _report():
     import sys
     from pathlib import Path
@@ -315,6 +319,39 @@ def api_collections_budget_optimize():
     result["listings_cached"] = len(listings_by_id)
     result["almost_count"] = len(almost)
     return jsonify(result)
+
+
+# ── Portfolio Analyzer ─────────────────────────────────────────────────────
+
+@app.route("/portfolio")
+def portfolio():
+    return render_template("portfolio.html")
+
+
+@app.route("/portfolio/run", methods=["POST"])
+def portfolio_run():
+    build_portfolio = _portfolio()
+    username = request.form.get("username", "").strip()
+    eos_account = request.form.get("eos_account", "").strip()
+
+    if not username or not eos_account:
+        return render_template("portfolio.html", error="Both username and EOS account are required.")
+
+    annual_rate_pct = request.form.get("annual_rate", "12.25").strip()
+    try:
+        annual_rate = float(annual_rate_pct) / 100.0
+    except ValueError:
+        annual_rate = 0.1225
+
+    try:
+        result = build_portfolio(username, eos_account, annual_rate=annual_rate)
+        if result.get("error"):
+            return render_template("portfolio.html", error=result["error"])
+        return render_template("portfolio_results.html", result=result, username=username)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render_template("portfolio.html", error=f"Error: {e}")
 
 
 # ── Neighborhood Score Dashboard ───────────────────────────────────────────

@@ -6,11 +6,23 @@ Given any Upland username, produce a full breakdown of their portfolio: properti
 
 ---
 
+## Status (2026-08-15)
+
+**MVP shipped** at `/portfolio` in the web app (`webapp/portfolio_analyzer.py`, `webapp/templates/portfolio.html` + `portfolio_results.html`). Reuses `load_user_properties()` (blockchain ownership + property cache, same as Collection Tracker) and adds one new per-property API pass (`fetch_property_details`) that pulls UP² + placed buildings together in a single request per property (24h cache at `webapp/cache/portfolio/{username}_details_cache.json`).
+
+Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via `score_calculator._lookup`), undeveloped-properties list. Not shipped: per-property yield efficiency ranking, income tracker, spark usage tracker, spark manager sub-feature, scouting-another-player mode — see notes below on why and what each needs.
+
+**Why no per-property yield ranking:** every "yield" figure elsewhere in this repo (Collection Tracker, budget optimizer) is `mintPrice × flat assumed annual rate` — there's no real per-property yield data anywhere in the codebase. Under a flat rate, yield is strictly proportional to mint price, so a per-property ranking would just re-sort by mint price — not useful. A real ranking needs actual UPX income per property, which means ingesting `n31` (yield-collection) blockchain events with amounts, which the economy scraper does not currently do (`n31` is only used opportunistically today, purely to reconstruct the *current owned-property-ID set* from the `p55` field in `_blockchain_user_properties` — the transfer amount inside each `n31` transaction, needed for a real income figure, is never read). See `docs/ECONOMY_DASHBOARD_PLAN.md`'s income tracker section for the same gap.
+
+**Scouting another player** is blocked on the same thing the research surfaced for this build: `_blockchain_user_properties` requires the target's EOS account, not their Upland username, and there's no username→EOS lookup in the repo (only the reverse, `webapp/username_lookup.py`). Would need to either scrape `data/username_cache.json` in reverse (build a name→account index once) or add a dedicated lookup.
+
+---
+
 ## Features
 
 ### Your own portfolio view (`/portfolio?user=pugs08`)
 
-- [ ] **Portfolio summary**
+- [x] **Portfolio summary**
   - Total properties owned, total mint value, total current market value (estimated from comps)
   - Total yield per hour, yield per day, yield per month
   - Total UP² owned, % developed (has at least one structure)
@@ -21,7 +33,7 @@ Given any Upland username, produce a full breakdown of their portfolio: properti
   - Rank from best to worst ROI — shows which properties are underperforming
   - Flag properties with 0 yield (unlisted and unbuilt — dead weight)
 
-- [ ] **Neighborhood breakdown**
+- [x] **Neighborhood breakdown**
   - Which neighborhoods are you active in, how many properties per neighborhood
   - For each neighborhood: your contribution %, structures built, total SU added
   - Link to neighborhood optimizer for each
@@ -37,7 +49,7 @@ Given any Upland username, produce a full breakdown of their portfolio: properti
   - Flag properties with spark running low (below minimum stacked threshold)
   - Total spark burn rate per day across all properties
 
-- [ ] **Structure inventory**
+- [x] **Structure inventory**
   - Full list of every structure across all properties, grouped by type
   - Total SU by category across all your neighborhoods
   - Structures not yet built vs structures in construction
