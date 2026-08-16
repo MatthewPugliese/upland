@@ -446,9 +446,7 @@ UPX sales (n5) historically have `seller = NULL` because the seller isn't in the
 - ~695K historical n5 rows have null seller — need a backfill script similar to `backfill_addresses.py`
 - At 5 req/s that's ~39h; run overnight on Pi after address backfill completes
 
-### Pending — deploy webapp code changes to Pi
-New features built locally (recommendation report, whale tracker with usernames) need a new webapp Docker image deployed to Pi.
-
+### Deploy webapp code changes to Pi — process (repeat as needed)
 ```bash
 # Build on Mac, transfer to Pi
 docker build --platform linux/arm64 -f Dockerfile.webapp -t upland-webapp . && \
@@ -459,7 +457,7 @@ ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 \
   "docker compose -f /opt/upland/docker-compose.yml up -d webapp"
 ```
 
-Also sync `data/username_cache.json` to Pi before deploying so whale tracker has full 239k mappings.
+**2026-08-15**: deployed through `48a1d1b` (spark estimator, plan completion tracker, commerce layer, multi-collection budget optimizer) using this exact process — Pi git checkout `git pull`ed to match, webapp container rebuilt/restarted, `/economy` + `/collections` both HTTP 200 after. See `project_pi_state.md` memory for full notes (incl. a Colima disk-lock gotcha on the Mac build side).
 
 ### Deployment notes
 - Webapp uses `Dockerfile.webapp` (light: flask + gunicorn + requests only, ~160MB image, no shapely/matplotlib/numpy)
