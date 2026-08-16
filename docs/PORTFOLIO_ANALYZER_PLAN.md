@@ -37,7 +37,7 @@ Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via 
 - [x] **Neighborhood breakdown**
   - Which neighborhoods are you active in, how many properties per neighborhood
   - For each neighborhood: your contribution %, structures built, total SU added
-  - Link to neighborhood optimizer for each
+  - [x] Link to neighborhood optimizer for each *(links to `/score?neighborhood=X`, the closest existing per-neighborhood analysis page)*
 
 - [ ] **Income tracker**
   - Pull `n31` (yield collection) events from the blockchain for the user
