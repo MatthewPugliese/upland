@@ -67,6 +67,9 @@
 
     .addr-cell { color: #333; }
     .addr-cell .city { color: #aaa; font-size: 11px; }
+
+    .full-table a { color: #1B4F72; text-decoration: none; }
+    .full-table a:hover { text-decoration: underline; }
 </style>
 {% endblock %}
 
@@ -124,7 +127,7 @@
         <tbody>
         {% for h in result.neighborhoods %}
             <tr>
-                <td><strong>{{ h.neighborhood }}</strong></td>
+                <td><strong><a href="/score?neighborhood={{ h.neighborhood|urlencode }}">{{ h.neighborhood }}</a></strong></td>
                 <td>{{ h.count }}</td>
                 <td>{{ "{:,}".format(h.mint) }}</td>
                 <td>{{ h.up2 }}</td>
