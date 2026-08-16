@@ -137,7 +137,7 @@ Upland has hundreds of collections. Players typically:
   is still <10% coverage for the largest cities) — left as a known, documented gap rather than a
   rushed partial fix. See the docstring on `_get_neighborhood_candidates` for full detail.
 
-  **Fixed a real production bug found testing this on the Pi (commit TBD):** the Flask session
+  **Fixed a real production bug found testing this on the Pi (commit `be5aa4a`):** the Flask session
   cookie storing Collection Tracker analysis (`coll_analysis`/`coll_listings` — every owned
   property ID + full near-complete-collection data) grew to 22,912 bytes for a 727-property
   account — over both the ~4KB browser cookie limit and gunicorn's request-header-size limit.
