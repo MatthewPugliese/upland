@@ -440,8 +440,14 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [ ] Neighborhood price heatmap overlay on existing map (table version shipped instead, see above)
 
 ### Known issues to fix
-- [ ] **30d/7d/today show low data** — scraper just caught up to present on 2026-06-24; data will accumulate naturally over the coming days/weeks
-- [ ] **Dashboard page spins intermittently** — root cause unclear; possibly SQLite read contention with active scraper writes, or lingering iptables weirdness from OOM events. Needs investigation.
+- [x] **30d/7d/today show low data** — resolved by time; as of 2026-08-16 there are 16,984 trades
+  in the last 7 days, no longer an issue.
+- [ ] **Dashboard page spins intermittently** — root cause unclear; possibly SQLite read contention
+  with active scraper writes, or lingering iptables weirdness from OOM events. **Possibly improved
+  by 2026-08-16's scraper fix** (commit `43280c5`): `economy_scraper.py` never had
+  `PRAGMA busy_timeout` set on its write connection, so a "database is locked" collision with a
+  concurrent reader/writer could have contributed to hangs — that's now fixed. Not confirmed as
+  the actual root cause of this specific symptom; keep an eye on whether it recurs.
 
 ### Pending — rebuild pending_usd_listings from blockchain history
 `pending_usd_listings` only contains listings the scraper has observed since it started. Any property listed before the scraper began is missing — when it sells, the price can't be recovered.
