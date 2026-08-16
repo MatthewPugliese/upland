@@ -22,11 +22,12 @@ Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via 
 
 ### Your own portfolio view (`/portfolio?user=pugs08`)
 
-- [x] **Portfolio summary**
-  - Total properties owned, total mint value, total current market value (estimated from comps)
-  - Total yield per hour, yield per day, yield per month
-  - Total UP² owned, % developed (has at least one structure)
-  - Net worth estimate: mint value + structure replacement cost
+- [x] **Portfolio summary** *(partial — see below)*
+  - [x] Total properties owned, total mint value
+  - [ ] Total current market value (estimated from comps) — needs Property Valuation Tool
+  - [x] Total yield per hour/day/month *(flat-rate estimate only, see Status above)*
+  - [x] Total UP² owned, % developed (has at least one structure)
+  - [ ] Net worth estimate: mint value + structure replacement cost — needs per-structure build cost data
 
 - [ ] **Yield efficiency ranking**
   - For each property: yield/hour, mint price, yield/hour per UPX invested
