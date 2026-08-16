@@ -23,12 +23,17 @@ import concurrent.futures
 import json
 import os
 import sqlite3
+import sys
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+OPTIMIZER_DIR = SCRIPT_DIR.parent / "optimizer"
+sys.path.insert(0, str(OPTIMIZER_DIR))
+from spark_estimator import get_spark_cost  # noqa: E402
+
 PROP_CACHE_DB = SCRIPT_DIR.parent / "scraper" / "property_cache.db"
 ECONOMY_DB = Path(os.environ.get("ECONOMY_DB", str(SCRIPT_DIR.parent / "data" / "economy.db")))
 AREA_CACHE_PATH = SCRIPT_DIR / "cache" / "valuation" / "area_cache.json"
@@ -279,13 +284,19 @@ def neighborhood_valuation_rate(neighborhood: str, city: str) -> dict:
     }
 
 
-def estimate_value(query: str) -> dict:
+def estimate_value(query: str, include_floor: bool = True) -> dict:
     """
     Main entry point. Returns one of:
       - {"error": "..."} — nothing matched, or live API fetch failed
       - {"matches": [...]} — more than one property matched the query text,
         caller should show a disambiguation list
       - full result dict with "property", "upx_valuation", "usd_valuation"
+
+    include_floor runs an extra neighborhood-wide active-listings scan
+    (floor_price.get_floor_prices) to compare this property's estimate
+    against the current cheapest ask in the same neighborhood. It's a real
+    extra network round trip (~3-5s on a cache miss, cached 30min after),
+    so estimate_batch() disables it to keep a multi-property batch fast.
     """
     resolved = resolve_property(query)
     matches = resolved["matches"]
@@ -327,6 +338,42 @@ def estimate_value(query: str) -> dict:
             usd_val["listing_pct_diff"] = round(
                 100 * (listing_price - usd_val["estimated_value"]) / usd_val["estimated_value"], 1)
 
+    sparks_invested = 0
+    sparks_buildings = 0
+    sparks_estimated_buildings = 0
+    for b in buildings:
+        name = b.get("buildingName") or b.get("buildingType") or "Unknown"
+        spark_cost = get_spark_cost(name)
+        if spark_cost:
+            sparks_invested += spark_cost["total_sparks"]
+            sparks_buildings += 1
+            if spark_cost["estimated"]:
+                sparks_estimated_buildings += 1
+    pct_sparks_estimated = (
+        round(100 * sparks_estimated_buildings / sparks_buildings, 1) if sparks_buildings else 0.0
+    )
+
+    floor = None
+    if include_floor:
+        try:
+            from floor_price import get_floor_prices
+            floor_result = get_floor_prices(match["neighborhood"])
+            if not floor_result.get("error"):
+                floor = {
+                    "floor_upx": floor_result.get("floor_upx"),
+                    "floor_upx_address": floor_result.get("floor_upx_address"),
+                    "floor_usd": floor_result.get("floor_usd"),
+                    "floor_usd_address": floor_result.get("floor_usd_address"),
+                }
+                if floor["floor_upx"] and upx_val["estimated_value"]:
+                    floor["upx_vs_floor_pct"] = round(
+                        100 * (upx_val["estimated_value"] - floor["floor_upx"]) / floor["floor_upx"], 1)
+                if floor["floor_usd"] and usd_val["estimated_value"]:
+                    floor["usd_vs_floor_pct"] = round(
+                        100 * (usd_val["estimated_value"] - floor["floor_usd"]) / floor["floor_usd"], 1)
+        except Exception:
+            floor = None
+
     return {
         "matches": [],
         "property": {
@@ -341,9 +388,12 @@ def estimate_value(query: str) -> dict:
             "structure_count": len(buildings),
             "structure_names": [b.get("buildingName") or b.get("buildingType") or "Unknown"
                                  for b in buildings],
+            "sparks_invested": sparks_invested,
+            "pct_sparks_estimated": pct_sparks_estimated,
         },
         "upx_valuation": upx_val,
         "usd_valuation": usd_val,
+        "floor": floor,
     }
 
 
@@ -361,7 +411,7 @@ def estimate_batch(queries: list, max_workers: int = 5) -> list:
     queries = [q.strip() for q in queries if q.strip()][:MAX_BATCH_ITEMS]
 
     def _run_one(query: str) -> dict:
-        result = estimate_value(query)
+        result = estimate_value(query, include_floor=False)
         if result.get("matches"):
             return {"query": query,
                      "error": f"{len(result['matches'])} properties matched '{query}' — "

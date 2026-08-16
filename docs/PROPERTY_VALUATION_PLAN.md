@@ -120,11 +120,18 @@ The economy scraper must be running for at least 30 days to have enough comps fo
 - [x] **Normalization** — computes UPX/UP² and USD/UP² per comp, shows median (UPX and USD tracked separately, not blended)
 - [x] **Confidence scoring** — High/Medium/Low—broadened/Very low badge based on comp count and scope, per the table above
 - [x] **Current listing comparison** — if listed, shows % over/under the matching-currency estimate
-- [ ] **Structures adjustment** — if the property has existing structures, note their value (demolish cost, structure SU contribution) as a modifier
+- [x] **Structures adjustment** *(partial)* — shows sparks invested in construction (real computed
+  figure via `spark_estimator.get_spark_cost()`, same model as Portfolio Analyzer), not a UPX
+  demolish-cost/replacement-value modifier — no UPX-cost-to-build data exists anywhere in the repo
+  (same gap noted in the Portfolio Analyzer plan).
 - [x] **Batch mode** — `/valuation/batch`, paste addresses/IDs (one per line, capped at 25), runs
   concurrently (`valuation.estimate_batch()`, 5 workers). Ambiguous text addresses are flagged
   with an error rather than silently guessing a match — batch mode expects IDs or exact addresses.
-- [ ] **Neighborhood floor comparison** — show where this property sits relative to the neighborhood floor and median
+- [x] **Neighborhood floor comparison** — shows the neighborhood's current floor UPX/USD listing
+  (via the new Floor Price Tracker, `floor_price.get_floor_prices()`) and this property's estimate
+  as a % above/below it, with a link to see every active listing. Adds a real extra network round
+  trip (~3-5s on a cache miss) so it's skipped in batch mode (`include_floor=False`) to keep a
+  multi-property batch fast.
 
 ---
 

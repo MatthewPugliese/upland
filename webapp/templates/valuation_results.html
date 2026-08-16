@@ -86,6 +86,9 @@
         {% if result.property.structure_count %}
             &middot; {{ result.property.structure_count }} structure{{ 's' if result.property.structure_count != 1 else '' }}
             ({{ result.property.structure_names|join(', ') }})
+            {% if result.property.sparks_invested %}
+                &middot; {{ "{:,}".format(result.property.sparks_invested) }} sparks invested in construction{% if result.property.pct_sparks_estimated > 0 %} ({{ result.property.pct_sparks_estimated }}% estimated){% endif %}
+            {% endif %}
         {% else %}
             &middot; undeveloped
         {% endif %}
@@ -123,6 +126,22 @@
         </div>
         {% endif %}
     </div>
+
+    {% if result.floor and (result.floor.floor_upx or result.floor.floor_usd) %}
+    <p class="scope-note">
+        Neighborhood floor (cheapest active listing right now):
+        {% if result.floor.floor_upx %}
+            {{ "{:,}".format(result.floor.floor_upx|round|int) }} UPX ({{ result.floor.floor_upx_address }})
+            {% if result.floor.upx_vs_floor_pct is defined %} — this property's UPX estimate is {{ "%+.1f%%"|format(result.floor.upx_vs_floor_pct) }} vs. the floor{% endif %}
+        {% endif %}
+        {% if result.floor.floor_usd %}
+            {% if result.floor.floor_upx %}<br>{% endif %}
+            ${{ "%.2f"|format(result.floor.floor_usd) }} ({{ result.floor.floor_usd_address }})
+            {% if result.floor.usd_vs_floor_pct is defined %} — this property's USD estimate is {{ "%+.1f%%"|format(result.floor.usd_vs_floor_pct) }} vs. the floor{% endif %}
+        {% endif %}
+        &nbsp;<a href="/floor?neighborhood={{ result.property.neighborhood|urlencode }}">See all listings &rarr;</a>
+    </p>
+    {% endif %}
 
     <div class="section-heading">
         UPX Valuation
