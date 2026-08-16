@@ -137,6 +137,17 @@ Upland has hundreds of collections. Players typically:
   is still <10% coverage for the largest cities) — left as a known, documented gap rather than a
   rushed partial fix. See the docstring on `_get_neighborhood_candidates` for full detail.
 
+  **Fixed a real production bug found testing this on the Pi (commit TBD):** the Flask session
+  cookie storing Collection Tracker analysis (`coll_analysis`/`coll_listings` — every owned
+  property ID + full near-complete-collection data) grew to 22,912 bytes for a 727-property
+  account — over both the ~4KB browser cookie limit and gunicorn's request-header-size limit.
+  Confirmed it broke *any* subsequent request in that session (not just this feature's own
+  follow-ups) with HTTP 431, only surfacing against the real Pi deployment since Werkzeug's local
+  dev server tolerates a larger header than gunicorn's production default. Fixed by moving the
+  data server-side (`webapp/session_store.py` — small JSON files keyed by a random token, only the
+  token in the cookie, 1-hour TTL cleanup). Verified: session cookie for the same account dropped
+  to 87 bytes, and the previously-broken follow-up request now succeeds.
+
 - [x] **Multi-collection optimizer** — shipped 2026-07-27
   - `webapp/multi_collection_optimizer.py` — knapsack over near-complete collections with live for-sale costs
   - Scores each option: monthly yield gain / UPX cost (same yield model as Phase 4)

@@ -32,6 +32,14 @@ def _collection_map():
     from collection_map import build_collection_map
     return build_collection_map
 
+def _coll_store() -> dict:
+    from session_store import load
+    return load(session.get("coll_token"))
+
+def _save_coll_store(data: dict) -> None:
+    from session_store import save
+    session["coll_token"] = save(session.get("coll_token"), data)
+
 def _score():
     from score_calculator import get_neighborhood_score, list_cached_neighborhoods
     return get_neighborhood_score, list_cached_neighborhoods
@@ -224,13 +232,18 @@ def collections_run():
         result["current_monthly_yield"] = current_monthly_yield
         result["current_hourly_yield"] = round(current_monthly_yield / (30 * 24), 2)
 
-        # Store analysis in session so the forsale endpoint can use it without re-running
-        session["coll_analysis"] = {
+        # Store analysis server-side (keyed by a small token in the session cookie) so
+        # the forsale/map/budget-optimize endpoints can reuse it without re-running —
+        # this data is too large for a client-side cookie for big portfolios (see
+        # session_store.py docstring for why).
+        store = _coll_store()
+        store["analysis"] = {
             "user_prop_ids": [p["id"] for p in props],
             "almost": result["almost"],
             "completable": result["completable"],
             "annual_rate": annual_rate,
         }
+        _save_coll_store(store)
 
         return render_template("collections_results.html", result=result, username=username)
     except Exception as e:
@@ -245,7 +258,8 @@ def api_collections_forsale():
     if not coll_id:
         return jsonify({"error": "coll_id required"}), 400
 
-    analysis = session.get("coll_analysis")
+    store = _coll_store()
+    analysis = store.get("analysis")
     if not analysis:
         return jsonify({"error": "No active session — run analysis first"}), 400
 
@@ -259,10 +273,9 @@ def api_collections_forsale():
     try:
         find_forsale_for_collection = _forsale()
         listings = find_forsale_for_collection(coll_entry, user_prop_ids)
-        # Cache listings on the session so the budget optimizer can reuse them
-        cached = session.get("coll_listings") or {}
-        cached[str(coll_id)] = listings
-        session["coll_listings"] = cached
+        # Cache listings server-side so the budget optimizer can reuse them
+        store.setdefault("listings", {})[str(coll_id)] = listings
+        _save_coll_store(store)
         return jsonify({"listings": listings, "count": len(listings)})
     except Exception as e:
         import traceback
@@ -279,7 +292,7 @@ def api_collections_map():
     if not username:
         return jsonify({"error": "username required"}), 400
 
-    analysis = session.get("coll_analysis")
+    analysis = _coll_store().get("analysis")
     if not analysis:
         return jsonify({"error": "No active session — run analysis first"}), 400
     owned_ids = set(str(x) for x in analysis.get("user_prop_ids", []))
@@ -315,13 +328,14 @@ def api_collections_budget_optimize():
     if budget <= 0:
         return jsonify({"error": "budget must be > 0"}), 400
 
-    analysis = session.get("coll_analysis")
+    store = _coll_store()
+    analysis = store.get("analysis")
     if not analysis:
         return jsonify({"error": "No active session — run analysis first"}), 400
 
     almost = analysis.get("almost") or []
     annual_rate = analysis.get("annual_rate") or 0.1225
-    listings_by_id = dict(session.get("coll_listings") or {})
+    listings_by_id = dict(store.get("listings") or {})
     user_prop_ids = set(str(x) for x in analysis.get("user_prop_ids", []))
 
     auto_fetch = request.args.get("fetch", "false").lower() == "true"
@@ -335,7 +349,8 @@ def api_collections_budget_optimize():
                 listings_by_id[cid] = find_forsale_for_collection(coll, user_prop_ids)
             except Exception:
                 listings_by_id[cid] = []
-        session["coll_listings"] = listings_by_id
+        store["listings"] = listings_by_id
+        _save_coll_store(store)
 
     from multi_collection_optimizer import build_options_from_almost, optimize_budget
     # keys may be str or int depending on session serialization
