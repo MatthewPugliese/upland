@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Valuation — {{ result.property.address }} — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .results-header {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-align: center;
+    }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 2px; }
+    .stat-card.highlight { background: #EBF5FB; border: 1px solid #AED6F1; }
+    .stat-card.highlight .value { color: #1B4F72; }
+    .stat-card.green { background: #EAFAF1; border: 1px solid #A9DFBF; }
+    .stat-card.green .value { color: #1E8449; }
+    .stat-card.red { background: #FDEDEC; border: 1px solid #F5B7B1; }
+    .stat-card.red .value { color: #C0392B; }
+
+    .section-heading {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin: 24px 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 2px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .section-count { font-size: 13px; font-weight: 400; color: #999; }
+
+    .confidence-badge {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 10px;
+    }
+    .confidence-high { background: #EAFAF1; color: #1E8449; }
+    .confidence-medium { background: #FEF9E7; color: #9A7D0A; }
+    .confidence-low { background: #FDEBD0; color: #B9770E; }
+    .confidence-very-low { background: #FDEDEC; color: #C0392B; }
+
+    .scope-note { font-size: 12px; color: #888; margin: 6px 0 12px; }
+
+    .full-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+    .full-table th {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 2px solid #e0e0e0;
+        color: #555;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .full-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid #f0f0f0;
+        vertical-align: middle;
+    }
+    .full-table tr:last-child td { border-bottom: none; }
+    .full-table tr:hover td { background: #fafafa; }
+
+    .no-comps { color: #999; font-style: italic; padding: 12px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{{ result.property.address }}</h2>
+    <p class="card-subtitle">
+        {{ result.property.neighborhood }}, {{ result.property.city }}
+        &middot; {{ result.property.area }} UP²
+        {% if result.property.structure_count %}
+            &middot; {{ result.property.structure_count }} structure{{ 's' if result.property.structure_count != 1 else '' }}
+            ({{ result.property.structure_names|join(', ') }})
+        {% else %}
+            &middot; undeveloped
+        {% endif %}
+    </p>
+
+    <div class="results-header">
+        {% if result.property.is_listed %}
+        <div class="stat-card highlight">
+            <div class="value">{{ "{:,}".format(result.property.listing_price|round|int) }}</div>
+            <div class="label">Current Listing ({{ result.property.listing_currency }})</div>
+        </div>
+        {% endif %}
+        <div class="stat-card {% if result.upx_valuation.estimated_value %}green{% endif %}">
+            <div class="value">
+                {% if result.upx_valuation.estimated_value %}{{ "{:,}".format(result.upx_valuation.estimated_value) }}{% else %}—{% endif %}
+            </div>
+            <div class="label">Estimated Value (UPX)</div>
+        </div>
+        <div class="stat-card {% if result.usd_valuation.estimated_value %}green{% endif %}">
+            <div class="value">
+                {% if result.usd_valuation.estimated_value %}${{ "%.2f"|format(result.usd_valuation.estimated_value) }}{% else %}—{% endif %}
+            </div>
+            <div class="label">Estimated Value (USD)</div>
+        </div>
+        {% if result.upx_valuation.listing_pct_diff is defined %}
+        <div class="stat-card {% if result.upx_valuation.listing_pct_diff > 15 %}red{% elif result.upx_valuation.listing_pct_diff < -15 %}green{% endif %}">
+            <div class="value">{{ "%+.1f"|format(result.upx_valuation.listing_pct_diff) }}%</div>
+            <div class="label">Listing vs. UPX Estimate</div>
+        </div>
+        {% endif %}
+        {% if result.usd_valuation.listing_pct_diff is defined %}
+        <div class="stat-card {% if result.usd_valuation.listing_pct_diff > 15 %}red{% elif result.usd_valuation.listing_pct_diff < -15 %}green{% endif %}">
+            <div class="value">{{ "%+.1f"|format(result.usd_valuation.listing_pct_diff) }}%</div>
+            <div class="label">Listing vs. USD Estimate</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="section-heading">
+        UPX Valuation
+        <span class="confidence-badge confidence-{{ result.upx_valuation.confidence_slug }}">{{ result.upx_valuation.confidence }}</span>
+    </div>
+    {% if result.upx_valuation.comp_count %}
+    <p class="scope-note">
+        {{ result.upx_valuation.comp_count }} comparable UPX sale{{ 's' if result.upx_valuation.comp_count != 1 else '' }}
+        at {{ result.upx_valuation.scope }}-level over the last {{ result.upx_valuation.window_days }} days.
+        Median: {{ result.upx_valuation.median_per_up2 }} UPX/UP².
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr><th>Address</th><th>Date</th><th>UP²</th><th>Price (UPX)</th><th>UPX/UP²</th></tr>
+        </thead>
+        <tbody>
+        {% for c in result.upx_valuation.comps %}
+            <tr>
+                <td>{{ c.address }}</td>
+                <td>{{ c.timestamp[:10] }}</td>
+                <td>{{ c.area }}</td>
+                <td>{{ "{:,}".format(c.upx_amount|round|int) }}</td>
+                <td>{{ c.per_up2 }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-comps">No comparable UPX sales found with known UP² in this window.</p>
+    {% endif %}
+
+    <div class="section-heading">
+        USD Valuation
+        <span class="confidence-badge confidence-{{ result.usd_valuation.confidence_slug }}">{{ result.usd_valuation.confidence }}</span>
+    </div>
+    {% if result.usd_valuation.comp_count %}
+    <p class="scope-note">
+        {{ result.usd_valuation.comp_count }} comparable USD sale{{ 's' if result.usd_valuation.comp_count != 1 else '' }}
+        at {{ result.usd_valuation.scope }}-level over the last {{ result.usd_valuation.window_days }} days.
+        Median: ${{ "%.2f"|format(result.usd_valuation.median_per_up2) }}/UP².
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr><th>Address</th><th>Date</th><th>UP²</th><th>Price (USD)</th><th>USD/UP²</th></tr>
+        </thead>
+        <tbody>
+        {% for c in result.usd_valuation.comps %}
+            <tr>
+                <td>{{ c.address }}</td>
+                <td>{{ c.timestamp[:10] }}</td>
+                <td>{{ c.area }}</td>
+                <td>${{ "%.2f"|format(c.usd_amount) }}</td>
+                <td>${{ "%.2f"|format(c.per_up2) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-comps">No comparable USD sales found with known UP² in this window.</p>
+    {% endif %}
+
+    <p class="scope-note" style="margin-top:20px;">
+        Estimates are based on median price-per-UP² from comparable sales — not a guaranteed price.
+        Structures, zone, and boundary shape aren't factored in yet.
+    </p>
+</div>
+{% endblock %}

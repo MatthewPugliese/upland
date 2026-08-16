@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Property Valuation — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .section-heading { font-size: 16px; font-weight: 700; color: #1a1a2e; margin: 24px 0 10px;
+        padding-bottom: 6px; border-bottom: 2px solid #e0e0e0; }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .full-table tr:last-child td { border-bottom: none; }
+    .full-table tr:hover td { background: #fafafa; }
+    .full-table a { color: #1B4F72; text-decoration: none; }
+    .full-table a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Property Valuation</h2>
+    <p class="card-subtitle">Estimate fair market value from comparable recent sales in the same neighborhood.</p>
+
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
+
+    <form action="/valuation/run" method="POST" id="valuationForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="query">Property Address or ID</label>
+                <input type="text" id="query" name="query"
+                       placeholder="e.g. 242 Liberty Ave or 81296939123819"
+                       value="{{ query or '' }}" required>
+            </div>
+        </div>
+        <p class="field-note">Comps come from real recent sales in the same neighborhood (broadening to city-level or a wider time window when sales are sparse).</p>
+        <button type="submit" class="btn-primary" id="submitBtn">Estimate Value</button>
+    </form>
+
+    {% if matches %}
+    <div class="section-heading" style="margin-top:20px;">Multiple matches — pick one</div>
+    <table class="full-table">
+        <thead>
+            <tr><th>Address</th><th>Neighborhood</th><th>City</th></tr>
+        </thead>
+        <tbody>
+        {% for m in matches %}
+            <tr>
+                <td><a href="/valuation/run" onclick="event.preventDefault(); document.getElementById('query').value='{{ m.prop_id }}'; document.getElementById('valuationForm').submit();">{{ m.address }}</a></td>
+                <td>{{ m.neighborhood }}</td>
+                <td>{{ m.city }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("valuationForm").addEventListener("submit", function() {
+    var btn = document.getElementById("submitBtn");
+    btn.disabled = true;
+    btn.textContent = "Estimating...";
+});
+</script>
+{% endblock %}

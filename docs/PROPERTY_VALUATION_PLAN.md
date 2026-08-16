@@ -8,19 +8,45 @@ This is the most universally useful tool on the platform — every active player
 
 ---
 
-## Status (2026-08-15)
+## Status (2026-08-16)
 
-**Not yet implemented** — no code written. Prep done: `data/economy.db` locally was a stale
-snapshot (55K rows, cut off 2023-04-11 — looked like an early dev copy, predating the Pi
-deployment). Replaced it with a fresh consistent copy pulled from the Pi's live database via
-SQLite's online backup API (`sqlite3.Connection.backup()`, no disruption to the live scraper) —
-old file kept as `data/economy.db.stale-2023-backup` in case anything needed it. Local dev/testing
-against `transactions` (n5/n52 comps) now reflects real current data instead of 2023-era rows.
+**MVP shipped** at `/valuation` in the web app (`webapp/valuation.py`, `webapp/templates/valuation.html`
++ `valuation_results.html`). Input is an in-game address (fuzzy `LIKE` match against
+`scraper/property_cache.db`, with a disambiguation picker when multiple properties match) or a
+numeric property ID.
 
-Next step when picked back up: build the comp-search + normalization + confidence-scoring logic
-described below against this refreshed local DB, likely as `webapp/valuation.py` + a `/valuation`
-route, following the same pattern as `webapp/portfolio_analyzer.py` (new module + form template +
-results template, reusing existing property-cache/API-lookup helpers where possible).
+**How it actually works, vs. the original design below:**
+- Comp search joins `data/economy.db`'s `transactions` table straight to `scraper/property_cache.db`
+  via `ATTACH DATABASE` (`t.property_id = p.prop_id`) to get each comp's neighborhood/city — the
+  `transactions` table's own `neighborhood`/`city` columns are only populated for ~13% of rows
+  (only what the scraper had cached at insert time), so joining through the property cache was
+  necessary to get reliable coverage.
+- UP² for the target and every comp comes from a live Upland API call per property (`area` field) —
+  there's no size data cached anywhere at scale (`property_cache.db` only has address/neighborhood/
+  city). A disk cache (`webapp/cache/valuation/area_cache.json`, 30-day TTL — UP² never changes)
+  avoids re-fetching the same comps across repeat queries in a popular neighborhood.
+- Broadening logic matches the confidence table below: try same-neighborhood at 90d → 180d → 365d;
+  if still under 5 comps, fall back to city-level with the same window escalation. Implemented in
+  `valuation.find_comps()`.
+- UPX and USD valuations are computed and shown **separately** (median UPX/UP² and median USD/UP²,
+  each with their own confidence tier) rather than one blended estimate — the two markets don't mix.
+- If the property is currently listed, its listing price is compared against the matching-currency
+  estimate and shown as a % over/under.
+
+**Not shipped:** structures adjustment (demolish cost / SU contribution as a value modifier — no
+UPX cost data exists for demolishing/replacing a structure, same gap as the Portfolio Analyzer's
+"net worth" line), batch mode, neighborhood floor comparison, and no `/economy` or `/portfolio`
+cross-links yet (planned in Related Tools below).
+
+Tested against a live property (`242 LIBERTY AVE`, Dongan Hills, prop ID `81296939123819`): only 2
+neighborhood comps existed in the last 90 days, correctly triggered a city-level broadening to
+Staten Island (59 UPX comps, 6 USD comps, both flagged "Low — broadened" confidence) — full round
+trip (live API fetch + comp query + ~60 comp-area lookups) took ~7s, dominated by the parallel
+area-lookup API calls.
+
+Prep note from the previous pass: `data/economy.db` locally had been a stale 2023-04 snapshot;
+it was replaced with a fresh consistent copy pulled from the Pi's live database via SQLite's online
+backup API before this was built — old file kept as `data/economy.db.stale-2023-backup`.
 
 ---
 
@@ -90,10 +116,10 @@ The economy scraper must be running for at least 30 days to have enough comps fo
 
 ## Features
 
-- [ ] **Comp search** — query transactions DB for same-neighborhood, similar-UP² recent sales
-- [ ] **Normalization** — compute UPX/UP² and USD/UP² for each comp, show median + range
-- [ ] **Confidence scoring** — flag how many comps were found and whether city-level broadening was needed
-- [ ] **Current listing comparison** — if property is currently listed, compare ask price to estimate; flag overpriced/underpriced
+- [x] **Comp search** — same-neighborhood recent sales, broadening to city-level and wider time windows when sparse (90d → 180d → 365d)
+- [x] **Normalization** — computes UPX/UP² and USD/UP² per comp, shows median (UPX and USD tracked separately, not blended)
+- [x] **Confidence scoring** — High/Medium/Low—broadened/Very low badge based on comp count and scope, per the table above
+- [x] **Current listing comparison** — if listed, shows % over/under the matching-currency estimate
 - [ ] **Structures adjustment** — if the property has existing structures, note their value (demolish cost, structure SU contribution) as a modifier
 - [ ] **Batch mode** — paste a list of property IDs, get valuations for all (useful when evaluating multiple listings at once)
 - [ ] **Neighborhood floor comparison** — show where this property sits relative to the neighborhood floor and median

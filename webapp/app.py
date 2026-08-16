@@ -36,6 +36,10 @@ def _portfolio():
     from portfolio_analyzer import build_portfolio
     return build_portfolio
 
+def _valuation():
+    from valuation import estimate_value
+    return estimate_value
+
 def _report():
     import sys
     from pathlib import Path
@@ -352,6 +356,34 @@ def portfolio_run():
         import traceback
         traceback.print_exc()
         return render_template("portfolio.html", error=f"Error: {e}")
+
+
+# ── Property Valuation Tool ─────────────────────────────────────────────────
+
+@app.route("/valuation")
+def valuation():
+    return render_template("valuation.html")
+
+
+@app.route("/valuation/run", methods=["POST"])
+def valuation_run():
+    estimate_value = _valuation()
+    query = request.form.get("query", "").strip()
+
+    if not query:
+        return render_template("valuation.html", error="Enter a property address or ID.")
+
+    try:
+        result = estimate_value(query)
+        if result.get("error"):
+            return render_template("valuation.html", error=result["error"], query=query)
+        if result.get("matches"):
+            return render_template("valuation.html", matches=result["matches"], query=query)
+        return render_template("valuation_results.html", result=result, query=query)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render_template("valuation.html", error=f"Error: {e}", query=query)
 
 
 # ── Neighborhood Score Dashboard ───────────────────────────────────────────

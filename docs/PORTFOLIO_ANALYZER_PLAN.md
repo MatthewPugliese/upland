@@ -24,7 +24,9 @@ Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via 
 
 - [x] **Portfolio summary** *(partial — see below)*
   - [x] Total properties owned, total mint value
-  - [ ] Total current market value (estimated from comps) — needs Property Valuation Tool
+  - [ ] Total current market value (estimated from comps) — Property Valuation Tool now exists
+    (`valuation.estimate_value()`) but isn't wired into the portfolio view yet; would mean an
+    extra comp-search call per property in the portfolio, not yet batch-friendly
   - [x] Total yield per hour/day/month *(flat-rate estimate only, see Status above)*
   - [x] Total UP² owned, % developed (has at least one structure)
   - [ ] Net worth estimate: mint value + structure replacement cost — needs per-structure build cost data
