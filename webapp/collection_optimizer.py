@@ -16,6 +16,7 @@ potential yield gain, fill highest-value first, then iterate.
 
 import json
 import re
+import sqlite3
 import sys
 import time
 from collections import defaultdict
@@ -28,6 +29,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 CACHE_DIR = SCRIPT_DIR / "cache"
 NEIGHBORHOOD_MAP_DIR = SCRIPT_DIR.parent / "optimizer"
+PROP_CACHE_DB = SCRIPT_DIR.parent / "scraper" / "property_cache.db"
 
 sys.path.insert(0, str(NEIGHBORHOOD_MAP_DIR))
 
@@ -89,25 +91,27 @@ def load_user_properties(username: str, eos_account: str) -> list[dict]:
     if not owned_ids:
         return []
 
-    # Load the main property cache to get addresses
-    main_cache = _load_main_property_cache()
+    # Look up just this user's owned IDs in property_cache.db (SQLite) instead
+    # of loading the full ~4.7M-row property_cache.json into memory — that
+    # used to cost ~800MB-1GB+ RSS per worker process just to look up a few
+    # hundred IDs (confirmed on the Pi 2026-08-16: RAM dropped to ~458Mi
+    # available, swap climbed to ~724Mi, the webapp's gunicorn worker
+    # restarted — same failure pattern as the 2026-07-07 scraper outage,
+    # just never fixed in this webapp code path until now).
+    cache_hits = _lookup_property_cache_db([str(pid) for pid in owned_ids])
 
     props = []
     missing_ids = []
     for pid in owned_ids:
-        full_addr = main_cache.get(str(pid)) if main_cache else None
-        if not full_addr:
+        meta = cache_hits.get(str(pid))
+        if not meta:
             missing_ids.append(str(pid))
             continue
-        parts = [p.strip() for p in full_addr.split(",")]
-        city = parts[-1] if len(parts) >= 2 else ""
-        neighborhood = parts[-2] if len(parts) >= 3 else (parts[-1] if len(parts) == 2 else "")
-        address = ", ".join(parts[:-2]) if len(parts) >= 3 else (parts[0] if parts else "")
         props.append({
             "id": str(pid),
-            "address": address,
-            "neighborhood": neighborhood.upper(),
-            "city": city.strip(),
+            "address": meta["address"],
+            "neighborhood": meta["neighborhood"],
+            "city": meta["city"],
             "mintPrice": 0,
         })
 
@@ -116,11 +120,6 @@ def load_user_properties(username: str, eos_account: str) -> list[dict]:
         print(f"[*] Fetching {len(missing_ids)} properties not in local cache from API...")
         fetched = _fetch_properties_from_api(missing_ids)
         props.extend(fetched)
-        # Update in-memory cache so _enrich_mint_prices skips re-fetching these
-        if main_cache is not None:
-            for p in fetched:
-                addr_str = f"{p['address']}, {p['neighborhood']}, {p['city']}"
-                main_cache[p['id']] = addr_str
 
     # Try to enrich with mintPrice from neighborhood caches / mint cache / API
     _enrich_mint_prices(props)
@@ -181,27 +180,39 @@ def _fetch_properties_from_api(prop_ids: list[str]) -> list[dict]:
     return results
 
 
-_main_cache = None
+def _lookup_property_cache_db(prop_ids: list) -> dict:
+    """
+    Look up specific property IDs in scraper/property_cache.db (SQLite).
+    Returns {prop_id: {"address": ..., "neighborhood": ..., "city": ...}}.
 
-def _load_main_property_cache() -> dict:
-    global _main_cache
-    if _main_cache is not None:
-        return _main_cache
+    Queries only the requested IDs via an indexed lookup rather than loading
+    every one of the ~4.7M rows into a Python dict — see load_user_properties's
+    docstring/comment for why this replaced the old JSON-into-memory approach.
+    """
+    if not prop_ids or not PROP_CACHE_DB.exists():
+        return {}
 
-    candidates = [
-        SCRIPT_DIR.parent / "scraper" / "property_cache.json",
-        SCRIPT_DIR.parent / "property_cache.json",
-    ]
-    for path in candidates:
-        if path.exists():
-            print(f"[*] Loading property cache from {path.name}...")
-            with open(path) as f:
-                _main_cache = json.load(f)
-            print(f"[+] {len(_main_cache):,} properties loaded")
-            return _main_cache
-
-    _main_cache = {}
-    return _main_cache
+    conn = sqlite3.connect(str(PROP_CACHE_DB), timeout=5)
+    try:
+        results = {}
+        CHUNK = 900  # SQLite's default bind-parameter limit is 999
+        for i in range(0, len(prop_ids), CHUNK):
+            chunk = prop_ids[i:i + CHUNK]
+            placeholders = ",".join("?" * len(chunk))
+            rows = conn.execute(
+                f"SELECT prop_id, address, neighborhood, city FROM properties "
+                f"WHERE prop_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for prop_id, address, neighborhood, city in rows:
+                results[str(prop_id)] = {
+                    "address": (address or "").strip(),
+                    "neighborhood": (neighborhood or "").upper().strip(),
+                    "city": (city or "").strip(),
+                }
+        return results
+    finally:
+        conn.close()
 
 
 def _enrich_mint_prices(props: list):
