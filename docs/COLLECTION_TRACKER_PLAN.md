@@ -109,9 +109,33 @@ Upland has hundreds of collections. Players typically:
   - Projected yield/hour after completing collection X
   - Payback period: how many hours of yield does the acquisition cost represent
 
-- [ ] **Collection map**
-  - For collections where all properties are in one geographic area (neighborhood or city collections), show them on a map
-  - Color: owned (green), missing + listed (yellow), missing + unlisted (red)
+- [x] **Collection map** — shipped 2026-08-16 (`webapp/collection_map.py`, "View Map" button next
+  to "Find listings" for near-complete collections). Plots each candidate property at its live
+  centerlat/centerlng (folium circle markers, not full building-outline matching like the
+  neighborhood optimizer maps — much cheaper, no OSM/geocoding pipeline needed). Colors: green =
+  owned, orange = missing + for sale, red = missing + not listed. Capped at 200 plotted properties
+  for large collections, prioritizing owned/for-sale first so a truncated map doesn't arbitrarily
+  omit the properties that actually matter. Mac-only (folium isn't on the Pi's lightweight image),
+  same accepted limitation as the other map features.
+
+  **Found and fixed a real bug while building this:** `forsale_finder._get_neighborhood_candidates`
+  had an empty-string substring bug — landmark/locked properties with no neighborhood assigned
+  (e.g. Governors Island) have `neighborhood.name = None`, which becomes `""` after the fallback,
+  and `"" in "ANY STRING"` is always `True` in Python — so those properties matched *every*
+  neighborhood search as false positives. Fixed by requiring a non-empty neighborhood before the
+  substring check. This bug affected the already-shipped "Find Listings" feature too, not just
+  this new map.
+
+  **Also discovered (documented, not fixed) a deeper, pre-existing limitation:** the same
+  function's slow-path scan caps at 3,000 properties per city, but most cities have far more —
+  Manhattan ~42K, several cities 300K-560K+. Neither the API's `neighborhoodId` nor `textSearch`
+  params work as a server-side filter (both tested directly), so for any neighborhood without a
+  precached `webapp/cache/neighborhoods/*.json` file, the scan can miss it entirely if its
+  properties don't fall within the first 3,000 in the API's arbitrary ordering — confirmed live
+  with "Upper East Side" in Manhattan (0 results after the false-positive fix, despite the
+  neighborhood definitely having properties). Raising the cap doesn't meaningfully help (even 5x
+  is still <10% coverage for the largest cities) — left as a known, documented gap rather than a
+  rushed partial fix. See the docstring on `_get_neighborhood_candidates` for full detail.
 
 - [x] **Multi-collection optimizer** — shipped 2026-07-27
   - `webapp/multi_collection_optimizer.py` — knapsack over near-complete collections with live for-sale costs

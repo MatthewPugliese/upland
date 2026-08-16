@@ -404,8 +404,10 @@
     {% if c.req_type in ("street_city", "street", "neighborhood_city", "neighborhood", "place") %}
     <button class="btn-forsale" data-boost="{{ c.boost }}" data-owned-mint="{{ c.owned_mint_sum }}"
             data-gap="{{ c.gap }}" onclick="loadForSale(this, {{ c.id }})">Find listings</button>
+    <button class="btn-forsale" onclick="loadCollectionMap(this, {{ c.id }})">View Map</button>
     <div class="yield-impact" id="yield-impact-{{ c.id }}" style="display:none"></div>
     <div class="forsale-results" id="forsale-{{ c.id }}" style="display:none"></div>
+    <div class="map-status" id="map-status-{{ c.id }}" style="display:none;font-size:12px;color:#888;margin-top:4px;"></div>
     {% endif %}
 </div>
 {% endfor %}
@@ -458,6 +460,7 @@
 {% block scripts %}
 <script>
 var ANNUAL_RATE = {{ result.annual_rate }};
+var USERNAME = {{ username|tojson }};
 
 function renderYieldImpact(btn, collId, listings) {
     var container = document.getElementById("yield-impact-" + collId);
@@ -623,6 +626,37 @@ function loadForSale(btn, collId) {
             container.innerHTML = '<span class="forsale-none">Request failed.</span>';
             btn.textContent = "Find listings";
             btn.disabled = false;
+        });
+}
+
+function loadCollectionMap(btn, collId) {
+    btn.disabled = true;
+    btn.textContent = "Building map...";
+    var status = document.getElementById("map-status-" + collId);
+    status.style.display = "block";
+    status.textContent = "Fetching property locations — this can take a bit for larger collections...";
+
+    fetch("/api/collections/map?coll_id=" + collId + "&username=" + encodeURIComponent(USERNAME))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            btn.textContent = "View Map";
+            if (data.error) {
+                status.textContent = "Error: " + data.error;
+                return;
+            }
+            var note = data.owned_count + " owned, " + data.listed_count + " for sale, "
+                + data.unlisted_count + " not listed";
+            if (data.truncated) {
+                note += " (showing " + data.total_plotted + " of " + data.total_candidates + " properties)";
+            }
+            status.textContent = note;
+            window.open(data.map_url, "_blank");
+        })
+        .catch(function(e) {
+            btn.disabled = false;
+            btn.textContent = "View Map";
+            status.textContent = "Request failed.";
         });
 }
 

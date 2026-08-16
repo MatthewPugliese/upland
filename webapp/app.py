@@ -28,6 +28,10 @@ def _forsale():
     from forsale_finder import find_forsale_for_collection
     return find_forsale_for_collection
 
+def _collection_map():
+    from collection_map import build_collection_map
+    return build_collection_map
+
 def _score():
     from score_calculator import get_neighborhood_score, list_cached_neighborhoods
     return get_neighborhood_score, list_cached_neighborhoods
@@ -260,6 +264,31 @@ def api_collections_forsale():
         cached[str(coll_id)] = listings
         session["coll_listings"] = cached
         return jsonify({"listings": listings, "count": len(listings)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/collections/map")
+def api_collections_map():
+    coll_id = request.args.get("coll_id", type=int)
+    username = request.args.get("username", "").strip()
+    if not coll_id:
+        return jsonify({"error": "coll_id required"}), 400
+    if not username:
+        return jsonify({"error": "username required"}), 400
+
+    analysis = session.get("coll_analysis")
+    if not analysis:
+        return jsonify({"error": "No active session — run analysis first"}), 400
+    owned_ids = set(str(x) for x in analysis.get("user_prop_ids", []))
+
+    try:
+        build_collection_map = _collection_map()
+        result = build_collection_map(coll_id, owned_ids, username)
+        status = 400 if result.get("error") else 200
+        return jsonify(result), status
     except Exception as e:
         import traceback
         traceback.print_exc()

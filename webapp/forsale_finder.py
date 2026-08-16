@@ -106,6 +106,20 @@ def _get_neighborhood_candidates(parsed_req: dict, city_id: int) -> list:
     """
     Find candidate properties for a neighborhood-based requirement.
     Returns list of {id, address, status, city, neighborhood}.
+
+    KNOWN LIMITATION (found 2026-08-16): the slow path below caps at 30 pages
+    (3,000 properties) of a city-wide scan, filtering client-side by
+    neighborhood name. Most cities have far more properties than that — e.g.
+    Manhattan has ~42,000, Los Angeles-scale cities 300K-560K+ — so for any
+    neighborhood without a precached `webapp/cache/neighborhoods/*.json` file
+    (the fast path above), this can silently return zero or incomplete
+    results if that neighborhood's properties don't happen to fall within the
+    scanned page range. There's no server-side neighborhoodId/textSearch
+    filter available on this API (tried both, neither works) to fix this
+    cheaply — raising the cap doesn't meaningfully help either, since even
+    5x the current cap is still <10% coverage for the largest cities. Left
+    as a known gap rather than a quick patch; a real fix would need either a
+    different API, or precomputing precache files for every neighborhood.
     """
     req_type = parsed_req["type"]
 
@@ -135,14 +149,16 @@ def _get_neighborhood_candidates(parsed_req: dict, city_id: int) -> list:
 
     for p in first.get("results", []):
         nh = ((p.get("neighborhood") or {}).get("name") or "").upper()
-        if hood_upper in nh or nh in hood_upper:
+        # A blank neighborhood (landmark/locked properties like Governors Island have
+        # none at all) is trivially "in" every string — must not match anything.
+        if nh and (hood_upper in nh or nh in hood_upper):
             found.append(p)
 
     for page in range(2, max_pages + 1):
         data = upland_get("/properties", {"cityId": city_id, "currentPage": page, "pageSize": 100})
         for p in data.get("results", []):
             nh = ((p.get("neighborhood") or {}).get("name") or "").upper()
-            if hood_upper in nh or nh in hood_upper:
+            if nh and (hood_upper in nh or nh in hood_upper):
                 found.append(p)
         if not data.get("results"):
             break
