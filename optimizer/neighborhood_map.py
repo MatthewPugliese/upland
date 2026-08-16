@@ -486,6 +486,7 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
         return _stale_ids
 
     # Save cache
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump({"username": username, "eos_account": eos_account,
                    "owned": sorted(owned)}, f)
@@ -569,6 +570,7 @@ def geocode_props(props: list, city_name: str, cache_path: Path) -> dict[str, li
         time.sleep(1.1)  # Nominatim ToS: max 1 req/sec
 
     print()
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump(geocache, f)
 
@@ -797,6 +799,7 @@ def get_neighborhood_properties(
     if props:
         print(f"[i] Property fields: {list(props[0].keys())}")
 
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump(props, f)
 
@@ -931,6 +934,7 @@ def get_nyc_pluto_parcels(boundary_coords: list, cache_path: Path = None) -> lis
     print(f"\n[+] MapPLUTO: {len(parcels)} parcels fetched")
 
     if cache_path and parcels:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
         with open(cache_path, "w") as f:
             json.dump(parcels, f)
 
@@ -1239,6 +1243,7 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
             except Exception:
                 pass
 
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
         with open(cache_path, "w") as f:
             json.dump(cache, f)
         return cache
@@ -1301,6 +1306,7 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
         except Exception:
             pass
 
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump(cache, f)
 
