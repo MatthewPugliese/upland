@@ -346,9 +346,11 @@ def portfolio_run():
         annual_rate = float(annual_rate_pct) / 100.0
     except ValueError:
         annual_rate = 0.1225
+    estimate_market_value = request.form.get("estimate_market_value") == "on"
 
     try:
-        result = build_portfolio(username, eos_account, annual_rate=annual_rate)
+        result = build_portfolio(username, eos_account, annual_rate=annual_rate,
+                                  estimate_market_value=estimate_market_value)
         if result.get("error"):
             return render_template("portfolio.html", error=result["error"])
         return render_template("portfolio_results.html", result=result, username=username)

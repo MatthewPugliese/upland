@@ -14,6 +14,18 @@ Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via 
 
 **Why no per-property yield ranking:** every "yield" figure elsewhere in this repo (Collection Tracker, budget optimizer) is `mintPrice × flat assumed annual rate` — there's no real per-property yield data anywhere in the codebase. Under a flat rate, yield is strictly proportional to mint price, so a per-property ranking would just re-sort by mint price — not useful. A real ranking needs actual UPX income per property, which means ingesting `n31` (yield-collection) blockchain events with amounts, which the economy scraper does not currently do (`n31` is only used opportunistically today, purely to reconstruct the *current owned-property-ID set* from the `p55` field in `_blockchain_user_properties` — the transfer amount inside each `n31` transaction, needed for a real income figure, is never read). See `docs/ECONOMY_DASHBOARD_PLAN.md`'s income tracker section for the same gap.
 
+**Market value estimate (2026-08-16):** an opt-in checkbox ("Estimate current market value") now
+runs `valuation.neighborhood_valuation_rate()` — a per-*neighborhood* comp search, not per-property
+— against the portfolio's top 15 neighborhoods by mint value, and applies each neighborhood's
+median UPX/UP² and USD/UP² to the UP² owned there. Off by default and capped at 15 neighborhoods
+because a full comp search is too slow to run per-property or across every neighborhood (each
+neighborhood's search is a SQL comp query + up to ~20 live API area-lookups, network-bound); a
+727-property/246-neighborhood test portfolio took ~52s covering only its top 15 (35.8% of total
+mint value in that case — coverage strongly depends on the portfolio's spread across neighborhoods).
+The `summary.market_value_coverage_pct` field and a note in the UI make the partial coverage
+explicit — this is not a full-portfolio valuation, just directionally useful for a whale's biggest
+neighborhoods. See `docs/PROPERTY_VALUATION_PLAN.md` for the underlying comp-search mechanics.
+
 **Scouting another player** is now unblocked: `username_lookup.lookup_eos_account()` (added same session) builds a lazy in-memory reverse index over `data/username_cache.json`, so `/portfolio` resolves any of the ~207k known usernames to an EOS account automatically when the EOS Account field is left blank. Falls back to a clean error if the username isn't in the cache (e.g. never minted/never active on-chain) — user can supply the EOS account directly in that case. Not yet wired up: the plan's "read-only, no spark details" restriction for scouting mode — today the scouted view is identical to the owner's view (moot for now since spark data isn't shown anywhere yet either).
 
 ---
@@ -24,9 +36,8 @@ Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via 
 
 - [x] **Portfolio summary** *(partial — see below)*
   - [x] Total properties owned, total mint value
-  - [ ] Total current market value (estimated from comps) — Property Valuation Tool now exists
-    (`valuation.estimate_value()`) but isn't wired into the portfolio view yet; would mean an
-    extra comp-search call per property in the portfolio, not yet batch-friendly
+  - [x] Total current market value (estimated from comps) *(opt-in checkbox, partial coverage —
+    see Status above)*
   - [x] Total yield per hour/day/month *(flat-rate estimate only, see Status above)*
   - [x] Total UP² owned, % developed (has at least one structure)
   - [ ] Net worth estimate: mint value + structure replacement cost — needs per-structure build cost data

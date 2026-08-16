@@ -251,6 +251,33 @@ def _build_currency_valuation(comps: list, scope: str, window_days: int, amount_
     }
 
 
+def neighborhood_valuation_rate(neighborhood: str, city: str) -> dict:
+    """
+    Median UPX/UP² and USD/UP² for an entire neighborhood, not tied to one
+    target property. Used by the Portfolio Analyzer to estimate a portfolio's
+    current market value without running a full comp search per property —
+    one comp search per *neighborhood* is applied against however many UP²
+    the portfolio holds there.
+    """
+    comp_result = find_comps(neighborhood, city)
+    comps = comp_result["comps"]
+    prop_ids = list({c["property_id"] for c in comps})[:MAX_AREA_LOOKUPS]
+    areas = fetch_areas(prop_ids)
+
+    upx_val = _build_currency_valuation(comps, comp_result["scope"], comp_result["window_days"],
+                                         "upx_amount", 0, areas)
+    usd_val = _build_currency_valuation(comps, comp_result["scope"], comp_result["window_days"],
+                                         "usd_amount", 0, areas)
+    return {
+        "upx_per_up2": upx_val["median_per_up2"],
+        "upx_comp_count": upx_val["comp_count"],
+        "upx_confidence": upx_val["confidence"],
+        "usd_per_up2": usd_val["median_per_up2"],
+        "usd_comp_count": usd_val["comp_count"],
+        "usd_confidence": usd_val["confidence"],
+    }
+
+
 def estimate_value(query: str) -> dict:
     """
     Main entry point. Returns one of:

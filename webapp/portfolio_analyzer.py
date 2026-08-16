@@ -46,6 +46,7 @@ from score_calculator import _lookup as _structure_lookup  # noqa: E402
 from spark_estimator import get_spark_cost  # noqa: E402
 
 _DETAILS_TTL = 86400  # 24h — matches get_upland_property_structures' convention
+_MARKET_VALUE_MAX_NEIGHBORHOODS = 15  # cap comp-search fanout for the optional market-value estimate
 
 
 def _safe_name(username: str) -> str:
@@ -98,7 +99,64 @@ def fetch_property_details(props: list, cache_path: Path) -> dict:
     return results
 
 
-def build_portfolio(username: str, eos_account: str | None = None, annual_rate: float = 0.1225) -> dict:
+def _estimate_market_value(neighborhoods: list, hood_city: dict) -> dict:
+    """
+    Estimate current market value for the top N neighborhoods by mint value
+    (comp search is too slow to run per-neighborhood across an entire
+    portfolio — see docs/PORTFOLIO_ANALYZER_PLAN.md). Applies each covered
+    neighborhood's median UPX/UP² and USD/UP² (from valuation.py's comp
+    search) against the UP² the portfolio holds there.
+
+    Mutates nothing; returns {"total_upx": float, "total_usd": float,
+    "covered_mint": int, "covered_count": int, "rates": {hood: {...}}}.
+    Neighborhoods beyond the cap, or with no comps at all, are excluded from
+    the total and reflected in covered_mint/covered_count vs. the full totals.
+    """
+    from valuation import neighborhood_valuation_rate
+
+    targets = neighborhoods[:_MARKET_VALUE_MAX_NEIGHBORHOODS]
+    rates: dict = {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(neighborhood_valuation_rate, h["neighborhood"], hood_city.get(h["neighborhood"], "")): h
+            for h in targets
+        }
+        for future in concurrent.futures.as_completed(futures):
+            h = futures[future]
+            try:
+                rates[h["neighborhood"]] = future.result()
+            except Exception:
+                rates[h["neighborhood"]] = None
+
+    total_upx = 0.0
+    total_usd = 0.0
+    covered_mint = 0
+    covered_count = 0
+    for h in targets:
+        rate = rates.get(h["neighborhood"])
+        if not rate:
+            continue
+        if rate.get("upx_per_up2"):
+            total_upx += rate["upx_per_up2"] * h["up2"]
+        if rate.get("usd_per_up2"):
+            total_usd += rate["usd_per_up2"] * h["up2"]
+        if rate.get("upx_per_up2") or rate.get("usd_per_up2"):
+            covered_mint += h["mint"]
+            covered_count += 1
+
+    return {
+        "total_upx": round(total_upx),
+        "total_usd": round(total_usd, 2),
+        "covered_count": covered_count,
+        "attempted_count": len(targets),
+        "covered_mint": covered_mint,
+        "rates": rates,
+    }
+
+
+def build_portfolio(username: str, eos_account: str | None = None, annual_rate: float = 0.1225,
+                     estimate_market_value: bool = False) -> dict:
     """
     Build the full portfolio breakdown for a username.
 
@@ -106,6 +164,12 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
     username->EOS index (see username_lookup.lookup_eos_account), which
     enables "scouting another player" with just their Upland username.
     Returns an error dict if the account can't be resolved either way.
+
+    estimate_market_value opts into an extra comp-search pass (via
+    valuation.neighborhood_valuation_rate) against the top 15 neighborhoods
+    by mint value — slow (one comp search + area lookups per neighborhood),
+    so it's off by default and capped rather than run across every
+    neighborhood in the portfolio.
 
     Returns a dict with: summary, neighborhoods (list), structures (list),
     undeveloped (list of property dicts with 0 buildings), properties
@@ -139,6 +203,7 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
     total_sparks_buildings = 0
     total_sparks_estimated_buildings = 0
     hood_stats: dict = defaultdict(lambda: {"count": 0, "mint": 0, "up2": 0.0, "developed": 0})
+    hood_city: dict = {}
     undeveloped = []
     enriched_props = []
 
@@ -178,6 +243,7 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
         hs["up2"] += up2
         if is_developed:
             hs["developed"] += 1
+        hood_city.setdefault(hood, p.get("city") or "")
 
         enriched_props.append({**p, "up2": up2, "structure_count": len(buildings), "developed": is_developed})
 
@@ -207,21 +273,40 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
         if total_sparks_buildings else 0.0
     )
 
+    market_value = None
+    if estimate_market_value and neighborhoods:
+        market_value = _estimate_market_value(neighborhoods, hood_city)
+        for h in neighborhoods:
+            rate = market_value["rates"].get(h["neighborhood"])
+            if rate:
+                h["market_upx_per_up2"] = rate.get("upx_per_up2")
+                h["market_usd_per_up2"] = rate.get("usd_per_up2")
+
+    summary = {
+        "total_properties": total_props,
+        "total_mint_value": round(total_mint),
+        "total_up2": round(total_up2, 1),
+        "pct_developed": pct_developed,
+        "developed_count": developed_count,
+        "undeveloped_count": total_props - developed_count,
+        "est_monthly_yield": est_monthly_yield,
+        "est_hourly_yield": est_hourly_yield,
+        "total_sparks_invested": total_sparks,
+        "pct_sparks_estimated": pct_sparks_estimated,
+        "neighborhood_count": len(hood_stats),
+        "annual_rate_pct": round(annual_rate * 100, 2),
+    }
+    if market_value is not None:
+        summary["market_value_upx"] = market_value["total_upx"]
+        summary["market_value_usd"] = market_value["total_usd"]
+        summary["market_value_neighborhoods_covered"] = market_value["covered_count"]
+        summary["market_value_neighborhoods_attempted"] = market_value["attempted_count"]
+        summary["market_value_coverage_pct"] = (
+            round(100 * market_value["covered_mint"] / total_mint, 1) if total_mint else 0.0
+        )
+
     return {
-        "summary": {
-            "total_properties": total_props,
-            "total_mint_value": round(total_mint),
-            "total_up2": round(total_up2, 1),
-            "pct_developed": pct_developed,
-            "developed_count": developed_count,
-            "undeveloped_count": total_props - developed_count,
-            "est_monthly_yield": est_monthly_yield,
-            "est_hourly_yield": est_hourly_yield,
-            "total_sparks_invested": total_sparks,
-            "pct_sparks_estimated": pct_sparks_estimated,
-            "neighborhood_count": len(hood_stats),
-            "annual_rate_pct": round(annual_rate * 100, 2),
-        },
+        "summary": summary,
         "neighborhoods": neighborhoods,
         "structures": structures,
         "undeveloped": sorted(undeveloped, key=lambda p: -(p.get("mintPrice") or 0)),

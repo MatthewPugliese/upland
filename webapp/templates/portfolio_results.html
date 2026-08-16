@@ -107,8 +107,21 @@
             <div class="value">{{ "{:,}".format(result.summary.total_sparks_invested) }}</div>
             <div class="label">Sparks Invested (builds)</div>
         </div>
+        {% if result.summary.market_value_upx is defined %}
+        <div class="stat-card highlight">
+            <div class="value">{{ "{:,}".format(result.summary.market_value_upx) }}</div>
+            <div class="label">Est. Market Value (UPX)</div>
+        </div>
+        <div class="stat-card highlight">
+            <div class="value">${{ "{:,.0f}".format(result.summary.market_value_usd) }}</div>
+            <div class="label">Est. Market Value (USD)</div>
+        </div>
+        {% endif %}
     </div>
     <p class="yield-note">Yield figures assume a flat {{ result.summary.annual_rate_pct }}% annual rate against mint value (same model as the Collection Tracker) — a portfolio-level estimate, not a measured per-property income figure. Sparks Invested is a real computed sum (construction cost per placed structure){% if result.summary.pct_sparks_estimated > 0 %}, though {{ result.summary.pct_sparks_estimated }}% of it comes from structure types without a measured cost sample and is estimated{% endif %}.</p>
+    {% if result.summary.market_value_upx is defined %}
+    <p class="yield-note">Market value covers {{ result.summary.market_value_neighborhoods_covered }} of {{ result.summary.market_value_neighborhoods_attempted }} attempted neighborhoods ({{ result.summary.market_value_coverage_pct }}% of total mint value) — comp-based (see Property Valuation Tool), not a flat rate. Neighborhoods beyond the top 15 by mint value aren't attempted and aren't included in this total.</p>
+    {% endif %}
 
     <div class="section-heading">
         Neighborhood Breakdown
@@ -122,6 +135,10 @@
                 <th>Mint Value (UPX)</th>
                 <th>UP²</th>
                 <th>Developed</th>
+                {% if result.summary.market_value_upx is defined %}
+                <th>Market Rate (UPX/UP²)</th>
+                <th>Market Rate (USD/UP²)</th>
+                {% endif %}
             </tr>
         </thead>
         <tbody>
@@ -137,6 +154,10 @@
                     </span>
                     <span style="color:#bbb;font-size:11px">({{ h.pct_developed }}%)</span>
                 </td>
+                {% if result.summary.market_value_upx is defined %}
+                <td>{{ h.market_upx_per_up2 if h.market_upx_per_up2 is defined and h.market_upx_per_up2 else "—" }}</td>
+                <td>{{ "$%.2f"|format(h.market_usd_per_up2) if h.market_usd_per_up2 is defined and h.market_usd_per_up2 else "—" }}</td>
+                {% endif %}
             </tr>
         {% endfor %}
         </tbody>
