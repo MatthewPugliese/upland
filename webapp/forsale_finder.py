@@ -130,7 +130,7 @@ def _get_neighborhood_candidates(parsed_req: dict, city_id: int) -> list:
     found = []
     hood_upper = hood_name.upper()
     first = upland_get("/properties", {"cityId": city_id, "currentPage": 1, "pageSize": 100})
-    total = first.get("totalResults", 0)
+    total = first.get("totalResults") or 0
     max_pages = min(30, -(-total // 100))  # cap at 3000 props to avoid slow scans
 
     for p in first.get("results", []):

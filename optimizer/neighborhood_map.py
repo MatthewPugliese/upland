@@ -347,7 +347,9 @@ def _blockchain_user_properties(username: str, eos_account: str, cache_path: Pat
     The Hyperion API requires the EOS account name (e.g. 'vo1dsqp3qmce'), not the
     Upland display username (e.g. 'pugs08').  Pass --eos-account to configure it.
 
-    Results are cached in `cache_path` (1-hour TTL).
+    Results are cached in `cache_path` (7-day TTL — a cache hit within that window is
+    returned directly with no live blockchain query; past that window, or on API
+    failure, the same cache is still read and served as a stale fallback).
     """
     import time as _time
 
@@ -677,6 +679,7 @@ def _search_city_by_street(city_id: int, street_search_term: str) -> list:
             f"&textSearch={encoded}"
         )
         import requests as _req
+        data = {}
         for attempt in range(3):
             try:
                 r = _req.get(url, headers=_auth_headers(), timeout=30)
@@ -1969,7 +1972,7 @@ Examples:
 
     if args.no_buildings:
         print("[*] Skipping OSM buildings (--no-buildings)")
-    else:
+    elif not boundary:
         print("[!] No boundary — skipping OSM buildings lookup")
 
     # ── Step 4: Match properties to buildings ────────────────────────────────

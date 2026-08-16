@@ -461,9 +461,10 @@ def _add_zone_overlays(m, props, matched, unmatched, geocode_map,
         latlon = [[pt[1], pt[0]] for pt in coords]
 
         street_label = cluster["street"]
-        # Shorten long street names
+        # Shorten long street names by dropping the trailing type suffix
         for suffix in [" AVE", " ST", " BLVD", " RD", " LN", " CT", " PL", " DR"]:
             if street_label.endswith(suffix):
+                street_label = street_label[:-len(suffix)]
                 break
 
         folium.Polygon(

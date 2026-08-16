@@ -968,7 +968,11 @@ def optimize_collections(props: list, collections: list, annual_rate: float = 0.
         "base_monthly_yield": round(base_monthly),
         "boosted_monthly_yield": round(boosted_monthly),
         "monthly_gain": round(boosted_monthly - base_monthly),
-        "improvement_pct": round((total_yield_gain / max(total_mint_all, 1)) * 100, 1),
+        "monthly_rate_pct": round(effective_rate / 12 * 100, 2),
+        # % improvement in monthly yield vs. the unboosted baseline — total_yield_gain and
+        # monthly_gain are the same monthly UPX figure computed two ways; comparing it against
+        # base_monthly (not total_mint_all) is what makes this a yield-improvement percentage.
+        "improvement_pct": round((total_yield_gain / max(base_monthly, 1)) * 100, 1),
         "one_time_rewards_total": sum(a["one_time_reward"] for a in assignments),
     }
 
@@ -1013,7 +1017,7 @@ if __name__ == "__main__":
         print(f"  Unassigned: {result['unassigned_count']}")
         print(f"")
         print(f"  Total portfolio mint value: {result['total_mint_all']:,.0f} UPX")
-        print(f"  Base monthly yield (4.9%): {result['base_monthly_yield']:,.0f} UPX")
+        print(f"  Base monthly yield ({result['monthly_rate_pct']}%): {result['base_monthly_yield']:,.0f} UPX")
         print(f"  Optimized monthly yield: {result['boosted_monthly_yield']:,.0f} UPX")
         print(f"  Monthly gain: +{result['monthly_gain']:,.0f} UPX")
         print(f"  Yield improvement: +{result['improvement_pct']}%")

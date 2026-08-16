@@ -267,7 +267,7 @@ def neighborhood_valuation_rate(neighborhood: str, city: str) -> dict:
     """
     comp_result = find_comps(neighborhood, city)
     comps = comp_result["comps"]
-    prop_ids = list({c["property_id"] for c in comps})[:MAX_AREA_LOOKUPS]
+    prop_ids = list(dict.fromkeys(c["property_id"] for c in comps))[:MAX_AREA_LOOKUPS]
     areas = fetch_areas(prop_ids)
 
     upx_val = _build_currency_valuation(comps, comp_result["scope"], comp_result["window_days"],
@@ -322,7 +322,7 @@ def estimate_value(query: str, include_floor: bool = True) -> dict:
     comp_result = find_comps(match["neighborhood"], match["city"], exclude_prop_id=prop_id)
     comps = comp_result["comps"]
 
-    prop_ids_needed = list({c["property_id"] for c in comps})[:MAX_AREA_LOOKUPS]
+    prop_ids_needed = list(dict.fromkeys(c["property_id"] for c in comps))[:MAX_AREA_LOOKUPS]
     areas = fetch_areas(prop_ids_needed)
 
     upx_val = _build_currency_valuation(comps, comp_result["scope"], comp_result["window_days"],

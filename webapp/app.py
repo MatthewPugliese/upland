@@ -70,7 +70,12 @@ def index():
 def api_neighborhoods():
     search_neighborhoods, _ = _neighborhoods()
     q = request.args.get("q", "").strip()
-    results = search_neighborhoods(q)
+    try:
+        results = search_neighborhoods(q)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return jsonify([])
     return jsonify([
         {"name": h["name"], "city": h["city_name"], "id": h["id"]}
         for h in results
@@ -482,7 +487,7 @@ def score_report():
     plan_progress = result.get("plan_progress") if isinstance(result, dict) else None
     commerce = result.get("commerce") if isinstance(result, dict) else None
     if mine_only:
-        rows = [r for r in rows if r["is_mine"]]
+        rows = [r for r in rows if r.get("is_mine")]
         # Recompute summaries for the filtered set so mine_only=true stays accurate
         try:
             import sys
@@ -493,7 +498,12 @@ def score_report():
             spark_summary = summarize_queue(rows, mine_only=False)
             plan_progress = compute_plan_progress(rows, mine_only=False)
         except Exception:
-            pass
+            # Don't silently keep the unfiltered (whole-neighborhood) summaries here —
+            # that would mislabel them as the mine_only view. Surface "unavailable" instead.
+            import traceback
+            traceback.print_exc()
+            spark_summary = None
+            plan_progress = None
     return jsonify({
         "rows": rows,
         "neighborhood": hood,
@@ -537,12 +547,13 @@ def score_forsale():
                 if r.status_code == 200:
                     d = r.json()
                     om = d.get("on_market") or {}
-                    fiat_raw = om.get("fiat", "0 FIAT")
-                    try:
-                        usd = float(fiat_raw.split()[0])
-                    except (ValueError, IndexError):
-                        usd = 0.0
-                    return pid, {"price_upx": d.get("price"), "price_usd": usd or None,
+                    currency = om.get("currency", "")
+                    # `price` is overloaded: for a USD listing it holds the fiat amount, not a
+                    # UPX figure — must gate on currency before trusting it as UPX (see
+                    # forsale_finder._public_api_price, which has the same currency check).
+                    price_upx = d.get("price") if currency == "UPX" else None
+                    price_usd = d.get("price") if currency == "USD" else None
+                    return pid, {"price_upx": price_upx, "price_usd": price_usd,
                                  "on_market": bool(om)}
             except Exception:
                 pass
