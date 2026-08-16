@@ -39,6 +39,7 @@ MIN_COMPS_NEIGHBORHOOD = 5
 MIN_COMPS_CITY = 5
 MAX_COMPS_SHOWN = 20
 MAX_AREA_LOOKUPS = 60
+MAX_BATCH_ITEMS = 25
 
 
 def _pc_connect() -> sqlite3.Connection:
@@ -344,3 +345,30 @@ def estimate_value(query: str) -> dict:
         "upx_valuation": upx_val,
         "usd_valuation": usd_val,
     }
+
+
+def estimate_batch(queries: list, max_workers: int = 5) -> list:
+    """
+    Run estimate_value() for a list of queries concurrently (each one is a
+    separate comp search + API calls, so this is worth parallelizing).
+    Ambiguous text matches (multiple properties hit the same query) are
+    reported as an error rather than silently guessing — batch mode expects
+    property IDs or exact addresses; use the single-property page's picker
+    to disambiguate a fuzzy address first. Capped at MAX_BATCH_ITEMS so one
+    request stays bounded; extra queries are silently dropped by the slice,
+    the caller (webapp route) is expected to surface that cap to the user.
+    """
+    queries = [q.strip() for q in queries if q.strip()][:MAX_BATCH_ITEMS]
+
+    def _run_one(query: str) -> dict:
+        result = estimate_value(query)
+        if result.get("matches"):
+            return {"query": query,
+                     "error": f"{len(result['matches'])} properties matched '{query}' — "
+                              f"use the exact property ID instead."}
+        result["query"] = query
+        return result
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_run_one, q) for q in queries]
+        return [f.result() for f in futures]

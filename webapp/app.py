@@ -40,6 +40,10 @@ def _valuation():
     from valuation import estimate_value
     return estimate_value
 
+def _valuation_batch():
+    from valuation import estimate_batch, MAX_BATCH_ITEMS
+    return estimate_batch, MAX_BATCH_ITEMS
+
 def _report():
     import sys
     from pathlib import Path
@@ -386,6 +390,32 @@ def valuation_run():
         import traceback
         traceback.print_exc()
         return render_template("valuation.html", error=f"Error: {e}", query=query)
+
+
+@app.route("/valuation/batch")
+def valuation_batch():
+    return render_template("valuation_batch.html")
+
+
+@app.route("/valuation/batch/run", methods=["POST"])
+def valuation_batch_run():
+    estimate_batch, max_batch_items = _valuation_batch()
+    raw = request.form.get("queries", "")
+    queries = [line.strip() for line in raw.splitlines() if line.strip()]
+
+    if not queries:
+        return render_template("valuation_batch.html", error="Enter at least one address or property ID.")
+
+    truncated = len(queries) > max_batch_items
+    try:
+        results = estimate_batch(queries)
+        return render_template("valuation_batch_results.html", results=results,
+                                truncated=truncated, max_batch_items=max_batch_items,
+                                raw_queries=raw)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render_template("valuation_batch.html", error=f"Error: {e}", raw_queries=raw)
 
 
 # ── Neighborhood Score Dashboard ───────────────────────────────────────────

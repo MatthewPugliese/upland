@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Batch Valuation — UplandScope{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Batch Valuation</h2>
+    <p class="card-subtitle">Paste a list of property addresses or IDs (one per line) to value them all at once. <a href="/valuation">Single property &rarr;</a></p>
+
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
+
+    <form action="/valuation/batch/run" method="POST" id="batchForm">
+        <div class="form-group">
+            <label for="queries">Addresses or Property IDs</label>
+            <textarea id="queries" name="queries" rows="10" style="width:100%; font-family:monospace; font-size:13px;"
+                      placeholder="81296939123819&#10;171 Cuba Ave&#10;174 Gower St" required>{{ raw_queries or '' }}</textarea>
+        </div>
+        <p class="field-note">Ambiguous addresses (multiple properties match the same text) are flagged rather than guessed — use the exact property ID for those. Capped at 25 properties per batch.</p>
+        <button type="submit" class="btn-primary" id="submitBtn">Estimate All</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("batchForm").addEventListener("submit", function() {
+    var btn = document.getElementById("submitBtn");
+    btn.disabled = true;
+    btn.textContent = "Estimating...";
+});
+</script>
+{% endblock %}

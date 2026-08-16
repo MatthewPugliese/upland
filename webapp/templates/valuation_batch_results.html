@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Batch Valuation Results — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    .full-table tr:last-child td { border-bottom: none; }
+    .full-table tr:hover td { background: #fafafa; }
+    .full-table a { color: #1B4F72; text-decoration: none; }
+    .full-table a:hover { text-decoration: underline; }
+
+    .confidence-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 10px; }
+    .confidence-high { background: #EAFAF1; color: #1E8449; }
+    .confidence-medium { background: #FEF9E7; color: #9A7D0A; }
+    .confidence-low { background: #FDEBD0; color: #B9770E; }
+    .confidence-very-low { background: #FDEDEC; color: #C0392B; }
+
+    .row-error td { color: #C0392B; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Batch Valuation Results</h2>
+    <p class="card-subtitle">{{ results|length }} quer{{ 'y' if results|length == 1 else 'ies' }} processed. <a href="/valuation/batch">Run another batch &rarr;</a></p>
+
+    {% if truncated %}
+    <div class="error-msg">More than {{ max_batch_items }} lines were submitted — only the first {{ max_batch_items }} were processed.</div>
+    {% endif %}
+
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Query</th>
+                <th>Address</th>
+                <th>UP²</th>
+                <th>Est. UPX</th>
+                <th>UPX Confidence</th>
+                <th>Est. USD</th>
+                <th>USD Confidence</th>
+                <th>Listing</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in results %}
+            {% if r.error %}
+            <tr class="row-error">
+                <td>{{ r.query }}</td>
+                <td colspan="7">{{ r.error }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td>{{ r.query }}</td>
+                <td>{{ r.property.address }} <span style="color:#aaa;font-size:11px">{{ r.property.neighborhood }}</span></td>
+                <td>{{ r.property.area }}</td>
+                <td>{% if r.upx_valuation.estimated_value %}{{ "{:,}".format(r.upx_valuation.estimated_value) }}{% else %}—{% endif %}</td>
+                <td><span class="confidence-badge confidence-{{ r.upx_valuation.confidence_slug }}">{{ r.upx_valuation.confidence }}</span></td>
+                <td>{% if r.usd_valuation.estimated_value %}${{ "%.2f"|format(r.usd_valuation.estimated_value) }}{% else %}—{% endif %}</td>
+                <td><span class="confidence-badge confidence-{{ r.usd_valuation.confidence_slug }}">{{ r.usd_valuation.confidence }}</span></td>
+                <td>
+                    {% if r.property.is_listed %}
+                        {{ "{:,}".format(r.property.listing_price|round|int) }} {{ r.property.listing_currency }}
+                    {% else %}
+                        not listed
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

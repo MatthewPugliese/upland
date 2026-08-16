@@ -379,10 +379,11 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   - Overlaid on the volume chart: shows whether market activity is driven by new supply or secondary trading
   - Flag cities with high mint rates — early-minted neighborhoods often have price pressure
 
-- [ ] **Price fairness estimator**
-  - Given a property ID or address, pull recent `n5`/`n52` sales for nearby properties (same neighborhood, similar UP²) from the DB
-  - Show: "properties of this size in Dongan Hills sold for 8,200–14,500 UPX in the last 30 days — this listing at 11,000 UPX is within range"
-  - Ties into the Property Valuation Tool (see PROPERTY_VALUATION_PLAN.md)
+- [x] **Price fairness estimator** — shipped as the Property Valuation Tool at `/valuation`
+  (2026-08-16, commit `3a137a7`). Given a property ID or address, shows comparable UPX/USD
+  sales (same neighborhood, broadening to city-level/wider window if sparse), a median
+  price/UP², and — if currently listed — a % over/under vs. the estimate. See
+  `docs/PROPERTY_VALUATION_PLAN.md` for full details.
 
 ---
 

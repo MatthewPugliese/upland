@@ -121,7 +121,9 @@ The economy scraper must be running for at least 30 days to have enough comps fo
 - [x] **Confidence scoring** — High/Medium/Low—broadened/Very low badge based on comp count and scope, per the table above
 - [x] **Current listing comparison** — if listed, shows % over/under the matching-currency estimate
 - [ ] **Structures adjustment** — if the property has existing structures, note their value (demolish cost, structure SU contribution) as a modifier
-- [ ] **Batch mode** — paste a list of property IDs, get valuations for all (useful when evaluating multiple listings at once)
+- [x] **Batch mode** — `/valuation/batch`, paste addresses/IDs (one per line, capped at 25), runs
+  concurrently (`valuation.estimate_batch()`, 5 workers). Ambiguous text addresses are flagged
+  with an error rather than silently guessing a match — batch mode expects IDs or exact addresses.
 - [ ] **Neighborhood floor comparison** — show where this property sits relative to the neighborhood floor and median
 
 ---
