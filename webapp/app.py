@@ -332,10 +332,10 @@ def portfolio():
 def portfolio_run():
     build_portfolio = _portfolio()
     username = request.form.get("username", "").strip()
-    eos_account = request.form.get("eos_account", "").strip()
+    eos_account = request.form.get("eos_account", "").strip() or None
 
-    if not username or not eos_account:
-        return render_template("portfolio.html", error="Both username and EOS account are required.")
+    if not username:
+        return render_template("portfolio.html", error="Username is required.")
 
     annual_rate_pct = request.form.get("annual_rate", "12.25").strip()
     try:

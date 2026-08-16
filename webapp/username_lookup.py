@@ -8,6 +8,7 @@ from pathlib import Path
 
 _CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "username_cache.json"
 _cache: dict | None = None
+_inverted: dict | None = None
 
 
 def _load() -> dict:
@@ -39,8 +40,26 @@ def lookup_many(accounts: list[str]) -> dict[str, str]:
     return {a: cache[a] for a in accounts if a in cache}
 
 
+def lookup_eos_account(username: str) -> str | None:
+    """
+    Return an EOS account for an Upland username, or None if unknown.
+
+    Built as a lazy in-memory reverse index over the same EOS->username
+    cache. Usernames aren't guaranteed unique across the cache's history
+    (a username can be reused by a different EOS account over time,
+    ~14% of entries collide) — this returns whichever account was last
+    in iteration order for that name, which is fine for exploratory
+    lookups but should not be treated as authoritative identity.
+    """
+    global _inverted
+    if _inverted is None:
+        _inverted = {name.lower(): account for account, name in _load().items()}
+    return _inverted.get(username.lower())
+
+
 def reload() -> int:
     """Force reload of the cache from disk. Returns number of entries."""
-    global _cache
+    global _cache, _inverted
     _cache = None
+    _inverted = None
     return len(_load())

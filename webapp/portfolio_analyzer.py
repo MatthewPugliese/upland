@@ -90,15 +90,30 @@ def fetch_property_details(props: list, cache_path: Path) -> dict:
     return results
 
 
-def build_portfolio(username: str, eos_account: str, annual_rate: float = 0.1225) -> dict:
+def build_portfolio(username: str, eos_account: str | None = None, annual_rate: float = 0.1225) -> dict:
     """
     Build the full portfolio breakdown for a username.
+
+    eos_account is optional — if omitted, it's resolved from the reverse
+    username->EOS index (see username_lookup.lookup_eos_account), which
+    enables "scouting another player" with just their Upland username.
+    Returns an error dict if the account can't be resolved either way.
 
     Returns a dict with: summary, neighborhoods (list), structures (list),
     undeveloped (list of property dicts with 0 buildings), properties
     (full enriched list, sorted by mint value desc).
     """
     from collection_optimizer import load_user_properties
+
+    if not eos_account:
+        from username_lookup import lookup_eos_account
+        eos_account = lookup_eos_account(username)
+        if not eos_account:
+            return {
+                "error": f"Couldn't resolve an EOS account for '{username}' — "
+                         f"it isn't in the known username cache. Provide the EOS account directly.",
+                "properties": [],
+            }
 
     props = load_user_properties(username, eos_account)
     if not props:
