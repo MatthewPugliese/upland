@@ -350,10 +350,22 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 
 ## Additional Feature Ideas
 
-- [ ] **Neighborhood price heatmap**
-  - After building the city breakdown table, add a choropleth map layer: color each neighborhood by average sale price (UPX or USD) over the selected period
-  - Instantly shows which neighborhoods are hot vs depressed
-  - Data already available from `transactions` table joined to property_cache
+- [x] **Neighborhood price breakdown** *(table, not a map choropleth yet)* — shipped on `/economy`
+  (2026-08-16, `webapp/economy.py:neighborhoods()`). Sortable table of avg UPX/USD price + trade
+  volume per neighborhood, capped to the top 50 by trade count (1,035 neighborhoods qualify in a
+  30d window — shows "top 50 of N" rather than silently truncating). A true choropleth map layer
+  is still unbuilt — would need per-neighborhood centroid/boundary geometry, which isn't cheaply
+  available (property_cache.db has no lat/lng; would need new geocoding work). The table delivers
+  the same "hot vs depressed at a glance" value without that extra infrastructure.
+  **Also fixed a real bug found while building this:** `cities()` (and the new `neighborhoods()`)
+  now join against `scraper/property_cache.db` instead of reading `transactions.city`/
+  `.neighborhood` directly — those columns are only reliably populated for the last ~30 days
+  (~100%); coverage drops to ~72-84% for 90d-1yr and just ~15% for "all time" (older rows were
+  inserted before the property cache was comprehensive). The City Breakdown table has been live on
+  `/economy` with this gap since it shipped — e.g. "all time" was showing Los Angeles at ~15K
+  trades when the real figure is ~96.5K. Selecting the default 30d period looked fine, which is
+  likely why it went unnoticed. Both functions now cache their (slower, full-scan) results for 15
+  min, since the join can take up to ~4-11s for "all"/long periods.
 
 - [x] **Floor price tracker** — shipped at `/floor` (2026-08-16, `webapp/floor_price.py`). Given a
   neighborhood, shows the floor UPX and USD asking price plus every active listing sorted by
@@ -422,9 +434,10 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] Webapp deployed to Pi at `http://192.168.1.115:8080/economy` (LAN only — port 8080 not forwarded externally)
 
 ### Phase 4 — Polish
-- [x] City/neighborhood breakdown table (sortable)
+- [x] City/neighborhood breakdown table (sortable) — city breakdown's city/neighborhood resolution
+  fixed 2026-08-16 to use a property_cache.db join instead of the sparse inline columns (see above)
 - [ ] Asset type filtering (property vs spark/equipment)
-- [ ] Neighborhood price heatmap overlay on existing map
+- [ ] Neighborhood price heatmap overlay on existing map (table version shipped instead, see above)
 
 ### Known issues to fix
 - [ ] **30d/7d/today show low data** — scraper just caught up to present on 2026-06-24; data will accumulate naturally over the coming days/weeks

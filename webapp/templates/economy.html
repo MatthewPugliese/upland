@@ -308,6 +308,29 @@
 </div>
 
 <div class="section-heading" style="margin-top:8px;">
+    <span>Neighborhood Price Breakdown</span>
+    <span style="font-size:11px;font-weight:400;color:#aaa;" id="hoods-count-note">which neighborhoods are hot vs depressed</span>
+</div>
+<div class="cities-wrap">
+    <table class="cities-table" id="hoods-table">
+        <thead>
+            <tr>
+                <th data-col="neighborhood">Neighborhood</th>
+                <th data-col="city">City</th>
+                <th data-col="total_trades">Trades</th>
+                <th data-col="upx_volume">UPX Volume</th>
+                <th data-col="usd_volume">USD Volume</th>
+                <th data-col="avg_upx">Avg UPX Price</th>
+                <th data-col="avg_usd">Avg USD Price</th>
+            </tr>
+        </thead>
+        <tbody id="hoods-body">
+            <tr><td colspan="7" class="loading-msg">Loading…</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="section-heading" style="margin-top:8px;">
     <span>Top Buyers & Sellers</span>
     <span style="font-size:11px;font-weight:400;color:#aaa;">UPX volume · property sales only</span>
 </div>
@@ -343,6 +366,10 @@ let feedRows = [];
 let citiesData = [];
 let citiesSortCol = 'total_trades';
 let citiesSortDir = -1; // -1 = desc
+let hoodsData = [];
+let hoodsTotal = 0;
+let hoodsSortCol = 'total_trades';
+let hoodsSortDir = -1; // -1 = desc
 let activeCityFilter = null;
 let volumeChart = null;
 let feedPollTimer = null;
@@ -387,6 +414,7 @@ document.querySelectorAll('.period-btn').forEach(btn => {
         loadSummary();
         loadChart();
         loadCities();
+        loadHoods();
         loadWhales();
     });
 });
@@ -651,7 +679,7 @@ function renderCities() {
     }).join('');
 
     // Update sort indicators
-    document.querySelectorAll('.cities-table th').forEach(th => {
+    document.querySelectorAll('#cities-table th').forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
         if (th.dataset.col === citiesSortCol) {
             th.classList.add(citiesSortDir === -1 ? 'sort-desc' : 'sort-asc');
@@ -659,7 +687,62 @@ function renderCities() {
     });
 }
 
-document.querySelectorAll('.cities-table th').forEach(th => {
+// ── Neighborhoods ─────────────────────────────────────────────────────────
+async function loadHoods() {
+    const r = await fetch('/api/economy/neighborhoods?period=' + currentPeriod);
+    const d = await r.json();
+    hoodsData = d.neighborhoods || [];
+    hoodsTotal = d.total || hoodsData.length;
+    document.getElementById('hoods-count-note').textContent =
+        hoodsTotal > hoodsData.length
+            ? `showing top ${hoodsData.length} of ${hoodsTotal} by trade count`
+            : 'which neighborhoods are hot vs depressed';
+    renderHoods();
+}
+
+function renderHoods() {
+    const sorted = [...hoodsData].sort((a, b) => {
+        const av = a[hoodsSortCol] ?? 0;
+        const bv = b[hoodsSortCol] ?? 0;
+        return hoodsSortDir * (typeof av === 'string' ? av.localeCompare(bv) : bv - av);
+    });
+    const body = document.getElementById('hoods-body');
+    if (sorted.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="loading-msg">No neighborhood data for this period.</td></tr>';
+        return;
+    }
+    body.innerHTML = sorted.map(h => `<tr>
+        <td>${h.neighborhood}</td>
+        <td>${h.city}</td>
+        <td>${fmtNum(h.total_trades)}</td>
+        <td>${fmtUpx(h.upx_volume)}</td>
+        <td>${fmtUsd(h.usd_volume)}</td>
+        <td>${h.avg_upx ? fmtUpx(h.avg_upx) : '—'}</td>
+        <td>${h.avg_usd ? fmtUsd(h.avg_usd) : '—'}</td>
+    </tr>`).join('');
+
+    document.querySelectorAll('#hoods-table th').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.col === hoodsSortCol) {
+            th.classList.add(hoodsSortDir === -1 ? 'sort-desc' : 'sort-asc');
+        }
+    });
+}
+
+document.querySelectorAll('#hoods-table th').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (hoodsSortCol === col) {
+            hoodsSortDir *= -1;
+        } else {
+            hoodsSortCol = col;
+            hoodsSortDir = (col === 'neighborhood' || col === 'city') ? 1 : -1;
+        }
+        renderHoods();
+    });
+});
+
+document.querySelectorAll('#cities-table th').forEach(th => {
     th.addEventListener('click', () => {
         const col = th.dataset.col;
         if (citiesSortCol === col) {
@@ -706,6 +789,7 @@ loadSummary();
 loadChart();
 loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
 loadCities();
+loadHoods();
 loadWhales();
 </script>
 {% endblock %}

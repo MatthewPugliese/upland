@@ -3,11 +3,18 @@ Economy dashboard DB queries — reads from economy.db written by the scraper.
 All functions return plain dicts/lists; Flask routes handle JSON serialisation.
 """
 
+import json
 import os
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 DB_PATH = os.environ.get("ECONOMY_DB", os.path.join(os.path.dirname(__file__), "..", "data", "economy.db"))
+PROP_CACHE_DB = os.path.join(os.path.dirname(__file__), "..", "scraper", "property_cache.db")
+
+_AGG_CACHE_DIR = Path(os.environ.get("CACHE_DIR", os.path.join(os.path.dirname(__file__), "cache"))) / "economy_agg"
+_AGG_CACHE_TTL = 900  # 15 min — these are full-table scans for longer periods (up to ~11s for "all")
 
 
 def _connect():
@@ -18,6 +25,37 @@ def _connect():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=3000")
     return conn
+
+
+def _connect_with_property_cache():
+    """
+    Like _connect(), but also ATTACHes scraper/property_cache.db so queries can
+    join on property_id for reliable city/neighborhood — most transactions rows
+    don't have those columns populated directly except for recent data (~100%
+    for the last 30d, dropping to ~15% for all-time history), since the scraper
+    only inlines them when it already had the property cached at insert time.
+    """
+    conn = _connect()
+    if conn is None:
+        return None
+    if os.path.exists(PROP_CACHE_DB):
+        conn.execute(f"ATTACH DATABASE '{PROP_CACHE_DB}' AS pc")
+    return conn
+
+
+def _agg_cache_get(key: str):
+    path = _AGG_CACHE_DIR / f"{key}.json"
+    if path.exists() and (time.time() - path.stat().st_mtime) < _AGG_CACHE_TTL:
+        try:
+            return json.loads(path.read_text())
+        except Exception:
+            return None
+    return None
+
+
+def _agg_cache_set(key: str, value) -> None:
+    _AGG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    (_AGG_CACHE_DIR / f"{key}.json").write_text(json.dumps(value))
 
 
 def _period_start(period: str) -> str:
@@ -137,26 +175,79 @@ def feed(limit: int = 50, marketplace: str = None, city: str = None) -> list:
 
 
 def cities(period: str = "30d") -> list:
-    conn = _connect()
+    cache_key = f"cities_{period}"
+    cached = _agg_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    conn = _connect_with_property_cache()
     if not conn:
         return []
     try:
         since = _period_start(period)
         rows = conn.execute("""
-            SELECT city,
+            SELECT COALESCE(pc.city, t.city) AS city,
                    COUNT(*) AS total_trades,
-                   COUNT(CASE WHEN marketplace='upx' THEN 1 END) AS upx_trades,
-                   COUNT(CASE WHEN marketplace='usd' THEN 1 END) AS usd_trades,
-                   COALESCE(SUM(upx_amount), 0) AS upx_volume,
-                   COALESCE(SUM(usd_amount), 0) AS usd_volume,
-                   AVG(CASE WHEN marketplace='upx' AND upx_amount IS NOT NULL THEN upx_amount END) AS avg_upx,
-                   AVG(CASE WHEN marketplace='usd' AND usd_amount IS NOT NULL THEN usd_amount END) AS avg_usd
-            FROM transactions
-            WHERE timestamp >= ? AND city IS NOT NULL AND city != ''
-            GROUP BY city
+                   COUNT(CASE WHEN t.marketplace='upx' THEN 1 END) AS upx_trades,
+                   COUNT(CASE WHEN t.marketplace='usd' THEN 1 END) AS usd_trades,
+                   COALESCE(SUM(t.upx_amount), 0) AS upx_volume,
+                   COALESCE(SUM(t.usd_amount), 0) AS usd_volume,
+                   AVG(CASE WHEN t.marketplace='upx' AND t.upx_amount IS NOT NULL THEN t.upx_amount END) AS avg_upx,
+                   AVG(CASE WHEN t.marketplace='usd' AND t.usd_amount IS NOT NULL THEN t.usd_amount END) AS avg_usd
+            FROM transactions t
+            LEFT JOIN pc.properties pc ON t.property_id = pc.prop_id
+            WHERE t.timestamp >= ? AND t.asset_type = 'property'
+              AND COALESCE(pc.city, t.city) IS NOT NULL AND COALESCE(pc.city, t.city) != ''
+            GROUP BY COALESCE(pc.city, t.city)
             ORDER BY total_trades DESC
         """, (since,)).fetchall()
-        return [dict(r) for r in rows]
+        result = [dict(r) for r in rows]
+        _agg_cache_set(cache_key, result)
+        return result
+    finally:
+        conn.close()
+
+
+def neighborhoods(period: str = "30d", min_trades: int = 3) -> list:
+    """
+    Per-neighborhood price breakdown — which neighborhoods are hot vs
+    depressed, by trade volume and average sale price. Same reliable
+    property_cache.db join as cities() (transactions.neighborhood is even
+    sparser than transactions.city historically). min_trades filters out
+    neighborhoods with too few sales for the average to mean anything.
+    """
+    cache_key = f"neighborhoods_{period}_{min_trades}"
+    cached = _agg_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    conn = _connect_with_property_cache()
+    if not conn:
+        return []
+    try:
+        since = _period_start(period)
+        rows = conn.execute("""
+            SELECT COALESCE(pc.neighborhood, t.neighborhood) AS neighborhood,
+                   COALESCE(pc.city, t.city) AS city,
+                   COUNT(*) AS total_trades,
+                   COUNT(CASE WHEN t.marketplace='upx' THEN 1 END) AS upx_trades,
+                   COUNT(CASE WHEN t.marketplace='usd' THEN 1 END) AS usd_trades,
+                   COALESCE(SUM(t.upx_amount), 0) AS upx_volume,
+                   COALESCE(SUM(t.usd_amount), 0) AS usd_volume,
+                   AVG(CASE WHEN t.marketplace='upx' AND t.upx_amount IS NOT NULL THEN t.upx_amount END) AS avg_upx,
+                   AVG(CASE WHEN t.marketplace='usd' AND t.usd_amount IS NOT NULL THEN t.usd_amount END) AS avg_usd
+            FROM transactions t
+            LEFT JOIN pc.properties pc ON t.property_id = pc.prop_id
+            WHERE t.timestamp >= ? AND t.asset_type = 'property'
+              AND COALESCE(pc.neighborhood, t.neighborhood) IS NOT NULL
+              AND COALESCE(pc.neighborhood, t.neighborhood) != ''
+            GROUP BY COALESCE(pc.neighborhood, t.neighborhood), COALESCE(pc.city, t.city)
+            HAVING COUNT(*) >= ?
+            ORDER BY total_trades DESC
+        """, (since, min_trades)).fetchall()
+        result = [dict(r) for r in rows]
+        _agg_cache_set(cache_key, result)
+        return result
     finally:
         conn.close()
 

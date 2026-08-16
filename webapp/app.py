@@ -653,6 +653,17 @@ def api_economy_cities():
     return jsonify({"cities": _econ.cities(period)})
 
 
+@app.route("/api/economy/neighborhoods")
+def api_economy_neighborhoods():
+    period = request.args.get("period", "30d")
+    if period not in _VALID_PERIODS:
+        period = "30d"
+    limit = min(request.args.get("limit", 50, type=int), 200)
+    rows = _econ.neighborhoods(period)
+    total = len(rows)
+    return jsonify({"neighborhoods": rows[:limit], "total": total, "shown": min(limit, total)})
+
+
 @app.route("/api/economy/whales")
 def api_economy_whales():
     from username_lookup import lookup_many
