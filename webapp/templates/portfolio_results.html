@@ -144,7 +144,10 @@
         <tbody>
         {% for h in result.neighborhoods %}
             <tr>
-                <td><strong><a href="/score?neighborhood={{ h.neighborhood|urlencode }}">{{ h.neighborhood }}</a></strong></td>
+                <td>
+                    <strong><a href="/score?neighborhood={{ h.neighborhood|urlencode }}">{{ h.neighborhood }}</a></strong>
+                    <a href="/floor?neighborhood={{ h.neighborhood|urlencode }}" style="font-size:11px;color:#aaa;margin-left:4px;">(floor price)</a>
+                </td>
                 <td>{{ h.count }}</td>
                 <td>{{ "{:,}".format(h.mint) }}</td>
                 <td>{{ h.up2 }}</td>

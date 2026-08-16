@@ -233,6 +233,12 @@
     {% endfor %}
 </div>
 
+<p style="margin: -4px 0 16px; font-size: 13px;">
+    <a href="/floor?neighborhood={{ neighborhood|urlencode }}">Floor price for {{ neighborhood }} &rarr;</a>
+    &nbsp;&middot;&nbsp;
+    <a href="/valuation">Value a specific property &rarr;</a>
+</p>
+
 {% if not score %}
 <div class="card no-data">
     No structures cache for <strong>{{ neighborhood }}</strong>.<br>

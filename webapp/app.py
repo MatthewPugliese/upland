@@ -424,7 +424,19 @@ def valuation_batch_run():
 
 @app.route("/floor")
 def floor_price():
-    return render_template("floor_price.html")
+    neighborhood = request.args.get("neighborhood", "").strip()
+    if not neighborhood:
+        return render_template("floor_price.html")
+    get_floor_prices = _floor_price()
+    try:
+        result = get_floor_prices(neighborhood)
+        if result.get("error"):
+            return render_template("floor_price.html", error=result["error"], neighborhood=neighborhood)
+        return render_template("floor_price_results.html", result=result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render_template("floor_price.html", error=f"Error: {e}", neighborhood=neighborhood)
 
 
 @app.route("/floor/run", methods=["POST"])
