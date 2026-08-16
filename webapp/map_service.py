@@ -35,6 +35,12 @@ try:
 except ImportError:
     HAS_FITTER = False
 
+try:
+    import folium  # noqa: F401 — presence check only; not used directly in this module
+    HAS_FOLIUM = True
+except ImportError:
+    HAS_FOLIUM = False
+
 # ── Job tracking ───────────────────────────────────────────────────────────
 
 _jobs: dict[str, dict] = {}
@@ -146,6 +152,17 @@ def _generate_map_thread(key: str, neighborhood: str, city_hint: str | None,
                          username: str, eos_account: str, mode: str,
                          show_zones: bool = False):
     """Background thread that generates the map."""
+    if not HAS_FOLIUM:
+        # Fail fast and honestly instead of running the whole property-fetch
+        # pipeline only to have render_html_map() silently no-op at the very
+        # end — found live on the Pi (no folium there): the job reported
+        # status="ready" with a path that was never actually written.
+        _update_job(key, status="error",
+                    error="folium isn't installed on this server — map generation isn't "
+                          "available here (this deploy only has the lightweight webapp deps).",
+                    progress="Failed")
+        return
+
     _semaphore.acquire()
     try:
         if mode == "optimize" and HAS_FITTER:
