@@ -44,11 +44,12 @@ Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via 
   - Show total UPX collected per day/week/month
   - Chart: yield income over time — did it go up as you built more?
 
-- [ ] **Spark usage tracker**
-  - Pull spark stacking/unstacking events from blockchain
-  - Show which properties are currently consuming spark and at what rate
-  - Flag properties with spark running low (below minimum stacked threshold)
-  - Total spark burn rate per day across all properties
+- [ ] **Spark usage tracker** *(partial)*
+  - [x] Total spark invested in construction across the portfolio, and per structure type — real computed sum via `spark_estimator.get_spark_cost()` (construction cost model), not blockchain-derived
+  - [ ] Pull spark stacking/unstacking events from blockchain
+  - [ ] Show which properties are currently consuming spark and at what rate
+  - [ ] Flag properties with spark running low (below minimum stacked threshold)
+  - [ ] Total spark burn rate per day across all properties
 
 - [x] **Structure inventory**
   - Full list of every structure across all properties, grouped by type

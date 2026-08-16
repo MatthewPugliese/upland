@@ -17,6 +17,13 @@ not ingested by the scraper). Treat est_hourly_yield / est_monthly_yield
 as a rough portfolio-level estimate only, not a per-property ranking —
 under a flat rate every property yields strictly proportional to mint
 price, so there's nothing to rank.
+
+Spark investment (total_sparks_invested) IS a real, computed figure —
+sum of optimizer.spark_estimator.get_spark_cost()'s total_sparks per
+placed structure, the same construction-cost model used by the spark
+estimator elsewhere. Some structure types only have an estimated cost
+(no exact measured totalSparksRequired sample) — pct_sparks_estimated
+tells you what fraction of the sum is estimate vs measured.
 """
 
 from __future__ import annotations
@@ -36,6 +43,7 @@ sys.path.insert(0, str(OPTIMIZER_DIR))
 
 from structure_fitter import STRUCTURES  # noqa: E402
 from score_calculator import _lookup as _structure_lookup  # noqa: E402
+from spark_estimator import get_spark_cost  # noqa: E402
 
 _DETAILS_TTL = 86400  # 24h — matches get_upland_property_structures' convention
 
@@ -126,7 +134,10 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
     total_mint = 0
     total_up2 = 0.0
     developed_count = 0
-    struct_counts: dict = defaultdict(lambda: {"count": 0, "su": 0.0})
+    struct_counts: dict = defaultdict(lambda: {"count": 0, "su": 0.0, "sparks": 0})
+    total_sparks = 0
+    total_sparks_buildings = 0
+    total_sparks_estimated_buildings = 0
     hood_stats: dict = defaultdict(lambda: {"count": 0, "mint": 0, "up2": 0.0, "developed": 0})
     undeveloped = []
     enriched_props = []
@@ -152,6 +163,14 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
             info = _structure_lookup(name)
             struct_counts[name]["count"] += 1
             struct_counts[name]["su"] += info.get("su", 0) or 0
+
+            spark_cost = get_spark_cost(name)
+            if spark_cost:
+                struct_counts[name]["sparks"] += spark_cost["total_sparks"]
+                total_sparks += spark_cost["total_sparks"]
+                total_sparks_buildings += 1
+                if spark_cost["estimated"]:
+                    total_sparks_estimated_buildings += 1
 
         hs = hood_stats[hood]
         hs["count"] += 1
@@ -180,9 +199,13 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
     ]
 
     structures = [
-        {"name": name, "count": s["count"], "su": round(s["su"], 1)}
+        {"name": name, "count": s["count"], "su": round(s["su"], 1), "sparks": s["sparks"]}
         for name, s in sorted(struct_counts.items(), key=lambda kv: -kv[1]["count"])
     ]
+    pct_sparks_estimated = (
+        round(100 * total_sparks_estimated_buildings / total_sparks_buildings, 1)
+        if total_sparks_buildings else 0.0
+    )
 
     return {
         "summary": {
@@ -194,6 +217,8 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
             "undeveloped_count": total_props - developed_count,
             "est_monthly_yield": est_monthly_yield,
             "est_hourly_yield": est_hourly_yield,
+            "total_sparks_invested": total_sparks,
+            "pct_sparks_estimated": pct_sparks_estimated,
             "neighborhood_count": len(hood_stats),
             "annual_rate_pct": round(annual_rate * 100, 2),
         },
