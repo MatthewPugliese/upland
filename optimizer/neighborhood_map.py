@@ -28,6 +28,7 @@ import json
 import math
 import os
 import re
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -83,11 +84,7 @@ OVERPASS_ENDPOINTS = [
 # Locations of the shared property cache from listings.py
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PARENT_DIR = _SCRIPT_DIR.parent
-MAIN_CACHE_CANDIDATES = [
-    _PARENT_DIR / "scraper" / "property_cache.json",
-    _PARENT_DIR / "property_cache.json",
-    _PARENT_DIR / "property_cache.json.gz",
-]
+PROP_CACHE_DB = _PARENT_DIR / "scraper" / "property_cache.db"
 
 # Color scheme for Upland property statuses
 STATUS_COLORS = {
@@ -219,68 +216,48 @@ def find_neighborhood(name: str, city_hint: str = None) -> dict:
 # Property cache (from scraper/listings.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_main_cache: dict | None = None  # {prop_id_str: full_address_str}
-
-
-def _load_main_cache() -> dict:
-    """
-    Load the large property cache built by listings.py.
-    Format: {property_id: "ADDRESS, NEIGHBORHOOD, City"}
-    Tries several candidate paths, handles both .json and .json.gz.
-    """
-    global _main_cache
-    if _main_cache is not None:
-        return _main_cache
-
-    for candidate in MAIN_CACHE_CANDIDATES:
-        if not candidate.exists():
-            continue
-        print(f"[*] Loading property cache from {candidate} …", end=" ", flush=True)
-        t0 = time.time()
-        try:
-            if candidate.suffix == ".gz":
-                import gzip
-                with gzip.open(candidate, "rt", encoding="utf-8") as f:
-                    _main_cache = json.load(f)
-            else:
-                with open(candidate, encoding="utf-8") as f:
-                    _main_cache = json.load(f)
-            elapsed = time.time() - t0
-            print(f"{len(_main_cache):,} properties loaded in {elapsed:.1f}s")
-            return _main_cache
-        except Exception as e:
-            print(f"failed ({e})")
-
-    print("[!] No property cache found — will use API only")
-    _main_cache = {}
-    return _main_cache
-
-
 def _properties_from_main_cache(neighborhood_name: str) -> list[dict]:
     """
-    Search the main property cache for entries belonging to a neighborhood.
-    Cache entries: "ADDRESS, NEIGHBORHOOD, City"  or  "ADDRESS, City"
-    Returns list of minimal prop dicts: {id, address, status, neighborhood_name}
+    Search scraper/property_cache.db (SQLite) for properties belonging to a
+    neighborhood, via an indexed query — not by loading the full ~4.7M-row
+    property_cache.json into memory and linear-scanning every entry's
+    comma-joined address string, which is what this used to do.
+
+    Found live 2026-08-16: this cost ~800MB-1GB+ RSS and ~20s per call,
+    triggered by every /generate map request — the same "expensive full
+    cache load" problem already fixed the same day in
+    webapp/collection_optimizer.py's load_user_properties(), just in this
+    separate call site. Verified property_cache.db's neighborhood column
+    gives identical results to the old JSON-based exact-match scan (874
+    for "DONGAN HILLS", matching the prior live log output exactly).
+
+    Returns list of minimal prop dicts: {id, address, status, mintPrice,
+    collection, _from_cache}.
     """
-    cache = _load_main_cache()
-    if not cache:
+    if not PROP_CACHE_DB.exists():
         return []
 
     target = neighborhood_name.upper()
-    results = []
-    for prop_id, full_addr in cache.items():
-        # The neighborhood name is the 2nd comma-delimited segment when present
-        parts = [p.strip() for p in full_addr.split(",")]
-        if len(parts) >= 2 and parts[1].upper() == target:
-            results.append({
-                "id": prop_id,
-                "address": parts[0],
-                "status": None,          # will be enriched from API
-                "mintPrice": None,
-                "collection": None,
-                "_from_cache": True,
-            })
-    return results
+    conn = sqlite3.connect(str(PROP_CACHE_DB), timeout=5)
+    try:
+        rows = conn.execute(
+            "SELECT prop_id, address FROM properties WHERE neighborhood = ?",
+            (target,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        {
+            "id": prop_id,
+            "address": address,
+            "status": None,          # will be enriched from API
+            "mintPrice": None,
+            "collection": None,
+            "_from_cache": True,
+        }
+        for prop_id, address in rows
+    ]
 
 
 def _enrich_from_api(cached_props: list, city_id: int, neighborhood_id: int) -> list:
