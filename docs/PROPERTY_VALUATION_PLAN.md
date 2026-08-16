@@ -8,6 +8,22 @@ This is the most universally useful tool on the platform — every active player
 
 ---
 
+## Status (2026-08-15)
+
+**Not yet implemented** — no code written. Prep done: `data/economy.db` locally was a stale
+snapshot (55K rows, cut off 2023-04-11 — looked like an early dev copy, predating the Pi
+deployment). Replaced it with a fresh consistent copy pulled from the Pi's live database via
+SQLite's online backup API (`sqlite3.Connection.backup()`, no disruption to the live scraper) —
+old file kept as `data/economy.db.stale-2023-backup` in case anything needed it. Local dev/testing
+against `transactions` (n5/n52 comps) now reflects real current data instead of 2023-era rows.
+
+Next step when picked back up: build the comp-search + normalization + confidence-scoring logic
+described below against this refreshed local DB, likely as `webapp/valuation.py` + a `/valuation`
+route, following the same pattern as `webapp/portfolio_analyzer.py` (new module + form template +
+results template, reusing existing property-cache/API-lookup helpers where possible).
+
+---
+
 ## The Core Problem
 
 Upland has no official price guidance. Players currently:
