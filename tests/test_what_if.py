@@ -150,6 +150,61 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("No empty lots of yours", data["note"])
 
 
+class BestBuildTests(unittest.TestCase):
+    def _score_short_transport(self):
+        score = _score(lu=200, essential_su=10)
+        for row in score["categories"]:
+            if row["key"] == "transportation":
+                row["su"] = 1
+                row["pct_of_target"] = 10
+            elif row["key"] == "essential":
+                row["pct_of_target"] = 50
+            else:
+                row["su"] = 8
+                row["pct_of_target"] = 40
+        return score
+
+    def test_shortest_category_beats_a_bigger_gain_elsewhere(self):
+        lots = [
+            {"prop_id": "small", "address": "1 Small St", "up2": 10, "width": 3, "depth": 8,
+             "is_mine": True},
+            {"prop_id": "big", "address": "9 Wide Ave", "up2": 40, "width": 8, "depth": 20,
+             "is_mine": True},
+            {"prop_id": "other", "address": "2 Their St", "up2": 4, "width": 3, "depth": 8,
+             "is_mine": False},
+        ]
+        with patch.object(what_if, "_spark_brief", return_value={"hours": 3, "estimated": True}):
+            best = what_if.best_builds(self._score_short_transport(), lots, {})
+        self.assertEqual(best["worst"]["key"], "transportation")
+        self.assertEqual(best["picks"][0]["structure"], "Bus Stop")
+        self.assertEqual(best["picks"][0]["address"], "1 Small St")
+        self.assertNotIn("2 Their St", [row["address"] for row in best["picks"]])
+        self.assertIn("est", best["picks"][0]["label"])
+        essential = next(row for row in best["picks"] if row["category"] == "essential")
+        self.assertGreater(essential["pct_gain"], best["picks"][0]["pct_gain"])
+        self.assertIn("catalog says 0.25", best["picks"][0]["label"])
+        self.assertIn("both sources agree", best["note"])
+        agreed = next(row for row in best["picks"][1:] if not row["catalog"])
+        self.assertIn(agreed["structure"], best["note"])
+
+    def test_says_when_the_short_category_fits_nowhere(self):
+        lots = [{"prop_id": "1", "address": "1 Narrow St", "up2": 20, "width": 4, "depth": 10,
+                 "is_mine": True}]
+        score = self._score_short_transport()
+
+        def only_essential(up2, width, depth):
+            return [{
+                "name": "Bike Shop", "su": 4, "su_cat": "essential",
+                "min_up2": 12, "type": "service", "living_units": 0,
+            }]
+
+        with patch.object(what_if, "structures_that_fit", side_effect=only_essential), \
+             patch.object(what_if, "_spark_brief", return_value=None):
+            best = what_if.best_builds(score, lots, {})
+        self.assertIn("Nothing that adds Transportation", best["note"])
+        self.assertEqual(best["picks"][0]["structure"], "Bike Shop")
+
+
 class CacheGapTests(unittest.TestCase):
     def test_known_build_is_counted_and_not_offered_as_empty(self):
         props = [

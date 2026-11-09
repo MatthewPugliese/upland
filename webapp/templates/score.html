@@ -233,6 +233,12 @@
     .what-if-delta th:first-child, .what-if-delta td:first-child { text-align: left; }
     .delta-up { color: #1E8449; font-weight: 600; }
     .delta-down { color: #C0392B; font-weight: 600; }
+    .what-if-pick {
+        display: block; width: 100%; text-align: left; margin: 0 0 6px;
+        padding: 8px 10px; border: 1px solid #EFE8D8; border-radius: 8px;
+        background: white; font-size: 12px; color: #333; cursor: pointer;
+    }
+    .what-if-pick:hover { border-color: #D4A017; }
 </style>
 {% endblock %}
 
@@ -393,7 +399,8 @@
 
 <div class="spark-panel" id="what-if-panel">
     <div class="spark-panel-title">What if you built here</div>
-    <p class="spark-note">Pick an empty lot and a structure that fits it. The table is the neighborhood score with that one building added. Offices and factories do not change Resident SU.</p>
+    <p class="spark-note">Pick an empty lot and a structure that fits it. The table is the neighborhood score with that one building added. Offices and factories do not change Resident SU. Houses are left out of the short list because they add living units and no service units.</p>
+    <div id="what-if-best"></div>
     <div class="what-if-controls">
         <div>
             <label for="what-if-lot">Empty lot</label>
@@ -857,6 +864,7 @@ loadForSale();
     const mineBox = document.getElementById('what-if-mine');
     const filterWrap = document.getElementById('what-if-filter-wrap');
     const filterBox = document.getElementById('what-if-filter');
+    const bestBox = document.getElementById('what-if-best');
     const gapBox = document.getElementById('what-if-gaps');
     const resultBox = document.getElementById('what-if-result');
     let lots = [];
@@ -958,6 +966,29 @@ loadForSale();
         filterWrap.style.display = mineBox.checked ? 'none' : '';
     }
 
+    function renderBest(data) {
+        bestBox.replaceChildren();
+        const best = data.best;
+        if (!best || !(best.picks || []).length) return;
+        if (best.note) {
+            const note = document.createElement('p');
+            note.className = 'spark-note';
+            note.textContent = best.note;
+            bestBox.appendChild(note);
+        }
+        best.picks.forEach(pick => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'what-if-pick';
+            btn.textContent = pick.label;
+            btn.addEventListener('click', () => {
+                filterBox.value = '';
+                load(pick.prop_id, pick.structure);
+            });
+            bestBox.appendChild(btn);
+        });
+    }
+
     function showGaps(data) {
         const gaps = data.cache_gaps || [];
         gapBox.textContent = gaps.map(gap =>
@@ -983,6 +1014,7 @@ loadForSale();
             settingScope = false;
         }
         lots = data.lots || [];
+        renderBest(data);
         showGaps(data);
         showLotFilter();
         fillLots(data.lot && data.lot.prop_id);
@@ -1003,24 +1035,31 @@ loadForSale();
     structSel.addEventListener('change', () => {
         if (structSel.value) load(lotSel.value, structSel.value);
     });
-    mineBox.addEventListener('change', async () => {
-        if (settingScope) return;
-        const data = await load('', '');
+    function topPick(data) {
+        const picks = data.best && data.best.picks;
+        return picks && picks[0];
+    }
+
+    async function openDefault(data) {
+        const top = topPick(data);
+        if (top) {
+            await load(top.prop_id, top.structure);
+            return;
+        }
         const firstLot = firstBuildable(data.lots);
         if (!firstLot) return;
         const withStructs = await load(firstLot.prop_id, '');
         const first = (withStructs.structures || [])[0];
         if (first) await load(firstLot.prop_id, first.name);
+    }
+
+    mineBox.addEventListener('change', async () => {
+        if (settingScope) return;
+        openDefault(await load('', ''));
     });
     filterBox.addEventListener('input', () => fillLots(lotSel.value));
 
-    load('', '', {omitScope: true}).then(async data => {
-        const firstLot = firstBuildable(data.lots);
-        if (!firstLot) return;
-        const withStructs = await load(firstLot.prop_id, '');
-        const first = (withStructs.structures || [])[0];
-        if (first) await load(firstLot.prop_id, first.name);
-    }).catch(() => {
+    load('', '', {omitScope: true}).then(openDefault).catch(() => {
         resultBox.textContent = 'Could not load the what-if simulator.';
     });
 })();

@@ -329,6 +329,206 @@ def _summary(result: dict, info: dict) -> str:
     return f"{name} does not change Resident SU or living units."
 
 
+def _catalog_cat(label: str) -> str | None:
+    text = (label or "").strip().lower()
+    if text.startswith("public"):
+        return "public"
+    if text in _RESIDENT_CATS:
+        return text
+    return None
+
+
+def catalog_conflicts() -> dict[str, str]:
+    """Resident SU values the lot-fit database and the structure catalog do not share.
+
+    Offices are left out. The catalog's office units are commerce, and this
+    score treats them as zero Resident SU on purpose.
+    """
+    cached = getattr(catalog_conflicts, "_cache", None)
+    if cached is not None:
+        return cached
+    found = {}
+    path = _OPTIMIZER_CACHE / "buildable_structures.json"
+    if path.exists():
+        try:
+            rows = json.loads(path.read_text()).get("structures") or []
+        except (OSError, json.JSONDecodeError):
+            rows = []
+        by_name = {row.get("name"): row for row in rows}
+        for name, info in STRUCTURES.items():
+            cat = info.get("su_cat")
+            if cat not in _RESIDENT_CATS:
+                continue
+            row = by_name.get(name)
+            if not row or row.get("units") is None:
+                continue
+            units = float(row["units"])
+            catalog_cat = _catalog_cat(row.get("type") or "")
+            same_units = abs(units - float(info.get("su") or 0)) < 0.01
+            if same_units and catalog_cat == cat:
+                continue
+            found[name] = (
+                f"catalog says {units:g} {row.get('type')}, "
+                f"not {float(info.get('su') or 0):g} {_CAT_LABELS.get(cat, cat)}"
+            )
+    catalog_conflicts._cache = found
+    return found
+
+
+def _spark_brief(name: str) -> dict | None:
+    try:
+        from spark_estimator import get_spark_cost
+    except ImportError:
+        return None
+    cost = get_spark_cost(name)
+    if not cost or cost.get("spark_hours_at_min") is None:
+        return None
+    return {"hours": cost["spark_hours_at_min"], "estimated": bool(cost.get("estimated"))}
+
+
+def _pick_label(row: dict) -> str:
+    kind = "new type" if row["new_type"] else f"already {row['existing']}"
+    spark = ""
+    if row["spark_hours"] is not None:
+        est = " est" if row["spark_estimated"] else ""
+        spark = f" · {row['spark_hours']:g} spark hrs{est}"
+    if row.get("catalog"):
+        spark += f" · {row['catalog']}"
+    return (
+        f"{row['structure']} on {row['address']} "
+        f"({row['up2']:g} UP², {row['width']:g}^) · "
+        f"{row['category_label']} {row['before_pct']}% → {row['after_pct']}% · "
+        f"+{row['su']:g} SU · {kind}{spark}"
+    )
+
+
+def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> dict:
+    """Best service build on an empty lot you own, one row per structure.
+
+    The shortest category comes first even when a healthier category would
+    gain more percentage points. Within a structure, the smallest fitting
+    lot is the one shown, so a bus stop does not use the biggest property.
+    Houses and offices are left out. They do not raise a short category.
+    """
+    categories = list(score.get("categories") or [])
+    mine = [lot for lot in lots if lot.get("is_mine")]
+    if not categories or not score.get("total_lu"):
+        return {"picks": [], "note": "No neighborhood score to compare against."}
+    worst = min(categories, key=lambda row: row["pct_of_target"])
+    if not mine:
+        return {
+            "worst": {"key": worst["key"], "label": worst["label"], "pct_of_target": worst["pct_of_target"]},
+            "picks": [],
+            "note": "No empty lots of yours have a cached size.",
+        }
+
+    lu = score["total_lu"]
+    conflicts = catalog_conflicts()
+    by_name: dict[str, dict] = {}
+    for lot in mine:
+        width = lot.get("width") or 0
+        depth = lot.get("depth") or 0
+        for struct in structures_that_fit(lot.get("up2") or 0, width, depth):
+            cat_key = struct.get("su_cat")
+            su = struct.get("su") or 0
+            before = next((row for row in categories if row["key"] == cat_key), None)
+            if before is None or not su:
+                continue
+            name = struct["name"]
+            after_su = before["su"] + su
+            target = before["target"]
+            after_pct = min(100, round((after_su / lu) / target * 100)) if target else 0
+            waste = (lot.get("up2") or 0) - (struct.get("min_up2") or 0)
+            spark = _spark_brief(name) or {}
+            row = {
+                "prop_id": lot["prop_id"],
+                "address": lot["address"],
+                "up2": lot.get("up2"),
+                "width": width,
+                "structure": name,
+                "su": su,
+                "category": cat_key,
+                "category_label": before["label"],
+                "before_pct": before["pct_of_target"],
+                "after_pct": after_pct,
+                "pct_gain": after_pct - before["pct_of_target"],
+                "new_type": counts.get(name, 0) == 0,
+                "existing": counts.get(name, 0),
+                "spark_hours": spark.get("hours"),
+                "spark_estimated": spark.get("estimated"),
+                "catalog": conflicts.get(name, ""),
+                "_waste": waste,
+            }
+            current = by_name.get(name)
+            if current is None or (waste, lot["address"]) < (current["_waste"], current["address"]):
+                by_name[name] = row
+
+    def rank(row: dict):
+        spark_sort = row["spark_hours"] if row["spark_hours"] is not None else 10**9
+        return (-row["pct_gain"], 0 if row["new_type"] else 1, spark_sort, row["structure"])
+
+    by_cat: dict[str, dict] = {}
+    extras = []
+    for row in sorted(by_name.values(), key=rank):
+        if row["category"] not in by_cat:
+            by_cat[row["category"]] = row
+        else:
+            extras.append(row)
+
+    picks = []
+    for cat in sorted(categories, key=lambda row: (row["pct_of_target"], row["key"])):
+        chosen = by_cat.get(cat["key"])
+        if chosen:
+            picks.append(chosen)
+    for row in extras:
+        if len(picks) >= limit:
+            break
+        picks.append(row)
+    picks = picks[:limit]
+    for row in picks:
+        row.pop("_waste", None)
+        row["label"] = _pick_label(row)
+
+    if not picks:
+        note = "No service structure in the database fits an empty lot of yours."
+    elif picks[0]["category"] != worst["key"]:
+        note = (
+            f"{worst['label']} is the shortest category at {worst['pct_of_target']}% of target. "
+            f"Nothing that adds {worst['label']} SU fits an empty lot of yours. "
+            f"Next is {picks[0]['structure']} on {picks[0]['address']}."
+        )
+    else:
+        top = picks[0]
+        note = (
+            f"{worst['label']} is the shortest category at {worst['pct_of_target']}% of target. "
+            f"{top['structure']} on {top['address']} is the build that moves it "
+            f"({top['before_pct']}% → {top['after_pct']}%)."
+        )
+        if top.get("catalog"):
+            note += f" The structure catalog disagrees: {top['catalog']}."
+            agreed = next((row for row in picks[1:] if not row.get("catalog")), None)
+            if agreed:
+                note += (
+                    f" The next build both sources agree on is "
+                    f"{agreed['structure']} on {agreed['address']}."
+                )
+        else:
+            bigger = next((row for row in picks[1:] if row["pct_gain"] > top["pct_gain"]), None)
+            if bigger:
+                note += (
+                    f" {bigger['structure']} on {bigger['address']} gains more "
+                    f"({bigger['pct_gain']} points) in {bigger['category_label']}, "
+                    "which is already closer to target."
+                )
+    if any(row["spark_estimated"] for row in picks):
+        note += " Spark hours are at the minimum stack. Ones marked est are not from a live construction timer."
+    return {
+        "worst": {"key": worst["key"], "label": worst["label"], "pct_of_target": worst["pct_of_target"]},
+        "picks": picks,
+        "note": note,
+    }
+
+
 def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | None = None,
                   scope: str | None = None) -> dict:
     hood_name = (hood_name or "").strip() or "Dongan Hills"
@@ -367,6 +567,11 @@ def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | N
         "lots": shown,
         "cache_gaps": pending,
     }
+    counts = _counts(structs)
+    for gap in pending:
+        counts[gap["structure"]] = counts.get(gap["structure"], 0) + 1
+    score = fold_pending(compute_score(hood_name, structs, props), pending)
+    payload["best"] = best_builds(score, mine, counts)
     if not shown and scope == "mine":
         payload["note"] = "No empty lots of yours have a cached size."
         return payload
@@ -378,9 +583,6 @@ def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | N
         payload["error"] = "That property is not an empty lot with a cached size."
         return payload
 
-    counts = _counts(structs)
-    for gap in pending:
-        counts[gap["structure"]] = counts.get(gap["structure"], 0) + 1
     payload["lot"] = lot
     payload["structures"] = fitting_structures(lot, counts)
     if not structure:
@@ -396,7 +598,6 @@ def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | N
         payload["result"] = {"structure": structure, "fits": False, "reason": reason}
         return payload
 
-    score = fold_pending(compute_score(hood_name, structs, props), pending)
     payload["result"] = project_score(score, structure, counts.get(structure, 0))
     payload["result"]["address"] = lot["address"]
     return payload
