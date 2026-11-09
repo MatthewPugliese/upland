@@ -28,6 +28,8 @@ Results are bucketed into three sections:
 
 "Find listings" button on each 1–2 away collection. Fetches async, shows matching for-sale props sorted by UPX price with address, owner, and USD price if applicable.
 
+Neighborhood and street collections are answered from the local listings snapshot. A partial snapshot (the 2026-11-09 reprice is one) shows the stored matches and says the snapshot is not a full city scan. A blank result in that case is not "nothing is for sale." A live scan remains only when the snapshot cannot name the requirement.
+
 ### Phase 4 — Yield Impact Calculator ✅ DONE (2026-07-08)
 
 | Component | File | Status |

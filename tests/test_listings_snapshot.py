@@ -154,6 +154,13 @@ class StoreTests(unittest.TestCase):
             "status": "partial", "finished_at": db.utc_now(),
         })
         self.assertIsNone(db.listings_for_requirement(self.conn, city_id=1, street="STOBE AVE"))
+        partial = db.listings_for_requirement(
+            self.conn, city_id=1, street="STOBE AVE", require_fresh=False,
+        )
+        self.assertEqual([row["id"] for row in partial], ["1"])
+        self.assertFalse(db.target_is_fresh(self.conn, "city:1", 36))
+        self.assertIn("not a full city scan", db.partial_snapshot_note(self.conn))
+        self.assertIn("1 listing", db.partial_snapshot_note(self.conn))
 
         fresh = (db.parse_time(db.utc_now())).strftime("%Y-%m-%dT%H:%M:%SZ")
         db.save_target(self.conn, {

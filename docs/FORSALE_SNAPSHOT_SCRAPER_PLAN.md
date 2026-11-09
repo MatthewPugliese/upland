@@ -15,7 +15,7 @@ Shipped:
 - `scraper/listings_db.py` — `data/listings.db` (separate from `economy.db`), upsert that keeps a stored price when a price lookup fails, and stale-row deletion scoped to one finished city or one finished neighborhood.
 - `scraper/listings_snapshot.py` — resumable crawler. Full page scan only when a city fits in the developers API window (pageSize 100, currentPage max 99, so 9,900 properties). Larger owned cities are deferred; each neighborhood the account owns there is crawled by street `textSearch` instead. A partial or failed scan does not delete unseen listings.
 - `/listings` — browse the snapshot (lowest UPX markup by default).
-- Collection for-sale finder uses the snapshot when that city, or that neighborhood, was completely crawled within 36 hours. Otherwise it still does the live scan.
+- Collection for-sale finder uses a finished city or neighborhood crawl from the last 36 hours as coverage. An empty result then means nothing matching is listed. When the snapshot is only partial, the finder still shows the stored matches and says it is not a full city scan. It does not call Upland for a neighborhood or street requirement the snapshot can name. A blank partial result is not stored as finished coverage.
 
 Decisions that were open in the design below:
 
@@ -25,7 +25,7 @@ Decisions that were open in the design below:
 
 Still open: run the owned-city queue (smallest cities first), then time a real pass before picking a re-scan cadence. Pi deployment is unchanged from the design below and has not been done.
 
-2026-11-09: a live page scan from this machine was blocked by Cloudflare on `api.prod.upland.me` (403 challenge page, before auth could matter). The public property endpoint still works. `listings_snapshot.py --reprice-caches` rechecked 359 for-sale ids already sitting in local property caches and stored 344 that are still listed (294 UPX, 50 USD). That target is `partial` on purpose, so the collection finder does not treat it as coverage and still falls through to a live scan. Lowest UPX markups in that partial set were about +15% in Gardens, Cape Town.
+2026-11-09: a live page scan from this machine was blocked by Cloudflare on `api.prod.upland.me` (403 challenge page, before auth could matter). The public property endpoint still works. `listings_snapshot.py --reprice-caches` rechecked 359 for-sale ids already sitting in local property caches and stored 344 that are still listed (294 UPX, 50 USD). That target stays `partial`. The collection finder reads those rows and labels them as a partial snapshot. It does not treat the reprice as a finished city crawl, and it does not fall through to a live scan for a neighborhood or street requirement. Lowest UPX markups in that partial set were about +15% in Gardens, Cape Town.
 
 ---
 

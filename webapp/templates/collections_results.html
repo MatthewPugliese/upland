@@ -153,6 +153,7 @@
     .forsale-markup.high { background: #FDEDEC; color: #C0392B; }
     .forsale-owner { color: #aaa; font-size: 11px; }
     .forsale-none { color: #aaa; font-style: italic; }
+    .forsale-note { color: #9A7D0A; font-size: 11px; margin-bottom: 6px; }
     .forsale-filters {
         display: flex;
         gap: 10px;
@@ -526,6 +527,12 @@ function markupClass(pct) {
     return "high";
 }
 
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function(ch) {
+        return {"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"}[ch];
+    });
+}
+
 function renderForSaleListings(container) {
     var listings = container._listings || [];
     var currency = container._currencyFilter || "all";
@@ -552,6 +559,10 @@ function renderForSaleListings(container) {
         return aUsd - bUsd;
     });
 
+    var noteHtml = container._note
+        ? '<div class="forsale-note">' + escapeHtml(container._note) + '</div>'
+        : '';
+
     var filterBar = '<div class="forsale-filters">'
         + 'Currency: <select onchange="onForSaleFilterChange(this, \'' + container.id + '\', \'currency\')">'
         + '<option value="all"' + (currency === "all" ? " selected" : "") + '>All</option>'
@@ -565,11 +576,11 @@ function renderForSaleListings(container) {
         + '</div>';
 
     if (!filtered.length) {
-        container.innerHTML = filterBar + '<span class="forsale-none">No listings match this filter.</span>';
+        container.innerHTML = noteHtml + filterBar + '<span class="forsale-none">No listings match this filter.</span>';
         return;
     }
 
-    var html = filterBar;
+    var html = noteHtml + filterBar;
     filtered.forEach(function(l) {
         var upx = l.price_upx ? l.price_upx.toLocaleString() + " UPX" : "—";
         var usd = l.price_usd ? "$" + l.price_usd.toFixed(2) : "";
@@ -612,9 +623,14 @@ function loadForSale(btn, collId) {
                 return;
             }
             var listings = data.listings || [];
+            container._note = data.note || "";
             if (!listings.length) {
-                container.innerHTML = '<span class="forsale-none">No qualifying properties currently for sale.</span>';
-                btn.textContent = "No listings found";
+                var emptyText = data.coverage === "partial"
+                    ? (data.note || "The local snapshot has no matching listings. That snapshot is not a full city scan.")
+                    : "No qualifying properties currently for sale.";
+                container.innerHTML = '<span class="forsale-none">' + escapeHtml(emptyText) + '</span>';
+                btn.textContent = data.coverage === "partial" ? "Snapshot only" : "No listings found";
+                if (data.coverage === "partial") btn.disabled = false;
                 return;
             }
             container._listings = listings;

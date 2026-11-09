@@ -272,11 +272,17 @@ def api_collections_forsale():
 
     try:
         find_forsale_for_collection = _forsale()
-        listings = find_forsale_for_collection(coll_entry, user_prop_ids)
+        answer = find_forsale_for_collection(coll_entry, user_prop_ids)
+        listings = answer["listings"]
         # Cache listings server-side so the budget optimizer can reuse them
         store.setdefault("listings", {})[str(coll_id)] = listings
         _save_coll_store(store)
-        return jsonify({"listings": listings, "count": len(listings)})
+        return jsonify({
+            "listings": listings,
+            "count": len(listings),
+            "coverage": answer.get("coverage"),
+            "note": answer.get("note"),
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -346,7 +352,7 @@ def api_collections_budget_optimize():
             if cid in listings_by_id:
                 continue
             try:
-                listings_by_id[cid] = find_forsale_for_collection(coll, user_prop_ids)
+                listings_by_id[cid] = find_forsale_for_collection(coll, user_prop_ids)["listings"]
             except Exception:
                 listings_by_id[cid] = []
         store["listings"] = listings_by_id

@@ -463,24 +463,29 @@ def listings_for_requirement(
     street: str | None = None,
     max_age_hours: float = 36,
     limit: int = 200,
+    require_fresh: bool = True,
 ) -> list[dict] | None:
     """Listings that satisfy a collection requirement, or None if the snapshot can't answer.
 
-    None means the caller should fall back to a live scan. An empty list means
-    the snapshot is fresh and nothing is listed.
-    Street requirements need a complete city scan. A single neighborhood does
-    not cover every property on a street.
+    None means the caller should fall back to a live scan. With require_fresh
+    (the default), an empty list means the snapshot is fresh and nothing is
+    listed. Street requirements need a complete city scan. A single neighborhood
+    does not cover every property on a street.
+
+    require_fresh=False still applies those filters, but an empty list only
+    means none of the stored rows matched. It does not mean the city was crawled,
+    and it must not be stored as finished coverage.
     """
     city_id = int(city_id)
     hood = (neighborhood or "").strip().upper() or None
     if street:
-        if not target_is_fresh(conn, f"city:{city_id}", max_age_hours):
+        if require_fresh and not target_is_fresh(conn, f"city:{city_id}", max_age_hours):
             return None
     elif hood:
         fresh = target_is_fresh(conn, f"city:{city_id}", max_age_hours) or target_is_fresh(
             conn, f"hood:{city_id}:{hood}", max_age_hours
         )
-        if not fresh:
+        if require_fresh and not fresh:
             return None
     else:
         return None
@@ -510,6 +515,17 @@ def listings_for_requirement(
         item["price_upx"] or 10 ** 12,
     ))
     return views[:limit]
+
+
+def partial_snapshot_note(conn: sqlite3.Connection) -> str:
+    """Say that stored rows are not a finished city crawl."""
+    count = int(summary(conn)["listings"] or 0)
+    noun = "listing" if count == 1 else "listings"
+    return (
+        f"Showing matches from the local snapshot ({count} {noun}). "
+        "That snapshot is not a full city scan, so a collection with no rows here "
+        "may still have properties for sale."
+    )
 
 
 def search_listings(

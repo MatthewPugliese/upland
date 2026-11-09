@@ -3,13 +3,15 @@ UplandScope — For-Sale Finder
 
 Given a collection entry (from collection_tracker.analyze_collections),
 finds properties currently listed for sale that would qualify for that
-collection and returns them with live UPX/USD prices.
+collection and returns them with UPX/USD prices.
 
-Uses:
-  - Developers API (upland_get) to find candidates with "For sale" status
-  - Public Upland API to fetch actual listing prices
-  - Neighborhood property cache when available (fast path)
-  - Results cached 30 minutes to limit API hammering
+A neighborhood or street requirement is answered from the local listings
+snapshot. A finished crawl within 36 hours is coverage: an empty list means
+nothing matching is listed. Any other stored rows are a partial snapshot.
+That answer is labeled, and an empty list is not treated as a finished scan.
+A live developers-API scan runs only when the snapshot cannot name the
+requirement (no database, no city, or a type other than neighborhood or street).
+Results are cached 30 minutes.
 """
 
 import json
@@ -184,17 +186,66 @@ def _get_street_candidates(parsed_req: dict, city_id: int) -> list:
     return _search_city_by_street(city_id, search_term)
 
 
-def _snapshot_candidates(coll_entry: dict):
-    """Priced listings from the local snapshot, or None when it cannot answer.
+def _read_forsale_cache(cache_path: Path):
+    """Cached answer, or None. An older bare list was a finished response."""
+    if not cache_path.exists():
+        return None
+    age = time.time() - cache_path.stat().st_mtime
+    if age >= FORSALE_CACHE_TTL:
+        return None
+    try:
+        with open(cache_path) as f:
+            cached = json.load(f)
+    except Exception:
+        return None
+    if isinstance(cached, list):
+        return {"listings": cached, "coverage": "complete", "note": None}
+    if isinstance(cached, dict) and isinstance(cached.get("listings"), list):
+        return {
+            "listings": cached["listings"],
+            "coverage": cached.get("coverage") or "complete",
+            "note": cached.get("note"),
+        }
+    return None
 
-    None keeps the live scan. An empty list means the snapshot is fresh and
-    nothing matching is listed, so the live scan stays idle.
+
+def _write_forsale_cache(cache_path: Path, answer: dict) -> None:
+    with open(cache_path, "w") as f:
+        json.dump(
+            {
+                "listings": answer["listings"],
+                "coverage": answer["coverage"],
+                "note": answer["note"],
+            },
+            f,
+        )
+
+
+def _trim_listings(rows: list, user_prop_ids: set) -> list:
+    owned = {str(prop_id) for prop_id in user_prop_ids}
+    kept = [row for row in rows if str(row.get("id")) not in owned]
+    kept.sort(key=lambda row: (row.get("price_upx") is None, row.get("price_upx") or 0))
+    return kept[:20]
+
+
+def _snapshot_answer(coll_entry: dict):
+    """Local listings for this collection, or None when the snapshot cannot name them.
+
+    None keeps the live scan. coverage "complete" is a finished crawl within
+    36 hours, so an empty list means nothing matching is listed. coverage
+    "partial" is whatever priced rows are already stored. An empty partial
+    list is not proof the city was crawled.
     """
     scraper_dir = str(SCRIPT_DIR.parent / "scraper")
     if scraper_dir not in sys.path:
         sys.path.insert(0, scraper_dir)
     try:
-        from listings_db import DEFAULT_DB, connect, listings_for_requirement
+        from listings_db import (
+            DEFAULT_DB,
+            connect,
+            listings_for_requirement,
+            partial_snapshot_note,
+        )
     except Exception:
         return None
     if not DEFAULT_DB.exists():
@@ -209,61 +260,72 @@ def _snapshot_candidates(coll_entry: dict):
     street = None
     if req_type in ("neighborhood_city", "neighborhood"):
         neighborhood = parsed.get("neighborhood")
+        if not neighborhood:
+            return None
     elif req_type in ("street_city", "street"):
         street = parsed.get("street")
+        if not street:
+            return None
     else:
         return None
 
     conn = connect(DEFAULT_DB)
     try:
-        return listings_for_requirement(
-            conn,
-            city_id=int(city_id),
-            neighborhood=neighborhood,
-            street=street,
-        )
+        query = dict(city_id=int(city_id), neighborhood=neighborhood, street=street)
+        fresh = listings_for_requirement(conn, **query)
+        if fresh is not None:
+            return {"coverage": "complete", "listings": fresh, "note": None}
+        partial = listings_for_requirement(conn, require_fresh=False, **query)
+        if partial is None:
+            return None
+        return {
+            "coverage": "partial",
+            "listings": partial,
+            "note": partial_snapshot_note(conn),
+        }
     except Exception:
         return None
     finally:
         conn.close()
 
 
-def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
+def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> dict:
     """
     Find for-sale properties that would qualify for a collection.
 
-    Returns list of dicts sorted by UPX price ascending (all qualifying listings
-    included, not pre-filtered by currency — the UI filters/sorts client-side):
-      {id, address, price_upx, price_usd, currency, markup_pct, mint_price,
-       city, neighborhood, owner_username}
+    Returns {listings, coverage, note}. listings are sorted by UPX price
+    ascending and are not pre-filtered by currency — the UI filters client-side.
+    Each listing is {id, address, price_upx, price_usd, currency, markup_pct,
+    mint_price, city, neighborhood, owner_username}.
+
+    coverage is "complete" (finished local crawl), "partial" (stored rows only),
+    "live" (a scan just ran), or "unsupported". note is set for a partial snapshot.
     """
     coll_id = coll_entry["id"]
     cache_path = FORSALE_CACHE_DIR / f"coll_{coll_id}.json"
-
-    # Serve from cache if fresh
-    if cache_path.exists():
-        age = time.time() - cache_path.stat().st_mtime
-        if age < FORSALE_CACHE_TTL:
-            with open(cache_path) as f:
-                return json.load(f)
+    cached = _read_forsale_cache(cache_path)
+    if cached is not None:
+        return cached
 
     req_type = coll_entry.get("req_type", "")
     parsed_req = coll_entry.get("parsed_req", {})
     city_id = coll_entry.get("city_id")
 
     if req_type not in SUPPORTABLE_TYPES:
-        return []
+        return {"listings": [], "coverage": "unsupported", "note": None}
 
-    # A fresh snapshot already has prices. Fall through to the live scan only
-    # when this city (or neighborhood) has not been crawled recently.
-    snapshot = _snapshot_candidates(coll_entry)
+    # A snapshot that can name this requirement answers it, including a partial
+    # one. Falling through here would call Upland and could cache a miss as if
+    # the city had been searched.
+    snapshot = _snapshot_answer(coll_entry)
     if snapshot is not None:
-        snapshot = [row for row in snapshot if str(row["id"]) not in user_prop_ids]
-        snapshot.sort(key=lambda row: (row["price_upx"] is None, row["price_upx"] or 0))
-        snapshot = snapshot[:20]
-        with open(cache_path, "w") as f:
-            json.dump(snapshot, f)
-        return snapshot
+        answer = {
+            "listings": _trim_listings(snapshot["listings"], user_prop_ids),
+            "coverage": snapshot["coverage"],
+            "note": snapshot["note"],
+        }
+        _write_forsale_cache(cache_path, answer)
+        return answer
 
     # Get candidates
     if req_type in ("street_city", "street"):
@@ -272,7 +334,7 @@ def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
         candidates = _get_neighborhood_candidates(parsed_req, city_id)
 
     if not candidates:
-        return []
+        return {"listings": [], "coverage": "live", "note": None}
 
     # Filter: for sale only, not owned by user
     for_sale = [
@@ -282,10 +344,9 @@ def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
     ]
 
     if not for_sale:
-        result = []
-        with open(cache_path, "w") as f:
-            json.dump(result, f)
-        return result
+        answer = {"listings": [], "coverage": "live", "note": None}
+        _write_forsale_cache(cache_path, answer)
+        return answer
 
     # Normalize shape and fetch prices
     normalized = []
@@ -311,8 +372,6 @@ def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
     # Currency filtering and markup sorting are done client-side — all listings
     # are returned here so the UI can re-slice without re-fetching.
     result = sorted(normalized, key=lambda x: (x["price_upx"] is None, x["price_upx"] or 0))
-
-    with open(cache_path, "w") as f:
-        json.dump(result, f)
-
-    return result
+    answer = {"listings": result, "coverage": "live", "note": None}
+    _write_forsale_cache(cache_path, answer)
+    return answer
