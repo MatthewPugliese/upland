@@ -351,7 +351,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 ## Additional Feature Ideas
 
 - [x] **Neighborhood price breakdown** *(table, not a map choropleth yet)* — shipped on `/economy`
-  (2026-08-16, `webapp/economy.py:neighborhoods()`). Sortable table of avg UPX/USD price + trade
+  (2026-08-16, `webapp/economy.py:neighborhoods()`). City, neighborhood, and buyer/seller tables count property sales only. The hero UPX total still includes spark and NFT sales. Sortable table of avg UPX/USD price + trade
   volume per neighborhood, capped to the top 50 by trade count (1,035 neighborhoods qualify in a
   30d window — shows "top 50 of N" rather than silently truncating). A true choropleth map layer
   is still unbuilt — would need per-neighborhood centroid/boundary geometry, which isn't cheaply

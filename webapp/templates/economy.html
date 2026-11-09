@@ -303,7 +303,7 @@
 
 <div class="section-heading" style="margin-top:8px;">
     <span>City Breakdown</span>
-    <span style="font-size:11px;font-weight:400;color:#aaa;">click a row to filter feed</span>
+    <span style="font-size:11px;font-weight:400;color:#aaa;">property sales only · click a row to filter feed</span>
 </div>
 <div class="cities-wrap">
     <table class="cities-table" id="cities-table">
@@ -327,7 +327,7 @@
 
 <div class="section-heading" style="margin-top:8px;">
     <span>Neighborhood Price Breakdown</span>
-    <span style="font-size:11px;font-weight:400;color:#aaa;" id="hoods-count-note">which neighborhoods are hot vs depressed</span>
+    <span style="font-size:11px;font-weight:400;color:#aaa;" id="hoods-count-note">property sales only · which neighborhoods are hot vs depressed</span>
 </div>
 <div class="cities-wrap">
     <table class="cities-table" id="hoods-table">
@@ -781,8 +781,8 @@ async function loadHoods() {
     hoodsTotal = d.total || hoodsData.length;
     document.getElementById('hoods-count-note').textContent =
         hoodsTotal > hoodsData.length
-            ? `showing top ${hoodsData.length} of ${hoodsTotal} by trade count`
-            : 'which neighborhoods are hot vs depressed';
+            ? `property sales only · showing top ${hoodsData.length} of ${hoodsTotal} by trade count`
+            : 'property sales only · which neighborhoods are hot vs depressed';
     renderHoods();
 }
 
