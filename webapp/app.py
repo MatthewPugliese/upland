@@ -534,7 +534,8 @@ def score_what_if():
     prop_id = request.args.get("prop_id") or None
     structure = request.args.get("structure") or None
     scope = request.args.get("scope") or None
-    return jsonify(build_what_if(hood, prop_id, structure, scope))
+    plan_step = request.args.get("plan_step")
+    return jsonify(build_what_if(hood, prop_id, structure, scope, plan_step))
 
 
 @app.route("/api/score/report")

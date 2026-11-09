@@ -217,6 +217,23 @@ def fold_pending(score: dict, pending: list[dict]) -> dict:
     return score
 
 
+def fold_plan(score: dict, counts: dict, earlier: list[dict]) -> tuple[dict, str]:
+    """Count earlier rows in the build order before the row on screen."""
+    if not earlier:
+        return score, ""
+    total_props = score.get("total_props") or 0
+    for row in earlier:
+        name = row["structure"]
+        folded = project_score(score, name, counts.get(name, 0))["after"]
+        folded["total_props"] = total_props
+        score = folded
+        counts[name] = counts.get(name, 0) + 1
+    built = ", ".join(f"{row['structure']} on {row['address']}" for row in earlier)
+    if len(earlier) == 1:
+        return score, f"Counts the earlier build in the order: {built}."
+    return score, f"Counts the {len(earlier)} earlier builds in the order: {built}."
+
+
 def _counts(structs: dict) -> dict[str, int]:
     counts: dict[str, int] = {}
     for buildings in structs.values():
@@ -584,9 +601,10 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
         if not pool:
             break
         take(pool)
-    for row in picks:
+    for step, row in enumerate(picks):
         row.pop("_waste", None)
         row.pop("_tight", None)
+        row["step"] = step
         row["label"] = _pick_label(row)
 
     if not picks:
@@ -630,7 +648,7 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
 
 
 def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | None = None,
-                  scope: str | None = None) -> dict:
+                  scope: str | None = None, plan_step: str | None = None) -> dict:
     hood_name = (hood_name or "").strip() or "Dongan Hills"
     structs = get_cached_structures(hood_name)
     if structs is None:
@@ -698,6 +716,19 @@ def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | N
         payload["result"] = {"structure": structure, "fits": False, "reason": reason}
         return payload
 
+    plan_note = ""
+    picks = payload["best"].get("picks") or []
+    if plan_step not in (None, ""):
+        try:
+            step = int(plan_step)
+        except (TypeError, ValueError):
+            step = -1
+        if 0 <= step < len(picks):
+            chosen = picks[step]
+            if chosen["prop_id"] == str(prop_id) and chosen["structure"] == structure:
+                score, plan_note = fold_plan(score, counts, picks[:step])
     payload["result"] = project_score(score, structure, counts.get(structure, 0))
     payload["result"]["address"] = lot["address"]
+    if plan_note:
+        payload["result"]["plan_note"] = plan_note
     return payload

@@ -234,6 +234,26 @@ class BestBuildTests(unittest.TestCase):
         self.assertEqual(best["picks"][0]["structure"], "Bike Shop")
 
 
+class PlanStackTests(unittest.TestCase):
+    def test_earlier_rows_are_already_counted(self):
+        score = _score(lu=200, essential_su=10)
+        counts = {}
+        folded, note = what_if.fold_plan(score, counts, [
+            {"structure": "Bike Shop", "address": "1 Main St"},
+        ])
+        essential = next(row for row in folded["categories"] if row["key"] == "essential")
+        self.assertEqual(essential["su"], 14)
+        self.assertIn("Bike Shop on 1 Main St", note)
+        self.assertEqual(counts["Bike Shop"], 1)
+        self.assertEqual(score["categories"][0]["su"], 10)
+
+    def test_no_earlier_rows_leaves_the_score_alone(self):
+        score = _score()
+        folded, note = what_if.fold_plan(score, {}, [])
+        self.assertIs(folded, score)
+        self.assertEqual(note, "")
+
+
 class CacheGapTests(unittest.TestCase):
     def test_known_build_is_counted_and_not_offered_as_empty(self):
         props = [

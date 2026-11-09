@@ -959,8 +959,12 @@ loadForSale();
                 <td>${before.variety} → ${after.variety}</td>
             </tr>`;
         }).join('');
+        const planNote = result.plan_note
+            ? `<p class="spark-note">${esc(result.plan_note)}</p>`
+            : '';
         resultBox.innerHTML = `
             <p><strong>${esc(result.structure)}</strong> on ${esc(result.address)}. ${esc(result.summary)}</p>
+            ${planNote}
             <p class="spark-note">Living units ${result.before.total_lu} → ${result.after.total_lu}.
             SU/LU ${result.before.su_per_lu.toFixed(3)} → ${result.after.su_per_lu.toFixed(3)}.
             This is the whole neighborhood, not just your properties.</p>
@@ -991,7 +995,7 @@ loadForSale();
             btn.textContent = pick.label;
             btn.addEventListener('click', () => {
                 filterBox.value = '';
-                load(pick.prop_id, pick.structure);
+                load(pick.prop_id, pick.structure, {planStep: pick.step});
             });
             bestBox.appendChild(btn);
         });
@@ -1014,6 +1018,7 @@ loadForSale();
         if (!opts.omitScope) params.set('scope', mineBox.checked ? 'mine' : 'all');
         if (propId) params.set('prop_id', propId);
         if (structure) params.set('structure', structure);
+        if (opts.planStep != null) params.set('plan_step', String(opts.planStep));
         const resp = await fetch('/api/score/what-if?' + params.toString());
         const data = await resp.json();
         if (opts.omitScope && data.scope) {
@@ -1051,7 +1056,7 @@ loadForSale();
     async function openDefault(data) {
         const top = topPick(data);
         if (top) {
-            await load(top.prop_id, top.structure);
+            await load(top.prop_id, top.structure, {planStep: top.step || 0});
             return;
         }
         const firstLot = firstBuildable(data.lots);
