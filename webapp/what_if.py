@@ -456,6 +456,8 @@ def _pick_label(row: dict) -> str:
         spark = f" · {row['spark_hours']:g} spark hrs{est}"
     if row.get("catalog"):
         spark += f" · {row['catalog']}"
+    if row.get("close_fit"):
+        spark += " · within 0.5 of the minimum width"
     return (
         f"{row['structure']} on {row['address']} "
         f"({row['up2']:g} UP², {row['width']:g}^) · "
@@ -465,12 +467,12 @@ def _pick_label(row: dict) -> str:
 
 
 def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> dict:
-    """Best service build on an empty lot you own, one row per structure.
+    """A build order for empty lots you own. Each row uses a different lot.
 
-    The shortest category comes first even when a healthier category would
-    gain more percentage points. Within a structure, the smallest fitting
-    lot is the one shown, so a bus stop does not use the biggest property.
-    Houses and offices are left out. They do not raise a short category.
+    The shortest category is filled first. A structure the catalog agrees
+    with is chosen over a disputed one in the same category. The percentages
+    stack, so a later row starts from the earlier builds. Houses and offices
+    are left out. They do not raise a short category.
     """
     categories = list(score.get("categories") or [])
     mine = [lot for lot in lots if lot.get("is_mine")]
@@ -486,69 +488,99 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
 
     lu = score["total_lu"]
     conflicts = catalog_conflicts()
-    by_name: dict[str, dict] = {}
-    for lot in mine:
-        width = lot.get("width") or 0
-        depth = lot.get("depth") or 0
-        for struct in structures_that_fit(lot.get("up2") or 0, width, depth):
-            cat_key = struct.get("su_cat")
-            su = struct.get("su") or 0
-            before = next((row for row in categories if row["key"] == cat_key), None)
-            if before is None or not su:
-                continue
-            name = struct["name"]
-            after_su = before["su"] + su
-            target = before["target"]
-            after_pct = min(100, round((after_su / lu) / target * 100)) if target else 0
-            waste = (lot.get("up2") or 0) - (struct.get("min_up2") or 0)
-            spark = _spark_brief(name) or {}
-            row = {
-                "prop_id": lot["prop_id"],
-                "address": lot["address"],
-                "up2": lot.get("up2"),
-                "width": width,
-                "structure": name,
-                "su": su,
-                "category": cat_key,
-                "category_label": before["label"],
-                "before_pct": before["pct_of_target"],
-                "after_pct": after_pct,
-                "pct_gain": after_pct - before["pct_of_target"],
-                "new_type": counts.get(name, 0) == 0,
-                "existing": counts.get(name, 0),
-                "spark_hours": spark.get("hours"),
-                "spark_estimated": spark.get("estimated"),
-                "catalog": conflicts.get(name, ""),
-                "_waste": waste,
-            }
-            current = by_name.get(name)
-            if current is None or (waste, lot["address"]) < (current["_waste"], current["address"]):
-                by_name[name] = row
-
-    def rank(row: dict):
-        spark_sort = row["spark_hours"] if row["spark_hours"] is not None else 10**9
-        return (-row["pct_gain"], 0 if row["new_type"] else 1, spark_sort, row["structure"])
-
-    by_cat: dict[str, dict] = {}
-    extras = []
-    for row in sorted(by_name.values(), key=rank):
-        if row["category"] not in by_cat:
-            by_cat[row["category"]] = row
-        else:
-            extras.append(row)
-
+    running = {}
+    for row in categories:
+        running[row["key"]] = dict(row)
+        running[row["key"]]["variety_names"] = list(row.get("variety_names") or [])
+    used_lots: set[str] = set()
+    used_names: set[str] = set()
     picks = []
+
+    def candidates(cat_key: str | None, agreed_only: bool) -> list[dict]:
+        found = []
+        for lot in mine:
+            if lot["prop_id"] in used_lots:
+                continue
+            width = lot.get("width") or 0
+            depth = lot.get("depth") or 0
+            for struct in structures_that_fit(lot.get("up2") or 0, width, depth):
+                name = struct["name"]
+                struct_cat = struct.get("su_cat")
+                su = struct.get("su") or 0
+                if name in used_names or not su:
+                    continue
+                if cat_key is not None and struct_cat != cat_key:
+                    continue
+                before = running.get(struct_cat)
+                if before is None:
+                    continue
+                catalog = conflicts.get(name, "")
+                if agreed_only and catalog:
+                    continue
+                after_su = before["su"] + su
+                target = before["target"]
+                after_pct = min(100, round((after_su / lu) / target * 100)) if target else 0
+                spark = _spark_brief(name) or {}
+                found.append({
+                    "prop_id": lot["prop_id"],
+                    "address": lot["address"],
+                    "up2": lot.get("up2"),
+                    "width": width,
+                    "structure": name,
+                    "su": su,
+                    "category": struct_cat,
+                    "category_label": before["label"],
+                    "before_pct": before["pct_of_target"],
+                    "after_pct": after_pct,
+                    "pct_gain": after_pct - before["pct_of_target"],
+                    "new_type": counts.get(name, 0) == 0,
+                    "existing": counts.get(name, 0),
+                    "spark_hours": spark.get("hours"),
+                    "spark_estimated": spark.get("estimated"),
+                    "catalog": catalog,
+                    "_waste": (lot.get("up2") or 0) - (struct.get("min_up2") or 0),
+                    "_tight": 0 if width - float(struct.get("min_width") or 0) >= 0.5 else 1,
+                    "close_fit": width - float(struct.get("min_width") or 0) < 0.5,
+                })
+        return found
+
+    def take(pool: list[dict]) -> None:
+        def sort_key(row: dict):
+            spark_sort = row["spark_hours"] if row["spark_hours"] is not None else 10**9
+            return (
+                -row["pct_gain"],
+                0 if row["new_type"] else 1,
+                spark_sort,
+                row["_tight"],
+                row["_waste"],
+                row["address"],
+                row["structure"],
+            )
+        chosen = min(pool, key=sort_key)
+        cat = running[chosen["category"]]
+        cat["su"] = cat["su"] + chosen["su"]
+        cat["pct_of_target"] = chosen["after_pct"]
+        names = set(cat["variety_names"])
+        names.add(chosen["structure"])
+        cat["variety_names"] = sorted(names)
+        used_lots.add(chosen["prop_id"])
+        used_names.add(chosen["structure"])
+        picks.append(chosen)
+
     for cat in sorted(categories, key=lambda row: (row["pct_of_target"], row["key"])):
-        chosen = by_cat.get(cat["key"])
-        if chosen:
-            picks.append(chosen)
-    for row in extras:
         if len(picks) >= limit:
             break
-        picks.append(row)
-    picks = picks[:limit]
+        pool = candidates(cat["key"], agreed_only=True) or candidates(cat["key"], agreed_only=False)
+        if pool:
+            take(pool)
+    while len(picks) < limit:
+        pool = candidates(None, agreed_only=True) or candidates(None, agreed_only=False)
+        if not pool:
+            break
+        take(pool)
     for row in picks:
         row.pop("_waste", None)
+        row.pop("_tight", None)
         row["label"] = _pick_label(row)
 
     if not picks:
@@ -582,6 +614,8 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
                     f"({bigger['pct_gain']} points) in {bigger['category_label']}, "
                     "which is already closer to target."
                 )
+    if len(picks) > 1:
+        note += " Each row uses a different lot, and the percentages stack in this order."
     if any(row["spark_estimated"] for row in picks):
         note += " Spark hours are at the minimum stack. Ones marked est are not from a live construction timer."
     return {

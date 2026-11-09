@@ -1044,8 +1044,8 @@ loadForSale();
         if (structSel.value) load(lotSel.value, structSel.value);
     });
     function topPick(data) {
-        const picks = data.best && data.best.picks;
-        return picks && picks[0];
+        const picks = (data.best && data.best.picks) || [];
+        return picks.find(pick => !pick.catalog) || picks[0];
     }
 
     async function openDefault(data) {

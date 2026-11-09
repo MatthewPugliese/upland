@@ -158,7 +158,7 @@ class BestBuildTests(unittest.TestCase):
                 row["su"] = 1
                 row["pct_of_target"] = 10
             elif row["key"] == "essential":
-                row["pct_of_target"] = 50
+                row["pct_of_target"] = 35
             else:
                 row["su"] = 8
                 row["pct_of_target"] = 40
@@ -167,6 +167,8 @@ class BestBuildTests(unittest.TestCase):
     def test_shortest_category_beats_a_bigger_gain_elsewhere(self):
         lots = [
             {"prop_id": "small", "address": "1 Small St", "up2": 10, "width": 3, "depth": 8,
+             "is_mine": True},
+            {"prop_id": "mid", "address": "4 Mid St", "up2": 20, "width": 4.2, "depth": 12,
              "is_mine": True},
             {"prop_id": "big", "address": "9 Wide Ave", "up2": 40, "width": 8, "depth": 20,
              "is_mine": True},
@@ -178,6 +180,11 @@ class BestBuildTests(unittest.TestCase):
         self.assertEqual(best["worst"]["key"], "transportation")
         self.assertEqual(best["picks"][0]["structure"], "Bus Stop")
         self.assertEqual(best["picks"][0]["address"], "1 Small St")
+        self.assertEqual(
+            len({row["prop_id"] for row in best["picks"]}),
+            len(best["picks"]),
+        )
+        self.assertIn("different lot", best["note"])
         self.assertNotIn("2 Their St", [row["address"] for row in best["picks"]])
         self.assertIn("est", best["picks"][0]["label"])
         essential = next(row for row in best["picks"] if row["category"] == "essential")
@@ -186,6 +193,29 @@ class BestBuildTests(unittest.TestCase):
         self.assertIn("both sources agree", best["note"])
         agreed = next(row for row in best["picks"][1:] if not row["catalog"])
         self.assertIn(agreed["structure"], best["note"])
+
+    def test_half_up_of_slack_beats_a_tighter_lot(self):
+        lots = [
+            {"prop_id": "tight", "address": "1 Tight St", "up2": 8, "width": 2.2, "depth": 6,
+             "is_mine": True},
+            {"prop_id": "room", "address": "2 Room St", "up2": 12, "width": 3.0, "depth": 6,
+             "is_mine": True},
+        ]
+        with patch.object(what_if, "_spark_brief", return_value=None):
+            best = what_if.best_builds(self._score_short_transport(), lots, {})
+        self.assertEqual(best["picks"][0]["structure"], "Bus Stop")
+        self.assertEqual(best["picks"][0]["address"], "2 Room St")
+        self.assertFalse(best["picks"][0]["close_fit"])
+
+    def test_a_lot_within_half_a_up_of_the_minimum_is_labeled(self):
+        lots = [{
+            "prop_id": "tight", "address": "1 Tight St", "up2": 8, "width": 2.2, "depth": 6,
+            "is_mine": True,
+        }]
+        with patch.object(what_if, "_spark_brief", return_value=None):
+            best = what_if.best_builds(self._score_short_transport(), lots, {})
+        self.assertTrue(best["picks"][0]["close_fit"])
+        self.assertIn("within 0.5 of the minimum width", best["picks"][0]["label"])
 
     def test_says_when_the_short_category_fits_nowhere(self):
         lots = [{"prop_id": "1", "address": "1 Narrow St", "up2": 20, "width": 4, "depth": 10,
