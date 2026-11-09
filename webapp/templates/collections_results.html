@@ -705,11 +705,13 @@ function loadCollectionMap(btn, collId) {
                 status.textContent = "Error: " + data.error;
                 return;
             }
-            var note = data.owned_count + " owned, " + data.listed_count + " for sale, "
-                + data.unlisted_count + " not listed";
+            var note = data.owned_count + " owned, " + data.listed_count + " for sale";
+            if (data.unlisted_count) note += ", " + data.unlisted_count + " not listed";
+            if (data.unknown_count) note += ", " + data.unknown_count + " with no sale status";
             if (data.truncated) {
                 note += " (showing " + data.total_plotted + " of " + data.total_candidates + " properties)";
             }
+            if (data.note) note += ". " + data.note;
             status.textContent = note;
             window.open(data.map_url, "_blank");
         })

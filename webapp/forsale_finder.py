@@ -89,14 +89,20 @@ def _fetch_prices_batch(candidates):
     return candidates
 
 
-def _load_neighborhood_cache(hood_name: str) -> list:
-    """Load the webapp neighborhood property cache if it has real statuses (not precache placeholders)."""
+def _load_neighborhood_cache(hood_name: str, allow_unknown: bool = False) -> list:
+    """Load the webapp neighborhood property cache.
+
+    The for-sale finder skips a file whose statuses are all Unknown. The
+    collection map passes allow_unknown so that file can still be plotted.
+    """
     safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in hood_name).strip().replace(" ", "_")
     path = CACHE_DIR / "neighborhoods" / f"{safe}_props_cache.json"
     if not path.exists():
         return []
     with open(path) as f:
         props = json.load(f)
+    if allow_unknown:
+        return props
     # Only use if statuses are real (not all "Unknown" from precache script)
     known_status = [p for p in props if p.get("status") not in (None, "Unknown")]
     if not known_status:

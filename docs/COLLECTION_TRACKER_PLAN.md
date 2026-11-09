@@ -117,10 +117,13 @@ Upland has hundreds of collections. Players typically:
   to "Find listings" for near-complete collections). Plots each candidate property at its live
   centerlat/centerlng (folium circle markers, not full building-outline matching like the
   neighborhood optimizer maps — much cheaper, no OSM/geocoding pipeline needed). Colors: green =
-  owned, orange = missing + for sale, red = missing + not listed. Capped at 200 plotted properties
-  for large collections, prioritizing owned/for-sale first so a truncated map doesn't arbitrarily
-  omit the properties that actually matter. Mac-only (folium isn't on the Pi's lightweight image),
-  same accepted limitation as the other map features.
+  owned, orange = missing + for sale, red = missing + not listed, gray = the local neighborhood
+  file has no sale status. Capped at 200 plotted properties, prioritizing owned, then for-sale,
+  then unknown status. Folium is on the Pi webapp image. As of 2026-11-09 the map does not start
+  a developers-API city scan. It uses the neighborhood property file when one exists (including
+  files whose sale status is still Unknown) and for-sale rows from the local listings snapshot.
+  With no neighborhood file, it plots owned properties that match the requirement plus those
+  snapshot rows, and says unlisted properties are left out.
 
   **Found and fixed a real bug while building this:** `forsale_finder._get_neighborhood_candidates`
   had an empty-string substring bug — landmark/locked properties with no neighborhood assigned
