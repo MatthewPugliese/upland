@@ -224,10 +224,9 @@ dongan_hills_zone_map.py
   - Render as a filled overlay on top of the lot polygon
 
 - [x] **For-sale scanner**
-  - `/api/score/forsale` cross-refs props_cache (status == "For sale") with generate_report recommendations
-  - Fetches live listing prices from public Upland API, cached 30 min per neighborhood
-  - "Buy Opportunities" panel on score dashboard: sorted by SU gain, shows UPX/SU efficiency
-  - 1919 Hylan Blvd surfaces as top DH buy (62 SU, Large Court House)
+  - `/api/score/forsale` ranks empty for-sale lots with the same rules as the build order. Lots you already own are left out. A category already at 80% does not get a buy under 3 SU
+  - Asking prices come from the local listings snapshot. The score page does not call the Upland API for this list
+  - "Buy Opportunities" panel on the score dashboard shows the structure, the score change, the asking price, and the markup over mint
 
 - [x] **Cache full Upland API response per property** — shipped 2026-07-07
   - `get_upland_property_structures()` in `neighborhood_map.py` now also stores `residents`, `stepSparks`, `minStackedSparks`, `maxStackedSparks`, `polygon`, `lat`, `lng`, `scale`, `rotate` per building

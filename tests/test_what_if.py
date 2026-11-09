@@ -347,5 +347,50 @@ class BuildOrderAlignTests(unittest.TestCase):
         self.assertEqual(rows[2]["current_names"], ["Barn & Nobles"])
 
 
+class ForSaleBuildTests(unittest.TestCase):
+    def test_a_lot_you_own_and_a_tiny_green_buy_are_left_out(self):
+        props = [
+            {"id": "own", "address": "1 Mine St", "status": "For sale"},
+            {"id": "wide", "address": "1919 Hylan Blvd", "status": "For sale"},
+            {"id": "narrow", "address": "44 Seaver Ave", "status": "For sale"},
+        ]
+        structs = {"own": [], "wide": [], "narrow": []}
+        dims = {
+            "1 MINE ST": {"up2": 800, "width_up": 20, "eff_width": 20, "depth_up": 40},
+            "1919 HYLAN BLVD": {"up2": 637, "width_up": 20.7, "eff_width": 20.7, "depth_up": 30},
+            "44 SEAVER AVE": {"up2": 26, "width_up": 2.7, "eff_width": 2.7, "depth_up": 10},
+        }
+        score = _score(lu=257, essential_su=21)
+        for row in score["categories"]:
+            if row["key"] == "entertainment":
+                row["su"] = 16
+                row["pct_of_target"] = 62
+            elif row["key"] == "public":
+                row["su"] = 21
+                row["pct_of_target"] = 82
+            elif row["key"] == "essential":
+                row["pct_of_target"] = 82
+            elif row["key"] == "transportation":
+                row["su"] = 4
+                row["pct_of_target"] = 31
+        with patch.object(what_if, "get_cached_structures", return_value=structs), \
+             patch.object(what_if, "get_cached_props", return_value=props), \
+             patch.object(what_if, "load_dims", return_value=dims), \
+             patch.object(what_if, "load_owned_ids", return_value={"own"}), \
+             patch.object(what_if, "compute_score", return_value=score), \
+             patch.object(what_if, "_snapshot_by_id", return_value={
+                 "wide": {"price_upx": 500000, "price_usd": None, "markup_pct": 1107.6},
+             }), \
+             patch.object(what_if, "_spark_brief", return_value={"hours": 12.5, "estimated": True}):
+            data = what_if.for_sale_builds("Dongan Hills")
+        addresses = [row["address"] for row in data["listings"]]
+        self.assertEqual(addresses[0], "1919 Hylan Blvd")
+        self.assertEqual(data["listings"][0]["recommended_name"], "Natural History Museum")
+        self.assertEqual(data["listings"][0]["price_upx"], 500000)
+        self.assertNotIn("1 Mine St", addresses)
+        self.assertNotIn("44 Seaver Ave", addresses)
+        self.assertIn("local snapshot", data["note"])
+
+
 if __name__ == "__main__":
     unittest.main()

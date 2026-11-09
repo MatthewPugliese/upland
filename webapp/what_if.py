@@ -480,8 +480,9 @@ def _pick_label(row: dict) -> str:
     )
 
 
-def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> dict:
-    """A build order for empty lots you own. Each row uses a different lot.
+def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8,
+                require_mine: bool = True) -> dict:
+    """A build order for empty lots. Each row uses a different lot.
 
     The shortest category is filled first. A structure the catalog agrees
     with is chosen over a disputed one in the same category. The percentages
@@ -489,15 +490,20 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
     are left out. They do not raise a short category.
     """
     categories = list(score.get("categories") or [])
-    mine = [lot for lot in lots if lot.get("is_mine")]
+    usable = [lot for lot in lots if lot.get("is_mine")] if require_mine else list(lots)
     if not categories or not score.get("total_lu"):
         return {"picks": [], "note": "No neighborhood score to compare against."}
     worst = min(categories, key=lambda row: row["pct_of_target"])
-    if not mine:
+    if not usable:
+        missing = (
+            "No empty lots of yours have a cached size."
+            if require_mine else
+            "No empty for-sale lots have a cached size."
+        )
         return {
             "worst": {"key": worst["key"], "label": worst["label"], "pct_of_target": worst["pct_of_target"]},
             "picks": [],
-            "note": "No empty lots of yours have a cached size.",
+            "note": missing,
         }
 
     lu = score["total_lu"]
@@ -513,7 +519,7 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
 
     def candidates(cat_key: str | None, agreed_only: bool) -> list[dict]:
         found = []
-        for lot in mine:
+        for lot in usable:
             if lot["prop_id"] in used_lots:
                 continue
             width = lot.get("width") or 0
@@ -631,7 +637,8 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
     if not picks and any(row.get("close_fit") for row in skipped):
         note = "Agreed buildings fit, but only within 0.5 UP of the minimum width, so they are left out."
     elif not picks:
-        note = "No agreed service structure fits an empty lot of yours."
+        yours = "an empty lot of yours" if require_mine else "an empty for-sale lot"
+        note = f"No agreed service structure fits {yours}."
     elif picks[0]["category"] != worst["key"]:
         note = (
             f"{worst['label']} is the shortest category at {worst['pct_of_target']}% of target. "
@@ -643,7 +650,8 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
                 "so it is left out of this order. "
             )
         else:
-            note += f"Nothing that adds {worst['label']} SU fits an empty lot of yours. "
+            yours = "an empty lot of yours" if require_mine else "an empty for-sale lot"
+            note += f"Nothing that adds {worst['label']} SU fits {yours}. "
         note += f"The order starts with {picks[0]['structure']} on {picks[0]['address']}."
     else:
         top = picks[0]
@@ -807,3 +815,80 @@ def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | N
     if plan_note:
         payload["result"]["plan_note"] = plan_note
     return payload
+
+
+def _snapshot_by_id(neighborhood: str) -> dict[str, dict]:
+    """Asking prices already stored locally. No Upland request."""
+    try:
+        import sys
+        scraper = Path(__file__).resolve().parent.parent / "scraper"
+        if str(scraper) not in sys.path:
+            sys.path.insert(0, str(scraper))
+        from listings_db import connect, search_listings
+        rows = search_listings(connect(), neighborhood=neighborhood, limit=500)
+    except Exception:
+        return {}
+    return {str(row.get("id")): row for row in rows}
+
+
+def for_sale_builds(hood_name: str) -> dict:
+    """Empty for-sale lots, ranked with the same rules as the build order.
+
+    Lots you already own are left out. A category that is already at 80%
+    does not get a buy under 3 SU. Prices come from the local snapshot.
+    """
+    hood_name = (hood_name or "").strip() or "Dongan Hills"
+    structs = get_cached_structures(hood_name)
+    props = get_cached_props(hood_name) or []
+    dims = load_dims(hood_name)
+    if structs is None or not dims:
+        return {
+            "neighborhood": hood_name,
+            "listings": [],
+            "note": "Lot sizes or structures are not cached for this neighborhood.",
+        }
+    owned = load_owned_ids()
+    sale_ids = {
+        str(prop.get("id") or "")
+        for prop in props
+        if (prop.get("status") or "") == "For sale" and str(prop.get("id") or "") not in owned
+    }
+    pending = pending_builds(hood_name, props, structs)
+    pending_addresses = {_addr(gap["address"]) for gap in pending}
+    lots = [
+        lot for lot in list_empty_lots(props, structs, dims, owned)
+        if lot["prop_id"] in sale_ids and _addr(lot["address"]) not in pending_addresses
+    ]
+    counts = _counts(structs)
+    for gap in pending:
+        counts[gap["structure"]] = counts.get(gap["structure"], 0) + 1
+    score = fold_pending(compute_score(hood_name, structs, props), pending)
+    best = best_builds(score, lots, counts, require_mine=False)
+    prices = _snapshot_by_id(hood_name)
+    listings = []
+    for pick in best.get("picks") or []:
+        if (pick.get("before_pct") or 0) >= 80 and (pick.get("su") or 0) < 3:
+            continue
+        price = prices.get(str(pick["prop_id"]), {})
+        listings.append({
+            "prop_id": pick["prop_id"],
+            "address": pick["address"],
+            "up2": pick.get("up2"),
+            "eff_width": pick.get("width"),
+            "recommended_name": pick["structure"],
+            "su_gain": pick["su"],
+            "su_cat": pick["category"],
+            "before_pct": pick["before_pct"],
+            "after_pct": pick["after_pct"],
+            "price_upx": price.get("price_upx"),
+            "price_usd": price.get("price_usd"),
+            "markup_pct": price.get("markup_pct"),
+            "label": pick.get("label"),
+        })
+    note = (
+        "Empty lots listed for sale, ranked the same way as the build order. "
+        "Prices are from the local snapshot."
+    )
+    if not listings:
+        note = best.get("note") or note
+    return {"neighborhood": hood_name, "listings": listings, "note": note}

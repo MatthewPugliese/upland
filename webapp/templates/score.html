@@ -484,9 +484,10 @@
 
 
 <!-- ── Buy Opportunities ─────────────────────────────────────────────────── -->
-<h3 class="section-heading">Buy Opportunities <span style="font-size:12px;font-weight:400;color:#aaa">(for-sale lots, ranked by SU gain)</span></h3>
+<h3 class="section-heading">Buy Opportunities</h3>
+<p class="spark-note" id="forsale-note">Empty lots listed for sale, ranked the same way as the build order. Prices are from the local snapshot.</p>
 <div id="forsale-loading" class="rec-loading">Loading…</div>
-<div id="forsale-empty" style="display:none;color:#aaa;font-size:13px;padding:8px 0 20px">No properties currently listed for sale in this neighborhood.</div>
+<div id="forsale-empty" style="display:none;color:#aaa;font-size:13px;padding:8px 0 20px">No empty for-sale lot with a cached size is on the build order.</div>
 <div class="card" style="padding:0;overflow:hidden;overflow-x:auto;display:none" id="forsale-wrap">
 <table class="rec-table">
     <thead>
@@ -496,9 +497,9 @@
             <th style="text-align:right">Eff W</th>
             <th>Best Structure</th>
             <th style="text-align:right">SU Gain</th>
-            <th style="text-align:right">Price (UPX)</th>
-            <th style="text-align:right">Price (USD)</th>
-            <th style="text-align:right">UPX / SU</th>
+            <th>Score</th>
+            <th style="text-align:right">Asking price</th>
+            <th style="text-align:right">Over mint</th>
         </tr>
     </thead>
     <tbody id="forsale-tbody"></tbody>
@@ -850,6 +851,7 @@ async function loadForSale() {
         const data = await resp.json();
         document.getElementById('forsale-loading').style.display = 'none';
         const listings = data.listings || [];
+        if (data.note) document.getElementById('forsale-note').textContent = data.note;
         if (!listings.length) {
             document.getElementById('forsale-empty').style.display = '';
             return;
@@ -859,20 +861,21 @@ async function loadForSale() {
         document.getElementById('forsale-tbody').innerHTML = listings.map(l => {
             const catColor = SU_CAT_COLOR[l.su_cat] || '#999';
             const suPill = l.su_gain > 0 ? `<span class="su-gain-pill">+${l.su_gain}</span>` : '<span style="color:#bbb">—</span>';
-            const priceUpx = l.price_upx != null ? l.price_upx.toLocaleString() : (l.mint_price ? l.mint_price.toLocaleString() + ' (mint)' : '—');
-            const priceUsd = l.price_usd != null ? `$${l.price_usd.toFixed(2)}` : '—';
-            const effPer = l.upx_per_su != null ? l.upx_per_su.toLocaleString() : '—';
+            const price = l.price_upx != null ? `${Number(l.price_upx).toLocaleString()} UPX`
+                : (l.price_usd != null ? `$${Number(l.price_usd).toLocaleString()}` : '—');
+            const markup = l.markup_pct != null ? `${Math.round(l.markup_pct).toLocaleString()}%` : '—';
+            const move = (l.before_pct != null && l.after_pct != null) ? `${l.before_pct}% → ${l.after_pct}%` : '—';
             const up2 = l.up2 != null ? l.up2 : '—';
-            const effW = l.eff_width != null ? l.eff_width.toFixed(1) + '^' : '—';
+            const effW = l.eff_width != null ? Number(l.eff_width).toFixed(1) + '^' : '—';
             return `<tr>
                 <td><strong>${l.address}</strong></td>
                 <td style="text-align:right">${up2}</td>
                 <td style="text-align:right">${effW}</td>
                 <td>${l.recommended_name ? `<span style="color:${catColor};font-weight:500">${l.recommended_name}</span>` : '<span style="color:#bbb">—</span>'}</td>
                 <td style="text-align:right">${suPill}</td>
-                <td style="text-align:right">${priceUpx}</td>
-                <td style="text-align:right">${priceUsd}</td>
-                <td style="text-align:right" style="color:#888">${effPer}</td>
+                <td>${move}</td>
+                <td style="text-align:right">${price}</td>
+                <td style="text-align:right">${markup}</td>
             </tr>`;
         }).join('');
     } catch(e) {
