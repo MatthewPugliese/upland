@@ -484,6 +484,8 @@ ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 \
 
 **2026-08-15**: deployed through `48a1d1b` (spark estimator, plan completion tracker, commerce layer, multi-collection budget optimizer) using this exact process — Pi git checkout `git pull`ed to match, webapp container rebuilt/restarted, `/economy` + `/collections` both HTTP 200 after. See `project_pi_state.md` memory for full notes (incl. a Colima disk-lock gotcha on the Mac build side).
 
+**2026-11-09**: deployed through `6e154a2`. Image built on the Mac and loaded on the Pi. Only the webapp container was recreated (`--no-build`); the scraper and Home Assistant were left running. `/`, `/economy`, `/collections`, `/listings`, `/floor?neighborhood=Gardens`, and `/score` all returned 200. `data/listings.db` was copied beside the Pi's economy database. The Pi economy database was not replaced.
+
 ### Deployment notes
 - Webapp uses `Dockerfile.webapp` (light: flask + gunicorn + requests only, ~160MB image, no shapely/matplotlib/numpy)
 - Map/optimizer routes lazy-load heavy deps — will error if hit on Pi since those packages aren't installed; run those features from Mac
