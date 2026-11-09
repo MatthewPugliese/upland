@@ -94,33 +94,47 @@ def _median_property_upx(conn, since: str):
     return (amounts[mid - 1] + amounts[mid]) / 2
 
 
+def _blank_summary(period: str, since: str = None, no_data: bool = True) -> dict:
+    return {
+        "upx_volume": 0, "usd_volume": 0, "upx_trades": 0, "usd_trades": 0,
+        "period": period, "period_start": since, "no_data": no_data,
+        "median_upx": None, "latest_sale": None,
+        "property_upx_trades": 0, "property_upx_volume": 0,
+        "asset_upx_trades": 0, "asset_upx_volume": 0,
+        "nft_upx_trades": 0, "nft_upx_volume": 0,
+    }
+
+
 def summary(period: str = "30d") -> dict:
     conn = _connect()
     if not conn:
-        return {"upx_volume": 0, "usd_volume": 0, "upx_trades": 0, "usd_trades": 0,
-                "period": period, "period_start": None, "no_data": True,
-                "median_upx": None, "latest_sale": None}
+        return _blank_summary(period)
     try:
         since = _period_start(period)
+        # Same timestamp scan as the old marketplace rollup. Grouping by
+        # asset_type splits property sales from spark/equipment and NFTs
+        # without a second pass over the table.
         rows = conn.execute("""
-            SELECT marketplace,
+            SELECT marketplace, asset_type,
                    COUNT(*) AS trade_count,
                    COALESCE(SUM(upx_amount), 0) AS upx_volume,
                    COALESCE(SUM(usd_amount), 0) AS usd_volume
             FROM transactions
             WHERE timestamp >= ?
-            GROUP BY marketplace
+            GROUP BY marketplace, asset_type
         """, (since,)).fetchall()
-        result = {"upx_volume": 0, "usd_volume": 0, "upx_trades": 0, "usd_trades": 0,
-                  "period": period, "period_start": since, "no_data": False,
-                  "median_upx": None, "latest_sale": None}
+        result = _blank_summary(period, since, no_data=False)
         for row in rows:
             if row["marketplace"] == "upx":
-                result["upx_volume"] = row["upx_volume"]
-                result["upx_trades"] = row["trade_count"]
+                result["upx_volume"] += row["upx_volume"]
+                result["upx_trades"] += row["trade_count"]
+                kind = row["asset_type"] if row["asset_type"] in ("property", "asset", "nft") else None
+                if kind:
+                    result[f"{kind}_upx_trades"] += row["trade_count"]
+                    result[f"{kind}_upx_volume"] += row["upx_volume"]
             elif row["marketplace"] == "usd":
-                result["usd_volume"] = row["usd_volume"]
-                result["usd_trades"] = row["trade_count"]
+                result["usd_volume"] += row["usd_volume"]
+                result["usd_trades"] += row["trade_count"]
         latest = conn.execute("SELECT MAX(timestamp) AS latest FROM transactions").fetchone()
         result["latest_sale"] = latest["latest"] if latest else None
         # All-time is a full-table sort on the Pi database. Skip the median there.
@@ -178,21 +192,50 @@ def timeseries(period: str = "30d") -> list:
         conn.close()
 
 
-def feed(limit: int = 50, marketplace: str = None, city: str = None) -> list:
+# Stored sale kinds. n111 is one type for spark and equipment; the chain row
+# does not say which. n112 is an NFT. Default the feed to properties so spark
+# sales do not bury the property feed.
+FEED_ASSETS = ("property", "asset", "nft")
+
+_FEED_COLUMNS = """
+    id, timestamp, address, city, neighborhood,
+    buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
+    property_id
+"""
+
+
+def normalize_asset(asset: str = None) -> str:
+    if asset in FEED_ASSETS or asset == "all":
+        return asset
+    return "property"
+
+
+def _feed_where(asset: str, marketplace: str = None, city: str = None, after_id: int = None):
+    clauses, params = [], []
+    if after_id is not None:
+        clauses.append("id > ?")
+        params.append(after_id)
+    if asset in FEED_ASSETS:
+        clauses.append("asset_type = ?")
+        params.append(asset)
+    if marketplace in ("upx", "usd"):
+        clauses.append("marketplace = ?")
+        params.append(marketplace)
+    if city:
+        clauses.append("city = ?")
+        params.append(city)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where, params
+
+
+def feed(limit: int = 50, marketplace: str = None, city: str = None, asset: str = None) -> list:
     conn = _connect()
     if not conn:
         return []
     try:
-        clauses, params = ["asset_type = 'property'"], []
-        if marketplace in ("upx", "usd"):
-            clauses.append("marketplace = ?"); params.append(marketplace)
-        if city:
-            clauses.append("city = ?"); params.append(city)
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where, params = _feed_where(normalize_asset(asset), marketplace, city)
         rows = conn.execute(f"""
-            SELECT id, timestamp, address, city, neighborhood,
-                   buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
-                   property_id
+            SELECT {_FEED_COLUMNS}
             FROM transactions
             {where}
             ORDER BY id DESC LIMIT ?
@@ -313,30 +356,19 @@ def whales(period: str = "30d", limit: int = 20) -> dict:
         conn.close()
 
 
-def latest_since(last_id: int = 0, limit: int = 30, city: str = None) -> list:
+def latest_since(last_id: int = 0, limit: int = 30, city: str = None, asset: str = None) -> list:
     """Return transactions with id > last_id — used by feed polling."""
     conn = _connect()
     if not conn:
         return []
     try:
-        if city:
-            rows = conn.execute("""
-                SELECT id, timestamp, address, city, neighborhood,
-                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
-                       property_id
-                FROM transactions
-                WHERE id > ? AND city = ? AND asset_type = 'property'
-                ORDER BY id ASC LIMIT ?
-            """, (last_id, city, limit)).fetchall()
-        else:
-            rows = conn.execute("""
-                SELECT id, timestamp, address, city, neighborhood,
-                       buyer, seller, upx_amount, usd_amount, marketplace, asset_type, action,
-                       property_id
-                FROM transactions
-                WHERE id > ? AND asset_type = 'property'
-                ORDER BY id ASC LIMIT ?
-            """, (last_id, limit)).fetchall()
+        where, params = _feed_where(normalize_asset(asset), city=city, after_id=last_id)
+        rows = conn.execute(f"""
+            SELECT {_FEED_COLUMNS}
+            FROM transactions
+            {where}
+            ORDER BY id ASC LIMIT ?
+        """, (*params, limit)).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

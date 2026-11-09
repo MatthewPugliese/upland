@@ -437,7 +437,10 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 ### Phase 4 — Polish
 - [x] City/neighborhood breakdown table (sortable) — city breakdown's city/neighborhood resolution
   fixed 2026-08-16 to use a property_cache.db join instead of the sparse inline columns (see above)
-- [ ] Asset type filtering (property vs spark/equipment)
+- [x] Asset type filtering — feed buttons for properties, spark/equipment, and NFTs.
+  Spark and equipment are one stored type (`asset`, chain action `n111`); the row does not
+  say which. The UPX total still includes every sale, and the line under it splits property,
+  spark/equipment, and NFT counts. The default feed stays on properties.
 - [ ] Neighborhood price heatmap overlay on existing map (table version shipped instead, see above)
 
 ### Known issues to fix

@@ -90,7 +90,13 @@
     .feed-filters {
         display: flex;
         gap: 6px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+    }
+    .feed-asset-note {
+        font-size: 11px;
+        color: #aaa;
+        margin: 0 0 12px;
     }
     .filter-btn {
         padding: 4px 14px;
@@ -140,6 +146,7 @@
     .feed-badge.upx { background: #1B4F72; }
     .feed-badge.usd { background: #1E8449; }
     .feed-badge.asset { background: #7D3C98; }
+    .feed-badge.nft { background: #B9770E; }
 
     .feed-info { flex: 1; min-width: 0; }
     .feed-address {
@@ -153,6 +160,8 @@
     .feed-amount { flex-shrink: 0; text-align: right; font-weight: 700; }
     .feed-amount.upx { color: #1B4F72; }
     .feed-amount.usd { color: #1E8449; }
+    .feed-amount.asset { color: #7D3C98; }
+    .feed-amount.nft { color: #B9770E; }
     .feed-time { font-size: 11px; color: #ccc; margin-top: 2px; }
 
     .feed-empty {
@@ -250,6 +259,7 @@
         <div class="hero-label">UPX Marketplace</div>
         <div class="hero-volume" id="upx-volume">—</div>
         <div class="hero-trades" id="upx-trades">— trades</div>
+        <div class="hero-trades" id="upx-split"></div>
         <div class="hero-trades" id="upx-median"></div>
     </div>
     <div class="hero-card usd">
@@ -273,14 +283,20 @@
     <span id="feed-status" style="font-size:11px;font-weight:400;color:#aaa;">updating…</span>
 </div>
 <div class="feed-filters">
-    <button class="filter-btn active" data-filter="all">All</button>
-    <button class="filter-btn" data-filter="upx">UPX only</button>
-    <button class="filter-btn" data-filter="usd">USD only</button>
+    <button class="filter-btn market-btn active" data-filter="all">All</button>
+    <button class="filter-btn market-btn" data-filter="upx">UPX only</button>
+    <button class="filter-btn market-btn" data-filter="usd">USD only</button>
     <span id="city-filter-badge" style="display:none" class="city-filter-badge">
         <span id="city-filter-badge-label"></span>
         <button class="city-filter-clear" onclick="clearCityFilter()">×</button>
     </span>
 </div>
+<div class="feed-filters">
+    <button class="filter-btn asset-btn active" data-asset="property">Properties</button>
+    <button class="filter-btn asset-btn" data-asset="asset">Spark / equipment</button>
+    <button class="filter-btn asset-btn" data-asset="nft">NFTs</button>
+</div>
+<p class="feed-asset-note">Spark and equipment are stored as one sale type. The chain record does not say which is which.</p>
 <div class="feed-list" id="feed-list">
     <div class="feed-empty">Loading feed…</div>
 </div>
@@ -363,6 +379,8 @@
 // ── State ─────────────────────────────────────────────────────────────────
 let currentPeriod = 'today';
 let feedFilter = 'all';
+let feedAsset = 'property';
+let feedGeneration = 0;
 let feedMaxId = 0;
 let feedRows = [];
 let citiesData = [];
@@ -422,12 +440,21 @@ document.querySelectorAll('.period-btn').forEach(btn => {
 });
 
 // ── Feed filter ───────────────────────────────────────────────────────────
-document.querySelectorAll('.filter-btn').forEach(btn => {
+document.querySelectorAll('.market-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.market-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         feedFilter = btn.dataset.filter;
         renderFeed();
+    });
+});
+document.querySelectorAll('.asset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.asset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        feedAsset = btn.dataset.asset;
+        if (feedPollTimer) { clearTimeout(feedPollTimer); feedPollTimer = null; }
+        loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
     });
 });
 
@@ -444,6 +471,11 @@ async function loadSummary() {
     document.getElementById('upx-trades').textContent = fmtNum(d.upx_trades) + ' trades';
     document.getElementById('upx-median').textContent = d.median_upx == null
         ? '' : 'median property sale ' + fmtUpxFull(d.median_upx);
+    const split = [];
+    if (d.property_upx_trades) split.push(fmtNum(d.property_upx_trades) + ' property');
+    if (d.asset_upx_trades) split.push(fmtNum(d.asset_upx_trades) + ' spark/equipment');
+    if (d.nft_upx_trades) split.push(fmtNum(d.nft_upx_trades) + ' NFT');
+    document.getElementById('upx-split').textContent = split.join(' · ');
     document.getElementById('usd-volume').textContent = fmtUsd(d.usd_volume);
     document.getElementById('usd-trades').textContent = fmtNum(d.usd_trades) + ' trades';
     const latest = document.getElementById('latest-sale');
@@ -539,10 +571,12 @@ async function loadChart() {
 // ── Feed ──────────────────────────────────────────────────────────────────
 function feedBadge(row) {
     if (row.asset_type === 'asset') return 'asset';
+    if (row.asset_type === 'nft') return 'nft';
     return row.marketplace;
 }
 function feedBadgeLabel(row) {
     if (row.asset_type === 'asset') return 'AST';
+    if (row.asset_type === 'nft') return 'NFT';
     return row.marketplace.toUpperCase();
 }
 
@@ -560,7 +594,7 @@ function buildFeedItem(row, isNew) {
     const buyer = row.buyer || '?';
     const seller = row.seller ? row.seller : '?';
     const amount = row.marketplace === 'usd' ? fmtUsd(row.usd_amount) : fmtUpxFull(row.upx_amount);
-    const amtClass = row.marketplace === 'usd' ? 'usd' : (row.asset_type === 'asset' ? 'asset' : 'upx');
+    const amtClass = row.marketplace === 'usd' ? 'usd' : (row.asset_type === 'asset' || row.asset_type === 'nft' ? row.asset_type : 'upx');
     const t = relTime(row.timestamp);
 
     const addrEl = row.property_id
@@ -585,7 +619,7 @@ function renderFeed(newIds) {
         : feedRows.filter(r => r.marketplace === feedFilter);
 
     if (visible.length === 0) {
-        document.getElementById('feed-list').innerHTML = '<div class="feed-empty">No transactions yet.</div>';
+        document.getElementById('feed-list').innerHTML = '<div class="feed-empty">No sales in this view.</div>';
         return;
     }
     document.getElementById('feed-list').innerHTML = visible
@@ -593,13 +627,17 @@ function renderFeed(newIds) {
         .join('');
 }
 
-function feedCityParam() {
-    return activeCityFilter ? '&city=' + encodeURIComponent(activeCityFilter) : '';
+function feedQuery() {
+    let q = '&asset=' + encodeURIComponent(feedAsset);
+    if (activeCityFilter) q += '&city=' + encodeURIComponent(activeCityFilter);
+    return q;
 }
 
 async function loadFeedInitial() {
-    const r = await fetch('/api/economy/feed?limit=50' + feedCityParam());
+    const gen = ++feedGeneration;
+    const r = await fetch('/api/economy/feed?limit=50' + feedQuery());
     const d = await r.json();
+    if (gen !== feedGeneration) return;
     feedRows = d.transactions || [];
     feedMaxId = d.max_id || 0;
     renderFeed();
@@ -607,9 +645,11 @@ async function loadFeedInitial() {
 }
 
 async function pollFeed() {
+    const gen = feedGeneration;
     try {
-        const r = await fetch('/api/economy/feed?since_id=' + feedMaxId + feedCityParam());
+        const r = await fetch('/api/economy/feed?since_id=' + feedMaxId + feedQuery());
         const d = await r.json();
+        if (gen !== feedGeneration) return;
         const newRows = d.transactions || [];
         if (newRows.length > 0) {
             const newIds = new Set(newRows.map(r => r.id));
@@ -621,7 +661,7 @@ async function pollFeed() {
     } catch (e) {
         // silent — don't disrupt the UI on a poll failure
     }
-    feedPollTimer = setTimeout(pollFeed, 30000);
+    if (gen === feedGeneration) feedPollTimer = setTimeout(pollFeed, 30000);
 }
 
 // ── Whales ────────────────────────────────────────────────────────────────
