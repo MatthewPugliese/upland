@@ -80,13 +80,22 @@ def load_collections(cache_path: Path = None) -> list[dict]:
 
 def load_user_properties(username: str, eos_account: str) -> list[dict]:
     """
-    Load user's properties with addresses from blockchain + property cache.
+    Load the user's properties with addresses from the public profile, or the
+    blockchain snapshot if the profile does not answer.
     Returns list of {id, address, neighborhood, city, mintPrice}.
     """
-    from neighborhood_map import _blockchain_user_properties
+    # The public profile is the current owned list. The blockchain snapshot is
+    # the last earnings collection, so it keeps properties that have since been sold.
+    from player_profile import fetch_player_profile
 
-    bc_cache = CACHE_DIR / "neighborhoods" / f"{username.lower()}_blockchain_cache.json"
-    owned_ids = _blockchain_user_properties(username, eos_account, bc_cache)
+    profile = fetch_player_profile(username)
+    if profile and profile.get("property_ids"):
+        owned_ids = set(profile["property_ids"])
+    else:
+        from neighborhood_map import _blockchain_user_properties
+
+        bc_cache = CACHE_DIR / "neighborhoods" / f"{username.lower()}_blockchain_cache.json"
+        owned_ids = _blockchain_user_properties(username, eos_account, bc_cache)
 
     if not owned_ids:
         return []

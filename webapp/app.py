@@ -220,17 +220,19 @@ def collections_run():
         if not props:
             return render_template("collections.html", error=f"No properties found for {username}.")
         result = analyze_collections(props, colls)
-        result["total_properties"] = len(props)
 
-        # Portfolio-level yield baseline, so per-collection completion impact
-        # (added in the template/JS) can be framed as a delta off a known total.
-        total_mint_all = round(sum(p.get("mintPrice") or 0 for p in props))
-        current_monthly_yield = round(total_mint_all * annual_rate / 12)
-        result["total_mint_all"] = total_mint_all
-        result["annual_rate"] = annual_rate
-        result["annual_rate_pct"] = round(annual_rate * 100, 2)
-        result["current_monthly_yield"] = current_monthly_yield
-        result["current_hourly_yield"] = round(current_monthly_yield / (30 * 24), 2)
+        # Profile count and the collections actually turned on. Monthly UPX is
+        # the last earnings payout. The mint rate stays available for the
+        # "what if I finish this collection" estimate in the page script.
+        from player_profile import fetch_player_profile
+        from collection_income import latest_collection_income
+        from collection_tracker import apply_tracker_header
+        from collection_optimizer import CACHE_DIR
+
+        profile = fetch_player_profile(username)
+        income_cache = CACHE_DIR / f"{eos_account.lower()}_collection_income.json"
+        income = latest_collection_income(eos_account, cache_path=income_cache)
+        apply_tracker_header(result, props, annual_rate, profile=profile, income=income)
 
         # Store analysis server-side (keyed by a small token in the session cookie) so
         # the forsale/map/budget-optimize endpoints can reuse it without re-running —

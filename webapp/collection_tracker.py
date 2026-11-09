@@ -86,3 +86,51 @@ def analyze_collections(user_props: list, all_collections: list) -> dict:
         "total_contributing": len(completable) + len(almost) + len(contributing),
         "skipped": skipped,
     }
+
+
+def apply_tracker_header(result: dict, props: list, annual_rate: float,
+                         profile: dict | None = None, income: dict | None = None) -> dict:
+    """Fill the summary cards.
+
+    Property count and collections that are on come from the public profile.
+    Monthly UPX comes from the last earnings collection when that payout is known.
+    Otherwise the summary stays on the mint-price estimate.
+    """
+    total_mint_all = round(sum(p.get("mintPrice") or 0 for p in props))
+    result["total_mint_all"] = total_mint_all
+    result["annual_rate"] = annual_rate
+    result["annual_rate_pct"] = round(annual_rate * 100, 2)
+
+    if profile and profile.get("property_ids"):
+        result["total_properties"] = len(profile["property_ids"])
+        result["collections_on"] = len(profile.get("collections") or [])
+        active = set()
+        for coll in profile.get("collections") or []:
+            try:
+                active.add(int(coll["id"]))
+            except (TypeError, ValueError, KeyError):
+                continue
+        for bucket in ("completable", "almost", "contributing"):
+            for entry in result.get(bucket) or []:
+                try:
+                    entry["on"] = int(entry["id"]) in active
+                except (TypeError, ValueError):
+                    entry["on"] = False
+    else:
+        result["total_properties"] = len(props)
+        result["collections_on"] = None
+
+    if income and income.get("monthly"):
+        result["current_monthly_yield"] = income["monthly"]
+        result["current_hourly_yield"] = income["hourly"]
+        result["yield_source"] = "collection"
+        result["income_as_of"] = income.get("as_of") or ""
+        result["income_payout"] = income.get("payout")
+    else:
+        monthly = round(total_mint_all * annual_rate / 12)
+        result["current_monthly_yield"] = monthly
+        result["current_hourly_yield"] = round(monthly / (30 * 24), 2)
+        result["yield_source"] = "mint"
+        result["income_as_of"] = ""
+        result["income_payout"] = None
+    return result

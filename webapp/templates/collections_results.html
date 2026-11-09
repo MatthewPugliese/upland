@@ -286,12 +286,17 @@
         <div class="label">Properties</div>
     </div>
     <div class="stat-card highlight">
+        {% if result.collections_on is not none %}
+        <div class="value">{{ result.collections_on }}</div>
+        <div class="label">Collections on</div>
+        {% else %}
         <div class="value">{{ result.total_contributing }}</div>
         <div class="label">Collections contributing</div>
+        {% endif %}
     </div>
     <div class="stat-card green">
         <div class="value">{{ result.completable|length }}</div>
-        <div class="label">Completable now</div>
+        <div class="label">Could fill now</div>
     </div>
     <div class="stat-card amber">
         <div class="value">{{ result.almost|selectattr("gap", "eq", 1)|list|length }}</div>
@@ -307,13 +312,25 @@
     </div>
     <div class="stat-card">
         <div class="value">{{ "{:,}".format(result.current_monthly_yield) }}</div>
+        {% if result.yield_source == "collection" %}
+        <div class="label">Current UPX/month</div>
+        {% else %}
         <div class="label">Current UPX/month ({{ result.annual_rate_pct }}%)</div>
+        {% endif %}
     </div>
     <div class="stat-card">
         <div class="value">{{ result.current_hourly_yield }}</div>
         <div class="label">Current UPX/hour</div>
     </div>
 </div>
+{% if result.yield_source == "collection" %}
+<p style="font-size:12px;color:#777;margin:-4px 0 16px">
+    Properties and collections on are from your Upland profile.
+    Monthly UPX stretches the last earnings collection
+    ({{ "{:,.0f}".format(result.income_payout) }} UPX on {{ result.income_as_of }}) across a month.
+    The lists below are other collections these properties could fill. A property can only be in one.
+</p>
+{% endif %}
 
 {% if result.almost %}
 <div class="budget-panel" id="budget-panel">
@@ -344,7 +361,7 @@
 
 {% if result.completable %}
 <div class="section-heading">
-    ✅ Completable Now
+    ✅ Could fill now
     <span class="section-count">({{ result.completable|length }})</span>
 </div>
 {% for c in result.completable %}
@@ -358,7 +375,7 @@
     </div>
     <div class="coll-meta">
         <span>{{ c.owned }}/{{ c.required }} props</span>
-        <span class="coll-gap-text gap-done">Complete</span>
+        <span class="coll-gap-text gap-done">{% if c.on %}On{% else %}Could fill{% endif %}</span>
         {% if c.reward > 0 %}<span>{{ "{:,}".format(c.reward) }} UPX reward</span>{% endif %}
         <span style="color:#888;font-size:12px">{{ c.requirements_text }}</span>
     </div>
