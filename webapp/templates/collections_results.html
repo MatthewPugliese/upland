@@ -328,6 +328,9 @@
     Properties and the collections that are on come from your Upland profile.
     Monthly UPX stretches the last earnings collection
     ({{ "{:,.0f}".format(result.income_payout) }} UPX on {{ result.income_as_of }}) across a month.
+    {% if result.income_previous_payout %}
+    The one before that was {{ "{:,.0f}".format(result.income_previous_payout) }} UPX on {{ result.income_previous_as_of }}.
+    {% endif %}
     Further down are collections these properties could fill that are not already on.
     A property can only be in one.
 </p>

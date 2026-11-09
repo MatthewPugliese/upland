@@ -161,6 +161,8 @@ def apply_tracker_header(result: dict, props: list, annual_rate: float,
         result["yield_source"] = "collection"
         result["income_as_of"] = income.get("as_of") or ""
         result["income_payout"] = income.get("payout")
+        result["income_previous_payout"] = income.get("previous_payout")
+        result["income_previous_as_of"] = income.get("previous_as_of") or ""
     else:
         monthly = round(total_mint_all * annual_rate / 12)
         result["current_monthly_yield"] = monthly
@@ -168,4 +170,6 @@ def apply_tracker_header(result: dict, props: list, annual_rate: float,
         result["yield_source"] = "mint"
         result["income_as_of"] = ""
         result["income_payout"] = None
+        result["income_previous_payout"] = None
+        result["income_previous_as_of"] = ""
     return result

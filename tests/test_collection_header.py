@@ -1,7 +1,9 @@
 """Collection summary uses the profile and the last earnings payout."""
 
+import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -78,6 +80,50 @@ class IncomeRateTests(unittest.TestCase):
         self.assertEqual(first["monthly"], second["monthly"])
         self.assertEqual(calls["n"], 0)
         self.assertEqual(first["as_of"], "Oct 30, 2026")
+        self.assertEqual(first["previous_payout"], 1000.0)
+        self.assertEqual(first["previous_as_of"], "Oct 16, 2026")
+        self.assertEqual(second["previous_payout"], 1000.0)
+
+    def test_previous_payout_is_separate_and_old_caches_refetch(self):
+        actions = [
+            {"@timestamp": "2026-10-30T14:49:19.500", "trx_id": "new"},
+            {"@timestamp": "2026-10-16T22:03:25.500", "trx_id": "old"},
+        ]
+
+        def payout(trx_ids, account):
+            if trx_ids == ["new"]:
+                return 81792.15
+            if trx_ids == ["old"]:
+                return 12694.56
+            raise AssertionError(trx_ids)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "income.json"
+            path.write_text(json.dumps({
+                "payout": 1000,
+                "monthly": 500,
+                "hourly": 1,
+                "as_of": "Oct 30, 2026",
+                "elapsed_days": 14,
+                "cached_at": time.time(),
+            }))
+            calls = {"n": 0}
+
+            def fetch_actions(account):
+                calls["n"] += 1
+                return actions
+
+            result = collection_income.latest_collection_income(
+                "vo1dsqp3qmce",
+                cache_path=path,
+                fetch_actions=fetch_actions,
+                fetch_payout=payout,
+            )
+        self.assertEqual(calls["n"], 1)
+        self.assertEqual(result["payout"], 81792.15)
+        self.assertEqual(result["previous_payout"], 12694.56)
+        self.assertEqual(result["previous_as_of"], "Oct 16, 2026")
+        self.assertAlmostEqual(result["monthly"], 181614, delta=1)
 
 
 class HeaderTests(unittest.TestCase):
@@ -179,6 +225,8 @@ class PageTests(unittest.TestCase):
             "hourly": 251.9,
             "payout": 81792.15,
             "as_of": "Oct 30, 2026",
+            "previous_payout": 12694.56,
+            "previous_as_of": "Oct 16, 2026",
         }
         collection_optimizer.load_collections = lambda: [{
             "id": 5,
@@ -205,6 +253,7 @@ class PageTests(unittest.TestCase):
         self.assertIn("181,373", page)
         self.assertIn("Oct 30, 2026", page)
         self.assertIn("81,792 UPX", page)
+        self.assertIn("The one before that was 12,695 UPX on Oct 16, 2026", page)
         self.assertNotIn("Current UPX/month (12.25%)", page)
         self.assertIn("1.5x", page)
         self.assertIn("Own 1 property on MAIN ST in Chicago", page)

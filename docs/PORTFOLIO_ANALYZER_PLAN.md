@@ -12,7 +12,7 @@ Given any Upland username, produce a full breakdown of their portfolio: properti
 
 Shipped: portfolio summary, neighborhood breakdown, structure inventory (SU via `score_calculator._lookup`), undeveloped-properties list. Not shipped: per-property yield efficiency ranking, income tracker, spark usage tracker, spark manager sub-feature, scouting-another-player mode — see notes below on why and what each needs.
 
-**Portfolio monthly total (2026-11-09):** the summary uses the last on-chain earnings collection, the same number as the Collection Tracker (`webapp/collection_income.py`). One payout covers the whole portfolio, so it is still not a per-property ranking. If that payout cannot be measured, the total falls back to mint price times the annual rate.
+**Portfolio monthly total (2026-11-09):** the summary uses the last on-chain earnings collection, the same number as the Collection Tracker (`webapp/collection_income.py`). The previous collection amount is shown beside it and does not change the monthly stretch. One payout covers the whole portfolio, so it is still not a per-property ranking. If that payout cannot be measured, the total falls back to mint price times the annual rate.
 
 **Why no per-property yield ranking:** a collection payout is one UPX transfer for every property in that collection round. The chain does not say how much of it came from each lot. Under a flat mint rate, a per-property ranking would just re-sort by mint price. The economy scraper still does not store `n31` amounts. See `docs/ECONOMY_DASHBOARD_PLAN.md`'s income tracker section.
 

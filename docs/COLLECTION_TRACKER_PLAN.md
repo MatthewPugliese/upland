@@ -83,7 +83,7 @@ Upland has hundreds of collections. Players typically:
 - **Listing prices**: `on_market` + `price` fields from Upland API per property
 - **Collection boost**: already returned per-property as `collection_boost` in the API response
 - **Summary counts**: `https://api.upland.me/profile/{username}` is the current property list and the collections that are actually turned on. The old blockchain snapshot is only a fallback, and it keeps properties sold since the last earnings collection.
-- **Monthly UPX**: the last on-chain earnings payout (`n31`, UPX from `communityupx`) divided by the days since the previous collection, then stretched to 1/12 of a year. Mint price times 12.25% is only the fallback, and it is still what the "finish this collection" estimate uses. The lists under the summary start with the collections the profile says are turned on. Below that are collections the owned properties could fill that are not already on. A property can only be in one.
+- **Monthly UPX**: the last on-chain earnings payout (`n31`, UPX from `communityupx`) divided by the days since the previous collection, then stretched to 1/12 of a year. The previous collection's UPX amount is shown next to that sentence and is not part of the monthly number. Mint price times 12.25% is only the fallback, and it is still what the "finish this collection" estimate uses. The lists under the summary start with the collections the profile says are turned on. Below that are collections the owned properties could fill that are not already on. A property can only be in one.
 
 ---
 

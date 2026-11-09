@@ -13,6 +13,10 @@ CHAIN_URL = "https://chain-history.upland.me"
 MONTH_DAYS = 365 / 12
 _CACHE_TTL = 6 * 3600
 _HEADERS = {"User-Agent": "UplandScope/1.0"}
+_RESULT_KEYS = (
+    "payout", "monthly", "hourly", "as_of", "elapsed_days",
+    "previous_payout", "previous_as_of",
+)
 
 
 def run_rate(payout_upx: float, elapsed_days: float) -> dict | None:
@@ -81,6 +85,21 @@ def _default_actions(eos_account: str) -> list:
     return response.json().get("actions") or []
 
 
+def _round_trx_ids(actions: list) -> list:
+    return list(dict.fromkeys(a.get("trx_id") for a in actions if a.get("trx_id")))
+
+
+def _payout_for_round(actions: list, eos_account: str, fetch_payout) -> float:
+    trx_ids = _round_trx_ids(actions)
+    if fetch_payout:
+        return float(fetch_payout(trx_ids, eos_account))
+    payout = 0.0
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for amount in pool.map(lambda trx: _transfer_upx(trx, eos_account), trx_ids):
+            payout += amount
+    return payout
+
+
 def _transfer_upx(trx_id: str, eos_account: str) -> float:
     response = requests.get(
         f"{CHAIN_URL}/v2/history/get_transaction",
@@ -122,8 +141,10 @@ def latest_collection_income(
     if cache_path and cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text())
-            if now - cached.get("cached_at", 0) < _CACHE_TTL and cached.get("monthly"):
-                return {k: cached[k] for k in ("payout", "monthly", "hourly", "as_of", "elapsed_days")}
+            fresh = now - cached.get("cached_at", 0) < _CACHE_TTL and cached.get("monthly")
+            # Older caches omit the previous collection. Treat those as stale.
+            if fresh and "previous_payout" in cached:
+                return {k: cached[k] for k in _RESULT_KEYS}
         except (json.JSONDecodeError, OSError, TypeError):
             pass
 
@@ -132,21 +153,27 @@ def latest_collection_income(
         rounds = group_rounds(actions)
         if len(rounds) < 2:
             return None
-        trx_ids = list(dict.fromkeys(a.get("trx_id") for a in rounds[0] if a.get("trx_id")))
-        if fetch_payout:
-            payout = float(fetch_payout(trx_ids, account))
-        else:
-            payout = 0.0
-            with ThreadPoolExecutor(max_workers=6) as pool:
-                for amount in pool.map(lambda trx: _transfer_upx(trx, account), trx_ids):
-                    payout += amount
+        payout = _payout_for_round(rounds[0], account, fetch_payout)
         latest = rounds[0][0]["@timestamp"]
         previous = rounds[1][0]["@timestamp"]
         elapsed_days = (_epoch(latest) - _epoch(previous)) / 86400
         rated = run_rate(payout, elapsed_days)
         if not rated:
             return None
-        result = {**rated, "as_of": _as_of(latest)}
+        previous_payout = None
+        previous_as_of = ""
+        try:
+            previous_payout = round(_payout_for_round(rounds[1], account, fetch_payout), 2)
+            previous_as_of = _as_of(previous)
+        except (requests.RequestException, ValueError, KeyError, TypeError, ZeroDivisionError):
+            previous_payout = None
+            previous_as_of = ""
+        result = {
+            **rated,
+            "as_of": _as_of(latest),
+            "previous_payout": previous_payout,
+            "previous_as_of": previous_as_of,
+        }
     except (requests.RequestException, ValueError, KeyError, TypeError, ZeroDivisionError):
         return None
 

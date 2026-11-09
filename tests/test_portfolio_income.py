@@ -39,6 +39,8 @@ class PortfolioIncomeTests(unittest.TestCase):
             "hourly": 248.79,
             "payout": 81792.15,
             "as_of": "Oct 30, 2026",
+            "previous_payout": 12694.56,
+            "previous_as_of": "Oct 16, 2026",
         }
         result = portfolio_analyzer.build_portfolio("pugs08", "vo1dsqp3qmce")
         summary = result["summary"]
@@ -46,6 +48,8 @@ class PortfolioIncomeTests(unittest.TestCase):
         self.assertEqual(summary["est_hourly_yield"], 248.79)
         self.assertEqual(summary["yield_source"], "collection")
         self.assertEqual(summary["income_as_of"], "Oct 30, 2026")
+        self.assertEqual(summary["income_previous_payout"], 12694.56)
+        self.assertEqual(summary["income_previous_as_of"], "Oct 16, 2026")
 
     def test_missing_payout_falls_back_to_mint(self):
         collection_income.latest_collection_income = lambda eos, cache_path=None: None
@@ -60,6 +64,8 @@ class PortfolioIncomeTests(unittest.TestCase):
             "hourly": 248.79,
             "payout": 81792.15,
             "as_of": "Oct 30, 2026",
+            "previous_payout": 12694.56,
+            "previous_as_of": "Oct 16, 2026",
         }
         import app as webapp
         client = webapp.app.test_client()
@@ -73,6 +79,7 @@ class PortfolioIncomeTests(unittest.TestCase):
         self.assertIn("181,614", page)
         self.assertIn("Oct 30, 2026", page)
         self.assertIn("81,792 UPX", page)
+        self.assertIn("The one before that was 12,695 UPX on Oct 16, 2026", page)
         self.assertNotIn("flat 12.25% annual rate against mint value (same model", page)
 
 

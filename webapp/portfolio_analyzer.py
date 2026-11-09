@@ -265,12 +265,16 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
         yield_source = "collection"
         income_as_of = income.get("as_of") or ""
         income_payout = income.get("payout")
+        income_previous_payout = income.get("previous_payout")
+        income_previous_as_of = income.get("previous_as_of") or ""
     else:
         est_monthly_yield = round(total_mint * annual_rate / 12)
         est_hourly_yield = round(est_monthly_yield / (30 * 24), 2)
         yield_source = "mint"
         income_as_of = ""
         income_payout = None
+        income_previous_payout = None
+        income_previous_as_of = ""
 
     neighborhoods = [
         {
@@ -314,6 +318,8 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
         "yield_source": yield_source,
         "income_as_of": income_as_of,
         "income_payout": income_payout,
+        "income_previous_payout": income_previous_payout,
+        "income_previous_as_of": income_previous_as_of,
         "total_sparks_invested": total_sparks,
         "pct_sparks_estimated": pct_sparks_estimated,
         "neighborhood_count": len(hood_stats),
