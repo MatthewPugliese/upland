@@ -21,6 +21,8 @@ import json
 import time
 from pathlib import Path
 
+import sys
+
 from forsale_finder import _get_neighborhood_candidates, _public_api_price  # noqa: E402
 from neighborhoods import get_all_neighborhoods
 
@@ -44,6 +46,70 @@ def _safe_name(name: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "_" for c in name.upper())
 
 
+def floor_from_snapshot(hood_name: str, city_name: str) -> dict | None:
+    """Lowest stored asking prices for this neighborhood, or None if none are stored.
+
+    None leaves the live lookup in place. A returned floor is only the local
+    snapshot, not every listing in the neighborhood.
+    """
+    scraper_dir = str(SCRIPT_DIR.parent / "scraper")
+    if scraper_dir not in sys.path:
+        sys.path.insert(0, scraper_dir)
+    try:
+        from listings_db import DEFAULT_DB, connect, partial_snapshot_note, search_listings
+    except Exception:
+        return None
+    if not DEFAULT_DB.exists():
+        return None
+
+    conn = connect(DEFAULT_DB)
+    try:
+        rows = search_listings(conn, neighborhood=hood_name, limit=500)
+        if not rows:
+            return None
+        note = partial_snapshot_note(conn)
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+    listings = []
+    for row in rows:
+        currency = row.get("currency") or ""
+        price = row.get("price_upx") if currency == "UPX" else row.get("price_usd")
+        if price is None:
+            continue
+        listings.append({
+            "prop_id": str(row.get("id")),
+            "address": row.get("address") or "",
+            "currency": currency,
+            "price": price,
+            "mint_price": row.get("mint_price"),
+            "markup_pct": row.get("markup_pct"),
+            "owner_username": row.get("owner_username") or "",
+        })
+    if not listings:
+        return None
+
+    upx_listings = sorted((item for item in listings if item["currency"] == "UPX"), key=lambda item: item["price"])
+    usd_listings = sorted((item for item in listings if item["currency"] == "USD"), key=lambda item: item["price"])
+    return {
+        "neighborhood": hood_name,
+        "city": city_name,
+        "total_for_sale": len(listings),
+        "priced_count": len(listings),
+        "truncated": len(rows) >= 500,
+        "coverage": "partial",
+        "note": note,
+        "floor_upx": upx_listings[0]["price"] if upx_listings else None,
+        "floor_upx_address": upx_listings[0]["address"] if upx_listings else None,
+        "floor_usd": usd_listings[0]["price"] if usd_listings else None,
+        "floor_usd_address": usd_listings[0]["address"] if usd_listings else None,
+        "upx_listings": upx_listings,
+        "usd_listings": usd_listings,
+    }
+
+
 def get_floor_prices(neighborhood: str) -> dict:
     """
     Returns {"error": "..."} if the neighborhood can't be resolved, otherwise:
@@ -62,6 +128,14 @@ def get_floor_prices(neighborhood: str) -> dict:
         age = time.time() - cache_path.stat().st_mtime
         if age < FLOOR_CACHE_TTL:
             return json.loads(cache_path.read_text())
+
+    # Stored prices answer the neighborhood without calling Upland. No rows
+    # means this snapshot cannot name a floor, so the live lookup still runs.
+    snapshot = floor_from_snapshot(hood_name, hood["city_name"])
+    if snapshot is not None:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(snapshot))
+        return snapshot
 
     parsed_req = {"type": "neighborhood", "neighborhood": hood_name}
     candidates = _get_neighborhood_candidates(parsed_req, hood["city_id"])

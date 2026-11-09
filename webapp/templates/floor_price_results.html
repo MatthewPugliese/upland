@@ -39,7 +39,7 @@
 {% block content %}
 <div class="card">
     <h2>{{ result.neighborhood }}</h2>
-    <p class="card-subtitle">{{ result.city }} &middot; {{ result.total_for_sale }} propert{{ 'y' if result.total_for_sale == 1 else 'ies' }} currently for sale{% if result.truncated %} (priced the first {{ result.priced_count }}){% endif %}</p>
+    <p class="card-subtitle">{{ result.city }} &middot; {{ result.total_for_sale }} propert{{ 'y' if result.total_for_sale == 1 else 'ies' }} {% if result.coverage == "partial" %}in the local snapshot{% else %}currently for sale{% endif %}{% if result.truncated %} (priced the first {{ result.priced_count }}){% endif %}{% if result.note %}<br><span style="color:#9A7D0A">{{ result.note }}</span>{% endif %}</p>
 
     <div class="results-header">
         <div class="stat-card green">

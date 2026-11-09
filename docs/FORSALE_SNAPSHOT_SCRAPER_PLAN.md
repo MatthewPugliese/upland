@@ -16,6 +16,7 @@ Shipped:
 - `scraper/listings_snapshot.py` — resumable crawler. Full page scan only when a city fits in the developers API window (pageSize 100, currentPage max 99, so 9,900 properties). Larger owned cities are deferred; each neighborhood the account owns there is crawled by street `textSearch` instead. A partial or failed scan does not delete unseen listings.
 - `/listings` — browse the snapshot (lowest UPX markup by default).
 - Collection for-sale finder uses a finished city or neighborhood crawl from the last 36 hours as coverage. An empty result then means nothing matching is listed. When the snapshot is only partial, the finder still shows the stored matches and says it is not a full city scan. It does not call Upland for a neighborhood or street requirement the snapshot can name. A blank partial result is not stored as finished coverage.
+- Floor price uses stored listings when that neighborhood has any, and says the number is not a full scan. A neighborhood with no stored rows still uses the live lookup.
 
 Decisions that were open in the design below:
 

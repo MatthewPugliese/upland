@@ -39,6 +39,9 @@
 <div class="card">
     <h2>For-Sale Snapshot</h2>
     <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan.</p>
+    {% if page.db_exists and not (page.coverage | selectattr("status", "equalto", "complete") | list) %}
+    <p class="empty-note">These rows are not a full city scan. A property that is missing here may still be for sale.</p>
+    {% endif %}
 
     <div class="results-header">
         <div class="stat-card">

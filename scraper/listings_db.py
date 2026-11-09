@@ -523,8 +523,7 @@ def partial_snapshot_note(conn: sqlite3.Connection) -> str:
     noun = "listing" if count == 1 else "listings"
     return (
         f"Showing matches from the local snapshot ({count} {noun}). "
-        "That snapshot is not a full city scan, so a collection with no rows here "
-        "may still have properties for sale."
+        "That snapshot is not a full city scan, so a missing property may still be for sale."
     )
 
 
