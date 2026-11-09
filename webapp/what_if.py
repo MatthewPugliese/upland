@@ -574,7 +574,10 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
                 row["address"],
                 row["structure"],
             )
-        chosen = min(pool, key=sort_key)
+        roomy = [row for row in pool if not row["close_fit"]]
+        chosen = min(roomy or pool, key=sort_key)
+        if chosen["close_fit"]:
+            return
         cat = running[chosen["category"]]
         cat["su"] = cat["su"] + chosen["su"]
         cat["pct_of_target"] = chosen["after_pct"]
@@ -589,15 +592,21 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
         if len(picks) >= limit:
             break
         agreed = candidates(cat["key"], agreed_only=True)
-        if agreed:
+        if any(not row["close_fit"] for row in agreed):
             take(agreed)
+            continue
+        if agreed:
+            skipped.append(min(agreed, key=lambda row: (row["_waste"], row["address"], row["structure"])))
             continue
         disputed = candidates(cat["key"], agreed_only=False)
         if disputed:
             sample = min(disputed, key=lambda row: (row["_waste"], row["address"], row["structure"]))
             skipped.append(sample)
     while len(picks) < limit:
-        pool = candidates(None, agreed_only=True)
+        pool = [
+            row for row in candidates(None, agreed_only=True)
+            if not row["close_fit"] and row["su"] >= 3
+        ]
         if not pool:
             break
         take(pool)
@@ -607,7 +616,24 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
         row["step"] = step
         row["label"] = _pick_label(row)
 
-    if not picks:
+    outcome = []
+    if picks:
+        ending, _ignored = fold_plan(score, dict(counts), picks)
+        end_by = {row["key"]: row for row in ending["categories"]}
+        for row in categories:
+            after = end_by[row["key"]]
+            if after["su"] == row["su"]:
+                continue
+            outcome.append({
+                "key": row["key"],
+                "label": row["label"],
+                "before_pct": row["pct_of_target"],
+                "after_pct": after["pct_of_target"],
+            })
+
+    if not picks and any(row.get("close_fit") for row in skipped):
+        note = "Agreed buildings fit, but only within 0.5 UP of the minimum width, so they are left out."
+    elif not picks:
         note = "No agreed service structure fits an empty lot of yours."
     elif picks[0]["category"] != worst["key"]:
         note = (
@@ -638,11 +664,20 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
             )
     if len(picks) > 1:
         note += " Each row uses a different lot, and the percentages stack in this order."
+    if any(row.get("close_fit") for row in skipped):
+        note += " Lots within 0.5 UP of a building's minimum width are left out."
+    if outcome:
+        moved = ", ".join(
+            f"{row['label']} {row['before_pct']}% to {row['after_pct']}%"
+            for row in outcome
+        )
+        note += f" The whole order takes {moved}."
     if any(row["spark_estimated"] for row in picks):
         note += " Spark hours are at the minimum stack. Ones marked est are not from a live construction timer."
     return {
         "worst": {"key": worst["key"], "label": worst["label"], "pct_of_target": worst["pct_of_target"]},
         "picks": picks,
+        "outcome": outcome,
         "note": note,
     }
 

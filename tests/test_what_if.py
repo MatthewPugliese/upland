@@ -205,7 +205,7 @@ class BestBuildTests(unittest.TestCase):
         self.assertEqual(best["picks"][0]["address"], "2 Room St")
         self.assertFalse(best["picks"][0]["close_fit"])
 
-    def test_a_lot_within_half_a_up_of_the_minimum_is_labeled(self):
+    def test_a_lot_within_half_a_up_of_the_minimum_is_left_out(self):
         lots = [{
             "prop_id": "tight", "address": "1 Tight St", "up2": 8, "width": 2.2, "depth": 6,
             "is_mine": True,
@@ -213,8 +213,8 @@ class BestBuildTests(unittest.TestCase):
         with patch.object(what_if, "catalog_conflicts", return_value={}), \
              patch.object(what_if, "_spark_brief", return_value=None):
             best = what_if.best_builds(self._score_short_transport(), lots, {})
-        self.assertTrue(best["picks"][0]["close_fit"])
-        self.assertIn("within 0.5 of the minimum width", best["picks"][0]["label"])
+        self.assertEqual(best["picks"], [])
+        self.assertIn("0.5", best["note"])
 
     def test_says_when_the_short_category_fits_nowhere(self):
         lots = [{"prop_id": "1", "address": "1 Narrow St", "up2": 20, "width": 4, "depth": 10,

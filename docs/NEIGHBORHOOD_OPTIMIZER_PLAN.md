@@ -271,7 +271,7 @@ dongan_hills_zone_map.py
 - [x] **"What if" build simulator** — shipped 2026-11-09 on `/score`
   - Empty lots with a cached size, yours first. The page opens on the first lot something fits. Structure dropdown is only what fits the lot (area, effective width, depth)
   - Shows the neighborhood SU/LU and variety change if that one structure were added
-  - Ranks a build order on your empty lots, one structure per lot. The shortest category comes first and the percentages stack. Opening a row counts the earlier rows. A lot at least 0.5 UP over the minimum is preferred when one is free. Houses, offices, and structures the catalog disagrees with are left out of the order
+  - Ranks a build order on your empty lots, one structure per lot. The shortest category comes first and the percentages stack. Opening a row counts the earlier rows. A building needs 0.5 UP of spare width or it is left out. An extra build in a category that already has one needs at least 3 SU. Houses, offices, and structures the catalog disagrees with are left out too
   - 114 Seaview Ave is left out of the empty list. The score cards and the estimate both count its Barn & Nobles, which the structures cache still misses
   - No API call — structures cache + `{neighborhood}_api_dims_cache.json` + the structure database
 
