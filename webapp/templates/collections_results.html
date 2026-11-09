@@ -295,7 +295,7 @@
         {% endif %}
     </div>
     <div class="stat-card green">
-        <div class="value">{{ result.completable|length }}</div>
+        <div class="value">{{ result.completable|rejectattr("on")|list|length }}</div>
         <div class="label">Could fill now</div>
     </div>
     <div class="stat-card amber">
@@ -325,11 +325,37 @@
 </div>
 {% if result.yield_source == "collection" %}
 <p style="font-size:12px;color:#777;margin:-4px 0 16px">
-    Properties and collections on are from your Upland profile.
+    Properties and the collections that are on come from your Upland profile.
     Monthly UPX stretches the last earnings collection
     ({{ "{:,.0f}".format(result.income_payout) }} UPX on {{ result.income_as_of }}) across a month.
-    The lists below are other collections these properties could fill. A property can only be in one.
+    Further down are collections these properties could fill that are not already on.
+    A property can only be in one.
 </p>
+{% endif %}
+
+{% if result.active_collections %}
+<div class="section-heading">
+    Collections on
+    <span class="section-count">({{ result.active_collections|length }})</span>
+</div>
+<table class="full-table">
+    <thead>
+        <tr>
+            <th>Collection</th>
+            <th>Boost</th>
+            <th>Requirement</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in result.active_collections %}
+        <tr>
+            <td>{{ c.name }}</td>
+            <td>{% if c.boost %}{{ c.boost }}x{% else %}—{% endif %}</td>
+            <td style="color:#666">{{ c.requirements }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 {% endif %}
 
 {% if result.almost %}
@@ -359,12 +385,13 @@
 </div>
 {% endif %}
 
-{% if result.completable %}
+{% set could_fill = result.completable|rejectattr("on")|list %}
+{% if could_fill %}
 <div class="section-heading">
     ✅ Could fill now
-    <span class="section-count">({{ result.completable|length }})</span>
+    <span class="section-count">({{ could_fill|length }})</span>
 </div>
-{% for c in result.completable %}
+{% for c in could_fill %}
 <div class="coll-item completable">
     <div class="coll-header">
         <span class="coll-name">{{ c.name }}</span>

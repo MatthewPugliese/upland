@@ -432,6 +432,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] Chart.js volume chart (dual axis: UPX left, USD right)
 - [x] Live transaction feed with 30s JS polling and marketplace filter
 - [x] Webapp deployed to Pi at `http://192.168.1.115:8080/economy` (LAN only — port 8080 not forwarded externally)
+- [x] Median UPX property-sale price for the selected period, and the timestamp of the newest stored sale. All-time skips the median so that sort does not run over the full sales table.
 
 ### Phase 4 — Polish
 - [x] City/neighborhood breakdown table (sortable) — city breakdown's city/neighborhood resolution

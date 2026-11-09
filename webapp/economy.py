@@ -73,11 +73,33 @@ def _period_start(period: str) -> str:
     return start.strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def _median_property_upx(conn, since: str):
+    """Median UPX price of property sales since `since`. Ignores spark and NFT sales."""
+    amounts = [
+        row[0] for row in conn.execute("""
+            SELECT upx_amount FROM transactions
+            WHERE timestamp >= ?
+              AND marketplace = 'upx'
+              AND asset_type = 'property'
+              AND upx_amount > 0
+            ORDER BY upx_amount
+        """, (since,))
+    ]
+    count = len(amounts)
+    if not count:
+        return None
+    mid = count // 2
+    if count % 2:
+        return amounts[mid]
+    return (amounts[mid - 1] + amounts[mid]) / 2
+
+
 def summary(period: str = "30d") -> dict:
     conn = _connect()
     if not conn:
         return {"upx_volume": 0, "usd_volume": 0, "upx_trades": 0, "usd_trades": 0,
-                "period": period, "period_start": None, "no_data": True}
+                "period": period, "period_start": None, "no_data": True,
+                "median_upx": None, "latest_sale": None}
     try:
         since = _period_start(period)
         rows = conn.execute("""
@@ -90,7 +112,8 @@ def summary(period: str = "30d") -> dict:
             GROUP BY marketplace
         """, (since,)).fetchall()
         result = {"upx_volume": 0, "usd_volume": 0, "upx_trades": 0, "usd_trades": 0,
-                  "period": period, "period_start": since, "no_data": False}
+                  "period": period, "period_start": since, "no_data": False,
+                  "median_upx": None, "latest_sale": None}
         for row in rows:
             if row["marketplace"] == "upx":
                 result["upx_volume"] = row["upx_volume"]
@@ -98,6 +121,11 @@ def summary(period: str = "30d") -> dict:
             elif row["marketplace"] == "usd":
                 result["usd_volume"] = row["usd_volume"]
                 result["usd_trades"] = row["trade_count"]
+        latest = conn.execute("SELECT MAX(timestamp) AS latest FROM transactions").fetchone()
+        result["latest_sale"] = latest["latest"] if latest else None
+        # All-time is a full-table sort on the Pi database. Skip the median there.
+        if period != "all":
+            result["median_upx"] = _median_property_upx(conn, since)
         return result
     finally:
         conn.close()

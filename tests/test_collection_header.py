@@ -90,6 +90,17 @@ class HeaderTests(unittest.TestCase):
         self.assertEqual(result["total_properties"], 2)
         self.assertEqual(result["collections_on"], 1)
         self.assertTrue(result["completable"][0]["on"])
+        collection_tracker.apply_tracker_header(
+            result, props, 0.1225, profile, income,
+            all_collections=[{
+                "id": 5, "name": "Catalog name", "yieldBoost": 2.5,
+                "requirements": "Own 1 property on Main St.",
+                "rarityLevel": 3,
+            }],
+        )
+        self.assertEqual(result["active_collections"][0]["name"], "Main")
+        self.assertEqual(result["active_collections"][0]["boost"], 2.5)
+        self.assertEqual(result["active_collections"][0]["requirements"], "Own 1 property on Main St")
         self.assertEqual(result["current_monthly_yield"], 181373)
         self.assertEqual(result["yield_source"], "collection")
 
@@ -195,7 +206,9 @@ class PageTests(unittest.TestCase):
         self.assertIn("Oct 30, 2026", page)
         self.assertIn("81,792 UPX", page)
         self.assertNotIn("Current UPX/month (12.25%)", page)
-        self.assertIn(">On<", page)
+        self.assertIn("1.5x", page)
+        self.assertIn("Own 1 property on MAIN ST in Chicago", page)
+        self.assertNotIn("10 MAIN ST", page)
 
     def test_page_falls_back_to_the_mint_estimate(self):
         player_profile.fetch_player_profile = lambda username: None

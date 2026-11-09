@@ -230,7 +230,8 @@
 
 {% block content %}
 <h2 style="margin-bottom: 4px;">Economy Dashboard</h2>
-<p style="color:#888;font-size:13px;margin-bottom:16px;">Live player-to-player marketplace activity across UPX and USD economies.</p>
+<p style="color:#888;font-size:13px;margin-bottom:4px;">Player-to-player sales stored by the local scraper.</p>
+<p id="latest-sale" style="color:#888;font-size:12px;margin:0 0 16px;"></p>
 
 <div id="no-data-banner" class="no-data-banner" style="display:none">
     No transaction data yet — the scraper is still backfilling. Check back soon.
@@ -249,6 +250,7 @@
         <div class="hero-label">UPX Marketplace</div>
         <div class="hero-volume" id="upx-volume">—</div>
         <div class="hero-trades" id="upx-trades">— trades</div>
+        <div class="hero-trades" id="upx-median"></div>
     </div>
     <div class="hero-card usd">
         <div class="hero-label">USD Marketplace</div>
@@ -440,8 +442,14 @@ async function loadSummary() {
     }
     document.getElementById('upx-volume').textContent = fmtUpx(d.upx_volume);
     document.getElementById('upx-trades').textContent = fmtNum(d.upx_trades) + ' trades';
+    document.getElementById('upx-median').textContent = d.median_upx == null
+        ? '' : 'median property sale ' + fmtUpxFull(d.median_upx);
     document.getElementById('usd-volume').textContent = fmtUsd(d.usd_volume);
     document.getElementById('usd-trades').textContent = fmtNum(d.usd_trades) + ' trades';
+    const latest = document.getElementById('latest-sale');
+    latest.textContent = d.latest_sale
+        ? 'Newest stored sale: ' + d.latest_sale.replace('T', ' ').slice(0, 16) + ' UTC'
+        : '';
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────

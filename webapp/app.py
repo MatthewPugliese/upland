@@ -232,7 +232,10 @@ def collections_run():
         profile = fetch_player_profile(username)
         income_cache = CACHE_DIR / f"{eos_account.lower()}_collection_income.json"
         income = latest_collection_income(eos_account, cache_path=income_cache)
-        apply_tracker_header(result, props, annual_rate, profile=profile, income=income)
+        apply_tracker_header(
+            result, props, annual_rate,
+            profile=profile, income=income, all_collections=colls,
+        )
 
         # Store analysis server-side (keyed by a small token in the session cookie) so
         # the forsale/map/budget-optimize endpoints can reuse it without re-running —

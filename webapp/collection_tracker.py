@@ -88,8 +88,41 @@ def analyze_collections(user_props: list, all_collections: list) -> dict:
     }
 
 
+def _active_collections(profile: dict, all_collections: list | None) -> list:
+    """Collections the profile says are turned on, with boost from the catalog."""
+    by_id = {}
+    for coll in all_collections or []:
+        try:
+            by_id[int(coll.get("id"))] = coll
+        except (TypeError, ValueError):
+            continue
+    rows = []
+    for item in profile.get("collections") or []:
+        try:
+            coll_id = int(item["id"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        defined = by_id.get(coll_id) or {}
+        raw_boost = defined.get("yieldBoost", defined.get("yield_boost"))
+        try:
+            boost = float(raw_boost) if raw_boost is not None else None
+        except (TypeError, ValueError):
+            boost = None
+        rarity_level = defined.get("rarityLevel", defined.get("category"))
+        rows.append({
+            "id": coll_id,
+            "name": item.get("name") or defined.get("name") or "",
+            "boost": boost,
+            "requirements": (defined.get("requirements") or "").rstrip("."),
+            "rarity": RARITY_NAMES.get(rarity_level, ""),
+        })
+    rows.sort(key=lambda row: (-(row["boost"] or 0), row["name"].lower()))
+    return rows
+
+
 def apply_tracker_header(result: dict, props: list, annual_rate: float,
-                         profile: dict | None = None, income: dict | None = None) -> dict:
+                         profile: dict | None = None, income: dict | None = None,
+                         all_collections: list | None = None) -> dict:
     """Fill the summary cards.
 
     Property count and collections that are on come from the public profile.
@@ -104,6 +137,7 @@ def apply_tracker_header(result: dict, props: list, annual_rate: float,
     if profile and profile.get("property_ids"):
         result["total_properties"] = len(profile["property_ids"])
         result["collections_on"] = len(profile.get("collections") or [])
+        result["active_collections"] = _active_collections(profile, all_collections)
         active = set()
         for coll in profile.get("collections") or []:
             try:
@@ -119,6 +153,7 @@ def apply_tracker_header(result: dict, props: list, annual_rate: float,
     else:
         result["total_properties"] = len(props)
         result["collections_on"] = None
+        result["active_collections"] = []
 
     if income and income.get("monthly"):
         result["current_monthly_yield"] = income["monthly"]
