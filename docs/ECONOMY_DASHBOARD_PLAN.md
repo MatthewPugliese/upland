@@ -487,8 +487,7 @@ ssh -p 8008 -i ~/Desktop/rpi root@69.113.229.61 \
 **2026-11-09**: deployed through `6e154a2`. Image built on the Mac and loaded on the Pi. Only the webapp container was recreated (`--no-build`); the scraper and Home Assistant were left running. `/`, `/economy`, `/collections`, `/listings`, `/floor?neighborhood=Gardens`, and `/score` all returned 200. `data/listings.db` was copied beside the Pi's economy database. The Pi economy database was not replaced.
 
 ### Deployment notes
-- Webapp uses `Dockerfile.webapp` (light: flask + gunicorn + requests only, ~160MB image, no shapely/matplotlib/numpy)
-- Map/optimizer routes lazy-load heavy deps — will error if hit on Pi since those packages aren't installed; run those features from Mac
+- Webapp uses `Dockerfile.webapp` (flask, gunicorn, requests, and folium). Collection maps and neighborhood maps render on the Pi. shapely and matplotlib are still left out, so outline merging falls back and zone overlays are not available there.
 - Pi kernel does not support cgroup memory limits — `memory limit capabilities` warning on startup is harmless
 - Pi swap expanded from 200MB → 1GB (`/etc/dphys-swapfile`) to give headroom alongside HA
 - HA uses ~1.5GB RAM after warmup; with 1GB swap the system is stable at idle
