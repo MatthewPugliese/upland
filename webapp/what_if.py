@@ -495,6 +495,7 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
     used_lots: set[str] = set()
     used_names: set[str] = set()
     picks = []
+    skipped: list[dict] = []
 
     def candidates(cat_key: str | None, agreed_only: bool) -> list[dict]:
         found = []
@@ -570,11 +571,16 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
     for cat in sorted(categories, key=lambda row: (row["pct_of_target"], row["key"])):
         if len(picks) >= limit:
             break
-        pool = candidates(cat["key"], agreed_only=True) or candidates(cat["key"], agreed_only=False)
-        if pool:
-            take(pool)
+        agreed = candidates(cat["key"], agreed_only=True)
+        if agreed:
+            take(agreed)
+            continue
+        disputed = candidates(cat["key"], agreed_only=False)
+        if disputed:
+            sample = min(disputed, key=lambda row: (row["_waste"], row["address"], row["structure"]))
+            skipped.append(sample)
     while len(picks) < limit:
-        pool = candidates(None, agreed_only=True) or candidates(None, agreed_only=False)
+        pool = candidates(None, agreed_only=True)
         if not pool:
             break
         take(pool)
@@ -584,13 +590,20 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
         row["label"] = _pick_label(row)
 
     if not picks:
-        note = "No service structure in the database fits an empty lot of yours."
+        note = "No agreed service structure fits an empty lot of yours."
     elif picks[0]["category"] != worst["key"]:
         note = (
             f"{worst['label']} is the shortest category at {worst['pct_of_target']}% of target. "
-            f"Nothing that adds {worst['label']} SU fits an empty lot of yours. "
-            f"Next is {picks[0]['structure']} on {picks[0]['address']}."
         )
+        blocked = next((row for row in skipped if row["category"] == worst["key"]), None)
+        if blocked and blocked.get("catalog"):
+            note += (
+                f"{blocked['structure']} would move it, but {blocked['catalog']}, "
+                "so it is left out of this order. "
+            )
+        else:
+            note += f"Nothing that adds {worst['label']} SU fits an empty lot of yours. "
+        note += f"The order starts with {picks[0]['structure']} on {picks[0]['address']}."
     else:
         top = picks[0]
         note = (
@@ -598,22 +611,13 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
             f"{top['structure']} on {top['address']} is the build that moves it "
             f"({top['before_pct']}% → {top['after_pct']}%)."
         )
-        if top.get("catalog"):
-            note += f" The structure catalog disagrees: {top['catalog']}."
-            agreed = next((row for row in picks[1:] if not row.get("catalog")), None)
-            if agreed:
-                note += (
-                    f" The next build both sources agree on is "
-                    f"{agreed['structure']} on {agreed['address']}."
-                )
-        else:
-            bigger = next((row for row in picks[1:] if row["pct_gain"] > top["pct_gain"]), None)
-            if bigger:
-                note += (
-                    f" {bigger['structure']} on {bigger['address']} gains more "
-                    f"({bigger['pct_gain']} points) in {bigger['category_label']}, "
-                    "which is already closer to target."
-                )
+        bigger = next((row for row in picks[1:] if row["pct_gain"] > top["pct_gain"]), None)
+        if bigger:
+            note += (
+                f" {bigger['structure']} on {bigger['address']} gains more "
+                f"({bigger['pct_gain']} points) in {bigger['category_label']}, "
+                "which is already closer to target."
+            )
     if len(picks) > 1:
         note += " Each row uses a different lot, and the percentages stack in this order."
     if any(row["spark_estimated"] for row in picks):

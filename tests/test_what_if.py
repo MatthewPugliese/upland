@@ -178,21 +178,18 @@ class BestBuildTests(unittest.TestCase):
         with patch.object(what_if, "_spark_brief", return_value={"hours": 3, "estimated": True}):
             best = what_if.best_builds(self._score_short_transport(), lots, {})
         self.assertEqual(best["worst"]["key"], "transportation")
-        self.assertEqual(best["picks"][0]["structure"], "Bus Stop")
-        self.assertEqual(best["picks"][0]["address"], "1 Small St")
+        self.assertNotIn("Bus Stop", [row["structure"] for row in best["picks"]])
+        self.assertEqual(best["picks"][0]["category"], "essential")
         self.assertEqual(
             len({row["prop_id"] for row in best["picks"]}),
             len(best["picks"]),
         )
         self.assertIn("different lot", best["note"])
+        self.assertIn("left out", best["note"])
+        self.assertIn("catalog says 0.25", best["note"])
         self.assertNotIn("2 Their St", [row["address"] for row in best["picks"]])
         self.assertIn("est", best["picks"][0]["label"])
-        essential = next(row for row in best["picks"] if row["category"] == "essential")
-        self.assertGreater(essential["pct_gain"], best["picks"][0]["pct_gain"])
-        self.assertIn("catalog says 0.25", best["picks"][0]["label"])
-        self.assertIn("both sources agree", best["note"])
-        agreed = next(row for row in best["picks"][1:] if not row["catalog"])
-        self.assertIn(agreed["structure"], best["note"])
+        self.assertFalse(any(row["catalog"] for row in best["picks"]))
 
     def test_half_up_of_slack_beats_a_tighter_lot(self):
         lots = [
@@ -201,7 +198,8 @@ class BestBuildTests(unittest.TestCase):
             {"prop_id": "room", "address": "2 Room St", "up2": 12, "width": 3.0, "depth": 6,
              "is_mine": True},
         ]
-        with patch.object(what_if, "_spark_brief", return_value=None):
+        with patch.object(what_if, "catalog_conflicts", return_value={}), \
+             patch.object(what_if, "_spark_brief", return_value=None):
             best = what_if.best_builds(self._score_short_transport(), lots, {})
         self.assertEqual(best["picks"][0]["structure"], "Bus Stop")
         self.assertEqual(best["picks"][0]["address"], "2 Room St")
@@ -212,7 +210,8 @@ class BestBuildTests(unittest.TestCase):
             "prop_id": "tight", "address": "1 Tight St", "up2": 8, "width": 2.2, "depth": 6,
             "is_mine": True,
         }]
-        with patch.object(what_if, "_spark_brief", return_value=None):
+        with patch.object(what_if, "catalog_conflicts", return_value={}), \
+             patch.object(what_if, "_spark_brief", return_value=None):
             best = what_if.best_builds(self._score_short_transport(), lots, {})
         self.assertTrue(best["picks"][0]["close_fit"])
         self.assertIn("within 0.5 of the minimum width", best["picks"][0]["label"])
