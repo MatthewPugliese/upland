@@ -265,6 +265,14 @@
 </div>
 {% else %}
 
+{% if score.cache_gaps %}
+<p class="spark-note">
+    {% for gap in score.cache_gaps %}
+    {{ gap.address }} already has a {{ gap.structure }} the cache has not recorded. The numbers on this page count it.
+    {% endfor %}
+</p>
+{% endif %}
+
 <div class="summary-grid">
     <div class="stat-card highlight">
         <div class="value">{{ score.total_lu }}</div>

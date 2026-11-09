@@ -145,6 +145,68 @@ def pending_builds(hood_name: str, props: list, structs: dict) -> list[dict]:
     return pending
 
 
+def _with_health(categories: list[dict]) -> list[dict]:
+    colored = []
+    for row in categories:
+        row = dict(row)
+        pct = row.get("pct_of_target") or 0
+        row["health"] = "green" if pct >= 80 else ("yellow" if pct >= 40 else "red")
+        colored.append(row)
+    return colored
+
+
+def apply_known_builds(hood_name: str, score: dict | None) -> dict | None:
+    """Count builds the structures cache has not recorded yet.
+
+    The score page and the what-if table then start from the same numbers.
+    """
+    if not score:
+        return score
+    structs = get_cached_structures(hood_name) or {}
+    props = get_cached_props(hood_name) or []
+    pending = pending_builds(hood_name, props, structs)
+    if not pending:
+        return score
+    folded = fold_pending(score, pending)
+    adjusted = dict(score)
+    for key in (
+        "total_lu", "total_su", "su_per_lu", "office_count",
+        "employment_buildings", "props_with_structs", "density_pct",
+    ):
+        if key in folded:
+            adjusted[key] = folded[key]
+    categories = _with_health(folded.get("categories") or [])
+    adjusted["categories"] = categories
+    adjusted["gaps"] = sorted(categories, key=lambda row: row["pct_of_target"])[:3]
+    inventory = [dict(row) for row in score.get("inventory") or []]
+    by_name = {row.get("name"): row for row in inventory}
+    for gap in pending:
+        name = gap["structure"]
+        info = STRUCTURES.get(name) or {}
+        current = by_name.get(name)
+        if current:
+            current["count"] = (current.get("count") or 0) + 1
+            continue
+        try:
+            from building_images import get_image_url
+            image = get_image_url(name)
+        except ImportError:
+            image = ""
+        inventory.append({
+            "name": name,
+            "count": 1,
+            "type": info.get("type", "unknown"),
+            "su": info.get("su", 0) or 0,
+            "su_cat": _CAT_LABELS.get(info.get("su_cat"), ""),
+            "lu": info.get("living_units", 0) or 0,
+            "image_url": image,
+        })
+    inventory.sort(key=lambda row: -(row.get("count") or 0))
+    adjusted["inventory"] = inventory
+    adjusted["cache_gaps"] = pending
+    return adjusted
+
+
 def fold_pending(score: dict, pending: list[dict]) -> dict:
     """Count known builds in the baseline the what-if table starts from."""
     total_props = score.get("total_props") or 0

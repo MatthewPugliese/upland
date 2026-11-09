@@ -234,6 +234,27 @@ class CacheGapTests(unittest.TestCase):
         self.assertIn("Barn & Nobles", essential["variety_names"])
         self.assertEqual(public["su"], 3)
 
+    def test_published_score_counts_the_uncached_build(self):
+        score = _score()
+        score["inventory"] = [{
+            "name": "Bodega", "count": 1, "type": "service",
+            "su": 2, "su_cat": "Essential", "lu": 0, "image_url": "",
+        }]
+        props = [{"id": "1", "address": "114 Seaview Ave"}]
+        structs = {"1": []}
+        with patch.object(what_if, "get_cached_structures", return_value=structs), \
+             patch.object(what_if, "get_cached_props", return_value=props):
+            adjusted = what_if.apply_known_builds("Dongan Hills", score)
+        essential = next(row for row in adjusted["categories"] if row["key"] == "essential")
+        self.assertEqual(essential["su"], 14)
+        self.assertIn(essential["health"], ("red", "yellow", "green"))
+        self.assertEqual(score["total_su"], 10)
+        barn = next(row for row in adjusted["inventory"] if row["name"] == "Barn & Nobles")
+        self.assertEqual(barn["count"], 1)
+        self.assertEqual(adjusted["gaps"][0]["pct_of_target"], min(
+            row["pct_of_target"] for row in adjusted["categories"]
+        ))
+
     def test_recorded_building_is_not_counted_twice(self):
         props = [{"id": "1", "address": "114 Seaview Ave"}]
         structs = {"1": [{"buildingName": "Barn & Nobles"}]}

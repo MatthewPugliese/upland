@@ -521,6 +521,9 @@ def score():
     hood = request.args.get("neighborhood", "Dongan Hills").strip()
     cached = list_cached_neighborhoods()
     score = get_neighborhood_score(hood)
+    if score:
+        from what_if import apply_known_builds
+        score = apply_known_builds(hood, score)
     return render_template("score.html", score=score, neighborhood=hood, cached=cached)
 
 
