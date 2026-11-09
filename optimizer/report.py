@@ -2,8 +2,8 @@
 """
 Upland Neighborhood Recommendation Report
 
-Generates a self-contained HTML table ranked by SU gain with zone/action filters
-and sortable columns. All filtering and sorting runs client-side — no server needed.
+Generates a self-contained HTML table. Empty-lot builds are listed first,
+then demolitions. Columns stay sortable. Filtering and sorting run client-side.
 
 Usage (standalone):
     python3 report.py "Dongan Hills" --username pugs08
@@ -20,7 +20,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from structure_fitter import STRUCTURES
-from recommender import auto_recommend, compute_lu_balance
+from known_builds import apply_missing_builds
+from recommender import ACTION_SORT, auto_recommend, compute_lu_balance
 
 ZONE_COLORS = {
     "commercial":  "#E74C3C",
@@ -99,7 +100,7 @@ def build_rows(props, structures, user_ids, api_dims, prop_zones, neighborhood_c
 
     rows.sort(key=lambda r: (
         0 if r["is_mine"] else 1,
-        {"DEMOLISH → BUILD": 0, "BUILD": 1, "KEEP": 2}.get(r["action"], 9),
+        ACTION_SORT.get(r["action"], 9),
         -(r["su_gain"] or 0),
     ))
     return rows
@@ -265,7 +266,7 @@ tr:not(.mine) td.addr{{font-weight:400;color:#bbb}}
         <th onclick="sortBy('action')">Action</th>
         <th onclick="sortBy('recommended_name')">Recommendation</th>
         <th onclick="sortBy('su_cat')">SU Type</th>
-        <th onclick="sortBy('su_gain')">SU Gain ↓</th>
+        <th onclick="sortBy('su_gain')">SU Gain</th>
         <th onclick="sortBy('current_su')">Current</th>
       </tr>
     </thead>
@@ -282,11 +283,13 @@ const ZONE_COLORS = {json.dumps(ZONE_COLORS)};
 const ZONE_NAMES  = {json.dumps(ZONE_NAMES)};
 const ACTION_COLORS = {json.dumps(ACTION_COLORS)};
 
+const ACTION_RANK = {{'BUILD': 0, 'DEMOLISH → BUILD': 1, 'KEEP': 2}};
+
 let state = {{
   zone: 'all', action: 'all',
   mineOnly: {'true' if username else 'false'},
   minGain: 0,
-  sortCol: 'su_gain', sortDir: -1
+  sortCol: null, sortDir: -1
 }};
 
 function setZone(btn, z) {{
@@ -326,6 +329,13 @@ function filtered() {{
 function render() {{
   const rows = filtered();
   rows.sort((a,b) => {{
+    if (!state.sortCol) {{
+      const mine = (b.is_mine ? 1 : 0) - (a.is_mine ? 1 : 0);
+      if (mine) return mine;
+      const rank = (ACTION_RANK[a.action] ?? 9) - (ACTION_RANK[b.action] ?? 9);
+      if (rank) return rank;
+      return (b.su_gain || 0) - (a.su_gain || 0);
+    }}
     let av = a[state.sortCol], bv = b[state.sortCol];
     if (av == null) av = ''; if (bv == null) bv = '';
     if (typeof av === 'string') return av.localeCompare(bv) * state.sortDir;
@@ -423,6 +433,7 @@ def main():
 
     props      = json.loads(props_path.read_text())
     structures = json.loads(structs_path.read_text()) if structs_path.exists() else {}
+    apply_missing_builds(args.neighborhood, props, structures)
     dims_raw   = json.loads(dims_path.read_text()) if dims_path.exists() else {}
     api_dims   = {k: v for k, v in dims_raw.items() if k != "_ts"}
     blockchain = json.loads(blockchain_path.read_text()) if blockchain_path.exists() else {}

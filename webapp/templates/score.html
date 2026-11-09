@@ -507,6 +507,7 @@
 
 <!-- ── Recommendations ──────────────────────────────────────────────────── -->
 <h3 class="section-heading">Recommendations</h3>
+<p class="spark-note">Empty-lot builds are listed first. Demolitions stay in the list under them. This list is the largest structure that fits each lot. The build order above is the one that moves the neighborhood score.</p>
 
 <div id="spark-panel" class="spark-panel" style="display:none">
     <div class="spark-panel-title">⚡ Spark Hours Estimator <span style="font-weight:400;color:#999;font-size:11px">(time @ min stack)</span></div>
@@ -558,7 +559,7 @@
             <th onclick="sortBy('eff_width')" class="sort-none" data-col="eff_width" style="text-align:right">Eff W <span class="sort-arrow"></span></th>
             <th onclick="sortBy('action')" class="sort-none" data-col="action">Action <span class="sort-arrow"></span></th>
             <th onclick="sortBy('recommended_name')" class="sort-none" data-col="recommended_name">Recommended Structure <span class="sort-arrow"></span></th>
-            <th onclick="sortBy('su_gain')" class="sort-desc" data-col="su_gain" style="text-align:right">SU Gain <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('su_gain')" class="sort-none" data-col="su_gain" style="text-align:right">SU Gain <span class="sort-arrow"></span></th>
             <th onclick="sortBy('spark_hours')" class="sort-none" data-col="spark_hours" style="text-align:right">Spark hrs <span class="sort-arrow"></span></th>
             <th onclick="sortBy('su_per_spark_hour')" class="sort-none" data-col="su_per_spark_hour" style="text-align:right">SU / hr <span class="sort-arrow"></span></th>
             <th>Current Structures</th>
@@ -582,7 +583,8 @@ const ZONE_COLORS = {
 let _allRows = [];
 let _mineOnly = true;
 let _actionFilter = '';
-let _sortCol = 'su_gain';
+const ACTION_RANK = {'BUILD': 0, 'DEMOLISH → BUILD': 1, 'KEEP': 2};
+let _sortCol = null;
 let _sortDir = 'desc';
 let _sparkNote = '';
 let _planProgress = null;
@@ -663,8 +665,18 @@ function renderSparkSummary(rows) {
 function renderRows() {
     let rows = filteredRows();
 
-    // Sort
+    // Default: your lots, then empty-lot builds, then demolitions, then keeps.
+    // A column click replaces that with a single-column sort.
     rows = [...rows].sort((a, b) => {
+        if (!_sortCol) {
+            const mine = (b.is_mine ? 1 : 0) - (a.is_mine ? 1 : 0);
+            if (mine) return mine;
+            const rank = (ACTION_RANK[a.action] ?? 9) - (ACTION_RANK[b.action] ?? 9);
+            if (rank) return rank;
+            const gain = (b.su_gain || 0) - (a.su_gain || 0);
+            if (gain) return gain;
+            return (a.address || '').localeCompare(b.address || '');
+        }
         let av = a[_sortCol], bv = b[_sortCol];
         // Numeric columns: nulls sort last regardless of direction
         const numericCols = new Set(['su_gain', 'spark_hours', 'su_per_spark_hour', 'up2', 'eff_width']);
@@ -769,8 +781,8 @@ function renderPlanProgress(pp) {
     document.getElementById('plan-bar').style.width = Math.min(100, pp.pct_complete) + '%';
     const by = pp.remaining_by_action || {};
     const parts = [];
-    if (by['DEMOLISH → BUILD']) parts.push(by['DEMOLISH → BUILD'] + ' demolish');
     if (by['BUILD']) parts.push(by['BUILD'] + ' build');
+    if (by['DEMOLISH → BUILD']) parts.push(by['DEMOLISH → BUILD'] + ' demolish');
     const next = (pp.remaining_actions || []).slice(0, 3)
         .map(a => a.address + ' → ' + a.recommended_name).join(' · ');
     document.getElementById('plan-breakdown').innerHTML =

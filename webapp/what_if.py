@@ -21,15 +21,12 @@ from score_calculator import (
     get_cached_props,
     get_cached_structures,
 )
+from known_builds import KNOWN_BUILDS
 from structure_fitter import STRUCTURES, structures_that_fit
 
 _OPTIMIZER_CACHE = Path(__file__).resolve().parent.parent / "optimizer" / "cache"
 _OWNER_CACHE = CACHE_DIR / "pugs08_blockchain_cache.json"
 _RESIDENT_CATS = ("essential", "entertainment", "public", "transportation")
-# The structures cache still lists these as empty. They are already built.
-_CACHE_GAPS = (
-    {"neighborhood": "dongan hills", "address": "114 SEAVIEW AVE", "structure": "Barn & Nobles"},
-)
 _CAT_LABELS = {
     "essential": "Essential",
     "entertainment": "Entertainment",
@@ -128,7 +125,7 @@ def pending_builds(hood_name: str, props: list, structs: dict) -> list[dict]:
     }
     hood = (hood_name or "").strip().lower()
     pending = []
-    for gap in _CACHE_GAPS:
+    for gap in KNOWN_BUILDS:
         if gap["neighborhood"] != hood:
             continue
         prop_id = ids_by_address.get(gap["address"])

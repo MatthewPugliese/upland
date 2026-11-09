@@ -820,6 +820,10 @@ Examples:
         except Exception as e:
             print(f"[~] Zone overrides file unreadable: {e}")
 
+    # Known buildings the structures cache has not recorded yet. In memory only.
+    from known_builds import apply_missing_builds
+    apply_missing_builds(args.neighborhood, props, structures)
+
     # Step 10: Render map
     render_zone_map(
         hood=hood,

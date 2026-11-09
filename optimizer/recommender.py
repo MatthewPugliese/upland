@@ -10,6 +10,7 @@ from pathlib import Path
 
 # Make structure_fitter importable from either the optimizer dir or from the webapp
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from known_builds import apply_missing_builds
 from structure_fitter import STRUCTURES, best_service_for_zone
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -420,13 +421,18 @@ def auto_recommend(prop_id: str, up2: float, width_up: float, depth_up: float,
     }
 
 
+# Empty-lot builds come before demolitions. A demolition can still be the
+# bigger SU gain. It stays in the list, under the builds.
+ACTION_SORT = {"BUILD": 0, "DEMOLISH → BUILD": 1, "KEEP": 2}
+
+
 def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
     """
     Load cached data and return recommendations for all properties.
 
     Returns:
         rows        — list of row dicts (see below), sorted: owned-first,
-                      then by action priority, then by su_gain descending
+                      then empty-lot builds, then demolitions, then by SU gain
         lu_balance  — output of compute_lu_balance() for user-owned props
         neighborhood_counts — {structure_name: count} across all props
 
@@ -446,6 +452,7 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
 
     props = json.loads(props_path.read_text())
     structures = json.loads(structs_path.read_text()) if structs_path.exists() else {}
+    apply_missing_builds(neighborhood, props, structures)
     dims_raw = json.loads(dims_path.read_text()) if dims_path.exists() else {}
     api_dims = {k: v for k, v in dims_raw.items() if k != "_ts"}
     blockchain = json.loads(blockchain_path.read_text()) if blockchain_path.exists() else {}
@@ -504,12 +511,10 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
             "desc": rec["desc"],
         })
 
-    _ACTION_PRIORITY = {"DEMOLISH → BUILD": 0, "BUILD": 1, "KEEP": 2}
-
     def _sort_key(r):
         return (
             0 if r["is_mine"] else 1,
-            _ACTION_PRIORITY.get(r["action"], 9),
+            ACTION_SORT.get(r["action"], 9),
             -(r["su_gain"] or 0),
         )
 
