@@ -145,6 +145,43 @@ def summary(period: str = "30d") -> dict:
         conn.close()
 
 
+def _empty_bucket(timestamp: str) -> dict:
+    return {
+        "timestamp": timestamp,
+        "upx_volume": 0,
+        "usd_volume": 0,
+        "upx_trades": 0,
+        "usd_trades": 0,
+        "property_upx_volume": 0,
+        "other_upx_volume": 0,
+    }
+
+
+def _add_upx_split(conn, since: str, buckets: dict, hourly: bool) -> None:
+    """Add property vs spark/NFT UPX volume for one period. Uses the timestamp index."""
+    bucket_expr = "substr(timestamp, 1, 13) || ':00:00'" if hourly else "substr(timestamp, 1, 10)"
+    for bucket in buckets.values():
+        bucket["property_upx_volume"] = 0
+        bucket["other_upx_volume"] = 0
+    rows = conn.execute(f"""
+        SELECT {bucket_expr} AS bucket,
+               CASE WHEN asset_type = 'property' THEN 'property' ELSE 'other' END AS kind,
+               COALESCE(SUM(upx_amount), 0) AS volume
+        FROM transactions
+        WHERE timestamp >= ?
+          AND marketplace = 'upx'
+          AND upx_amount > 0
+        GROUP BY bucket, kind
+    """, (since,)).fetchall()
+    for row in rows:
+        bucket = buckets.get(row["bucket"])
+        if bucket is None:
+            bucket = _empty_bucket(row["bucket"])
+            buckets[row["bucket"]] = bucket
+        key = "property_upx_volume" if row["kind"] == "property" else "other_upx_volume"
+        bucket[key] = row["volume"]
+
+
 def timeseries(period: str = "30d") -> list:
     conn = _connect()
     if not conn:
@@ -187,6 +224,11 @@ def timeseries(period: str = "30d") -> list:
             elif row["marketplace"] == "usd":
                 buckets[b]["usd_volume"] = row["volume"]
                 buckets[b]["usd_trades"] = row["trade_count"]
+        # All-time stays on the stored hourly totals. Splitting that period
+        # would group the whole sales table. Shorter periods separate property
+        # UPX from spark and NFT sales.
+        if period != "all":
+            _add_upx_split(conn, since, buckets, hourly=use_hourly)
         return sorted(buckets.values(), key=lambda x: x["timestamp"])
     finally:
         conn.close()

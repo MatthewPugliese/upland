@@ -491,30 +491,58 @@ async function loadChart() {
     const pts = await r.json();
 
     const labels = pts.map(p => p.timestamp);
-    const upxVols = pts.map(p => p.upx_volume / 1e6);   // millions
     const usdVols = pts.map(p => p.usd_volume);
+    const hasSplit = pts.length > 0 && pts[0].property_upx_volume != null;
 
     const isHourly = currentPeriod === 'today' || currentPeriod === '7d';
-    document.getElementById('chart-interval-label').textContent = isHourly ? 'hourly buckets' : 'daily buckets';
+    const grain = isHourly ? 'hourly buckets' : 'daily buckets';
+    document.getElementById('chart-interval-label').textContent = hasSplit
+        ? grain + ' · property sales separated from spark and NFT'
+        : grain + ' · UPX line includes spark and NFT sales';
     document.getElementById('chart-loading').style.display = 'none';
 
     if (volumeChart) volumeChart.destroy();
+
+    const pointRadius = pts.length > 60 ? 0 : 3;
+    const upxDatasets = hasSplit ? [
+        {
+            label: 'Property UPX (M)',
+            data: pts.map(p => (p.property_upx_volume || 0) / 1e6),
+            borderColor: '#1B4F72',
+            backgroundColor: 'rgba(27,79,114,0.08)',
+            fill: true,
+            tension: 0.3,
+            yAxisID: 'yUpx',
+            pointRadius,
+        },
+        {
+            label: 'Spark and NFT UPX (M)',
+            data: pts.map(p => (p.other_upx_volume || 0) / 1e6),
+            borderColor: '#7D3C98',
+            backgroundColor: 'rgba(125,60,152,0.08)',
+            fill: true,
+            tension: 0.3,
+            yAxisID: 'yUpx',
+            pointRadius,
+        },
+    ] : [
+        {
+            label: 'UPX Volume (M)',
+            data: pts.map(p => p.upx_volume / 1e6),
+            borderColor: '#1B4F72',
+            backgroundColor: 'rgba(27,79,114,0.08)',
+            fill: true,
+            tension: 0.3,
+            yAxisID: 'yUpx',
+            pointRadius,
+        },
+    ];
 
     volumeChart = new Chart(document.getElementById('volumeChart'), {
         type: 'line',
         data: {
             labels,
-            datasets: [
-                {
-                    label: 'UPX Volume (M)',
-                    data: upxVols,
-                    borderColor: '#1B4F72',
-                    backgroundColor: 'rgba(27,79,114,0.08)',
-                    fill: true,
-                    tension: 0.3,
-                    yAxisID: 'yUpx',
-                    pointRadius: pts.length > 60 ? 0 : 3,
-                },
+            datasets: upxDatasets.concat([
                 {
                     label: 'USD Volume',
                     data: usdVols,
@@ -523,9 +551,9 @@ async function loadChart() {
                     fill: true,
                     tension: 0.3,
                     yAxisID: 'yUsd',
-                    pointRadius: pts.length > 60 ? 0 : 3,
+                    pointRadius,
                 }
-            ]
+            ])
         },
         options: {
             responsive: true,
@@ -535,8 +563,11 @@ async function loadChart() {
                 tooltip: {
                     callbacks: {
                         label: ctx => {
-                            if (ctx.datasetIndex === 0) return ' UPX: ' + (ctx.raw * 1e6).toLocaleString(undefined, {maximumFractionDigits: 0});
-                            return ' USD: $' + ctx.raw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            const name = ctx.dataset.label || '';
+                            if (name.indexOf('USD') === 0) {
+                                return ' USD: $' + ctx.raw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            }
+                            return ' ' + name.replace(' (M)', '') + ': ' + (ctx.raw * 1e6).toLocaleString(undefined, {maximumFractionDigits: 0});
                         }
                     }
                 }

@@ -115,6 +115,26 @@ class EconomyFeedTests(unittest.TestCase):
         self.assertEqual(row["buyer_name"], "pugs08")
         self.assertIsNone(row["seller_name"])
 
+    def test_chart_separates_property_upx_from_spark_and_nft(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("""
+            CREATE TABLE hourly_aggregates (
+                hour TEXT, marketplace TEXT, trade_count INTEGER, volume REAL
+            )
+        """)
+        conn.execute(
+            "INSERT INTO hourly_aggregates VALUES (?,?,?,?)",
+            ("2026-11-09T12:00:00", "upx", 4, 52),
+        )
+        conn.commit()
+        conn.close()
+        points = economy.timeseries("30d")
+        self.assertEqual(sum(point["property_upx_volume"] for point in points), 40)
+        self.assertEqual(sum(point["other_upx_volume"] for point in points), 12)
+        all_points = economy.timeseries("all")
+        self.assertTrue(all_points)
+        self.assertNotIn("property_upx_volume", all_points[0])
+
 
 if __name__ == "__main__":
     unittest.main()
