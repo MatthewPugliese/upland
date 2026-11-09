@@ -89,15 +89,44 @@ def _fetch_prices_batch(candidates):
     return candidates
 
 
+def _cache_file_name(hood_name: str) -> str:
+    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in hood_name).strip().replace(" ", "_")
+    return f"{safe}_props_cache.json"
+
+
+def _pick_cache_name(names, hood_name: str):
+    """Match a neighborhood file even when its capitalization differs.
+
+    Requirements are compared in uppercase, so the lookup asks for
+    DONGAN_HILLS_props_cache.json. The saved file keeps the neighborhood's
+    own capitalization. That is the same path on a case-insensitive disk
+    and a miss on the Pi.
+    """
+    wanted = _cache_file_name(hood_name).lower()
+    for name in names:
+        if name.lower() == wanted:
+            return name
+    return None
+
+
+def _neighborhood_cache_path(hood_name: str):
+    folder = CACHE_DIR / "neighborhoods"
+    if not folder.is_dir():
+        return None
+    picked = _pick_cache_name((path.name for path in folder.iterdir() if path.is_file()), hood_name)
+    if not picked:
+        return None
+    return folder / picked
+
+
 def _load_neighborhood_cache(hood_name: str, allow_unknown: bool = False) -> list:
     """Load the webapp neighborhood property cache.
 
     The for-sale finder skips a file whose statuses are all Unknown. The
     collection map passes allow_unknown so that file can still be plotted.
     """
-    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in hood_name).strip().replace(" ", "_")
-    path = CACHE_DIR / "neighborhoods" / f"{safe}_props_cache.json"
-    if not path.exists():
+    path = _neighborhood_cache_path(hood_name)
+    if path is None:
         return []
     with open(path) as f:
         props = json.load(f)

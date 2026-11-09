@@ -123,7 +123,9 @@ Upland has hundreds of collections. Players typically:
   a developers-API city scan. It uses the neighborhood property file when one exists (including
   files whose sale status is still Unknown) and for-sale rows from the local listings snapshot.
   With no neighborhood file, it plots owned properties that match the requirement plus those
-  snapshot rows, and says unlisted properties are left out.
+  snapshot rows, and says unlisted properties are left out. The neighborhood file is matched
+  without regard to capitalization, so `Dongan_Hills_props_cache.json` is found when the
+  requirement is uppercase. That matters on the Pi, where the disk is case-sensitive.
 
   **Found and fixed a real bug while building this:** `forsale_finder._get_neighborhood_candidates`
   had an empty-string substring bug — landmark/locked properties with no neighborhood assigned

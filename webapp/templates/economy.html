@@ -580,6 +580,13 @@ function feedBadgeLabel(row) {
     return row.marketplace.toUpperCase();
 }
 
+function feedPlayer(name, account) {
+    if (name) {
+        return `<a href="https://play.upland.me/profile?username=${encodeURIComponent(name)}" target="_blank" class="acct-link">${name}</a>`;
+    }
+    return account || '?';
+}
+
 function assetLabel(row) {
     if (row.action === 'n111') return 'Spark / Equipment Sale';
     if (row.action === 'n112') return 'NFT Sale';
@@ -591,8 +598,8 @@ function buildFeedItem(row, isNew) {
     const label = feedBadgeLabel(row);
     const addr = row.address || (row.asset_type === 'property' ? '(unknown address)' : assetLabel(row));
     const city = row.city ? ' · ' + row.city : '';
-    const buyer = row.buyer || '?';
-    const seller = row.seller ? row.seller : '?';
+    const buyer = feedPlayer(row.buyer_name, row.buyer);
+    const seller = feedPlayer(row.seller_name, row.seller);
     const amount = row.marketplace === 'usd' ? fmtUsd(row.usd_amount) : fmtUpxFull(row.upx_amount);
     const amtClass = row.marketplace === 'usd' ? 'usd' : (row.asset_type === 'asset' || row.asset_type === 'nft' ? row.asset_type : 'upx');
     const t = relTime(row.timestamp);

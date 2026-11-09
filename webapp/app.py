@@ -642,7 +642,26 @@ def api_economy_feed():
         rows = _econ.latest_since(last_id, city=city, asset=asset)
     else:
         rows = _econ.feed(limit, marketplace, city=city, asset=asset)
+    _attach_feed_names(rows)
     return jsonify({"transactions": rows, "max_id": _econ.max_id()})
+
+
+def _attach_feed_names(rows: list) -> None:
+    """Add buyer_name and seller_name from the local username cache."""
+    try:
+        from username_lookup import lookup_many
+        accounts = [
+            account
+            for row in rows
+            for account in (row.get("buyer"), row.get("seller"))
+            if account
+        ]
+        names = lookup_many(accounts)
+    except Exception:
+        return
+    for row in rows:
+        row["buyer_name"] = names.get(row.get("buyer"))
+        row["seller_name"] = names.get(row.get("seller"))
 
 
 @app.route("/api/economy/cities")

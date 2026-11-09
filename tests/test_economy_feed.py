@@ -99,6 +99,22 @@ class EconomyFeedTests(unittest.TestCase):
         fallback = client.get("/api/economy/feed?asset=bogus").get_json()
         self.assertEqual([row["id"] for row in fallback["transactions"]], [5, 2, 1])
 
+    def test_feed_uses_cached_usernames(self):
+        import app as webapp
+        import username_lookup
+        old = username_lookup.lookup_many
+        username_lookup.lookup_many = lambda accounts: {"vwt3u3kmbncg": "pugs08"}
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("UPDATE transactions SET buyer=?, seller=? WHERE id=3", ("vwt3u3kmbncg", "zx4aqmh2epmf"))
+        conn.commit()
+        conn.close()
+        try:
+            row = webapp.app.test_client().get("/api/economy/feed?asset=asset").get_json()["transactions"][0]
+        finally:
+            username_lookup.lookup_many = old
+        self.assertEqual(row["buyer_name"], "pugs08")
+        self.assertIsNone(row["seller_name"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -159,6 +159,13 @@ class CollectionMapTests(unittest.TestCase):
         result = collection_map.build_collection_map(7, {"1"}, "pugs08")
         self.assertIn("geographic scope", result["error"])
 
+    def test_neighborhood_file_match_ignores_capitalization(self):
+        self.assertEqual(
+            forsale_finder._pick_cache_name(["Dongan_Hills_props_cache.json"], "DONGAN HILLS"),
+            "Dongan_Hills_props_cache.json",
+        )
+        self.assertIsNone(forsale_finder._pick_cache_name(["Other_props_cache.json"], "DONGAN HILLS"))
+
     def test_allow_unknown_keeps_placeholder_statuses(self):
         hood_dir = Path(self.tmp.name) / "neighborhoods"
         hood_dir.mkdir()
