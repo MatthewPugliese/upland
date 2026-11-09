@@ -97,11 +97,11 @@
         </div>
         <div class="stat-card green">
             <div class="value">{{ "{:,}".format(result.summary.est_monthly_yield) }}</div>
-            <div class="label">Est. Monthly Yield (UPX)</div>
+            <div class="label">{% if result.summary.yield_source == "collection" %}Monthly Yield (UPX){% else %}Est. Monthly Yield (UPX){% endif %}</div>
         </div>
         <div class="stat-card">
             <div class="value">{{ result.summary.est_hourly_yield }}</div>
-            <div class="label">Est. Hourly Yield (UPX)</div>
+            <div class="label">{% if result.summary.yield_source == "collection" %}Hourly Yield (UPX){% else %}Est. Hourly Yield (UPX){% endif %}</div>
         </div>
         <div class="stat-card">
             <div class="value">{{ "{:,}".format(result.summary.total_sparks_invested) }}</div>
@@ -118,7 +118,11 @@
         </div>
         {% endif %}
     </div>
-    <p class="yield-note">Yield figures assume a flat {{ result.summary.annual_rate_pct }}% annual rate against mint value (same model as the Collection Tracker) — a portfolio-level estimate, not a measured per-property income figure. Sparks Invested is a real computed sum (construction cost per placed structure){% if result.summary.pct_sparks_estimated > 0 %}, though {{ result.summary.pct_sparks_estimated }}% of it comes from structure types without a measured cost sample and is estimated{% endif %}.</p>
+    {% if result.summary.yield_source == "collection" %}
+    <p class="yield-note">Monthly yield is the last earnings collection ({{ "{:,.0f}".format(result.summary.income_payout) }} UPX on {{ result.summary.income_as_of }}), stretched across a month. Same figure as the Collection Tracker. It is not split per property. Sparks Invested is a real computed sum (construction cost per placed structure){% if result.summary.pct_sparks_estimated > 0 %}, though {{ result.summary.pct_sparks_estimated }}% of it comes from structure types without a measured cost sample and is estimated{% endif %}.</p>
+    {% else %}
+    <p class="yield-note">Yield figures assume a flat {{ result.summary.annual_rate_pct }}% annual rate against mint value. The last earnings collection was not available, so this is an estimate, not a measured income figure. Sparks Invested is a real computed sum (construction cost per placed structure){% if result.summary.pct_sparks_estimated > 0 %}, though {{ result.summary.pct_sparks_estimated }}% of it comes from structure types without a measured cost sample and is estimated{% endif %}.</p>
+    {% endif %}
     {% if result.summary.market_value_upx is defined %}
     <p class="yield-note">Market value covers {{ result.summary.market_value_neighborhoods_covered }} of {{ result.summary.market_value_neighborhoods_attempted }} attempted neighborhoods ({{ result.summary.market_value_coverage_pct }}% of total mint value) — comp-based (see Property Valuation Tool), not a flat rate. Neighborhoods beyond the top 15 by mint value aren't attempted and aren't included in this total.</p>
     {% endif %}

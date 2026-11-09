@@ -9,14 +9,11 @@ Reuses the same blockchain-derived ownership lookup as the collection
 optimizer (`load_user_properties`), then fetches UP² + placed structures
 per property from the public Upland API in one pass.
 
-Yield figures are the same flat-rate estimate used elsewhere in this repo
-(mintPrice x assumed annual yield rate) — there is no real per-property
-yield data available yet (see docs/PORTFOLIO_ANALYZER_PLAN.md and
-docs/ECONOMY_DASHBOARD_PLAN.md for why: n31 yield-collection events are
-not ingested by the scraper). Treat est_hourly_yield / est_monthly_yield
-as a rough portfolio-level estimate only, not a per-property ranking —
-under a flat rate every property yields strictly proportional to mint
-price, so there's nothing to rank.
+The portfolio monthly total uses the last on-chain earnings collection
+when one can be measured (same figure as the Collection Tracker). There
+is still no per-property split of that payout, so nothing here ranks
+properties by income. If the chain has no collection to measure, the
+total falls back to mint price times the annual rate.
 
 Spark investment (total_sparks_invested) IS a real, computed figure —
 sum of optimizer.spark_estimator.get_spark_cost()'s total_sparks per
@@ -155,6 +152,18 @@ def _estimate_market_value(neighborhoods: list, hood_city: dict) -> dict:
     }
 
 
+def _collection_income(eos_account: str | None) -> dict | None:
+    """Last earnings collection for this account, or None if it cannot be measured."""
+    if not eos_account:
+        return None
+    from collection_income import latest_collection_income
+    cache_path = SCRIPT_DIR / "cache" / f"{eos_account.lower()}_collection_income.json"
+    try:
+        return latest_collection_income(eos_account, cache_path=cache_path)
+    except Exception:
+        return None
+
+
 def build_portfolio(username: str, eos_account: str | None = None, annual_rate: float = 0.1225,
                      estimate_market_value: bool = False) -> dict:
     """
@@ -249,8 +258,19 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
 
     total_props = len(props)
     pct_developed = round(100 * developed_count / total_props, 1) if total_props else 0.0
-    est_monthly_yield = round(total_mint * annual_rate / 12)
-    est_hourly_yield = round(est_monthly_yield / (30 * 24), 2)
+    income = _collection_income(eos_account)
+    if income and income.get("monthly"):
+        est_monthly_yield = income["monthly"]
+        est_hourly_yield = income["hourly"]
+        yield_source = "collection"
+        income_as_of = income.get("as_of") or ""
+        income_payout = income.get("payout")
+    else:
+        est_monthly_yield = round(total_mint * annual_rate / 12)
+        est_hourly_yield = round(est_monthly_yield / (30 * 24), 2)
+        yield_source = "mint"
+        income_as_of = ""
+        income_payout = None
 
     neighborhoods = [
         {
@@ -291,6 +311,9 @@ def build_portfolio(username: str, eos_account: str | None = None, annual_rate: 
         "undeveloped_count": total_props - developed_count,
         "est_monthly_yield": est_monthly_yield,
         "est_hourly_yield": est_hourly_yield,
+        "yield_source": yield_source,
+        "income_as_of": income_as_of,
+        "income_payout": income_payout,
         "total_sparks_invested": total_sparks,
         "pct_sparks_estimated": pct_sparks_estimated,
         "neighborhood_count": len(hood_stats),

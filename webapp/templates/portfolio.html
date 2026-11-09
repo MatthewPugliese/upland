@@ -34,7 +34,7 @@
                 <span class="checkbox-hint">Runs a comp-sale search against your top 15 neighborhoods by mint value and applies the median UPX/USD per UP² — slower (up to ~30-60s) and only covers those neighborhoods, not the whole portfolio.</span>
             </span>
         </label>
-        <p class="field-note">Pulls the full property list from blockchain ownership history, then fetches UP² and placed structures per property from the Upland API. Leave EOS Account blank to auto-resolve it from the username (works for any of the ~207k known usernames — great for scouting other players too); supply it directly if the username isn't found. Yield figures are a flat-rate estimate against mint value (same model used by the Collection Tracker) — not a real per-property income figure.</p>
+        <p class="field-note">Pulls the property list from the public profile, then fetches UP² and placed structures per property. Leave EOS Account blank to auto-resolve it from the username. Monthly yield is the last earnings collection, same as the Collection Tracker. It is not split per property.</p>
         <button type="submit" class="btn-primary" id="submitBtn">Analyze Portfolio</button>
     </form>
 </div>
