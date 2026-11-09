@@ -81,6 +81,60 @@ def resolve_property(query: str) -> dict:
         conn.close()
 
 
+def _hood_dims_path(neighborhood: str) -> Path:
+    safe = "".join(
+        c if c.isalnum() or c in " -_" else "_" for c in (neighborhood or "")
+    ).strip().replace(" ", "_")
+    return OPTIMIZER_DIR / "cache" / f"{safe}_api_dims_cache.json"
+
+
+def cached_area(prop_id: str, address: str, neighborhood: str) -> float | None:
+    """UP² already stored for this property. UP² does not change, so an old cache still counts."""
+    entry = _load_area_cache().get(str(prop_id)) or {}
+    area = entry.get("area")
+    if area:
+        return float(area)
+
+    path = _hood_dims_path(neighborhood)
+    if not path.exists():
+        return None
+    try:
+        dims = json.loads(path.read_text())
+    except Exception:
+        return None
+    row = dims.get((address or "").upper().strip()) or {}
+    up2 = row.get("up2")
+    if not up2:
+        return None
+    return float(up2)
+
+
+def snapshot_listing(prop_id: str) -> dict | None:
+    """Asking price stored for this property, or None if it is not in the snapshot."""
+    scraper_dir = str(SCRIPT_DIR.parent / "scraper")
+    if scraper_dir not in sys.path:
+        sys.path.insert(0, scraper_dir)
+    try:
+        from listings_db import DEFAULT_DB, connect
+    except Exception:
+        return None
+    if not DEFAULT_DB.exists():
+        return None
+    conn = connect(DEFAULT_DB)
+    try:
+        row = conn.execute(
+            "SELECT currency, price FROM current_listings WHERE property_id = ?",
+            (str(prop_id),),
+        ).fetchone()
+    except Exception:
+        return None
+    finally:
+        conn.close()
+    if row is None or row["price"] is None or row["currency"] not in ("UPX", "USD"):
+        return None
+    return {"currency": row["currency"], "price": row["price"]}
+
+
 def fetch_property_live(prop_id: str) -> dict | None:
     """Fetch full live property data from the public Upland API."""
     try:
@@ -308,16 +362,33 @@ def estimate_value(query: str, include_floor: bool = True) -> dict:
     match = matches[0]
     prop_id = match["prop_id"]
     live = fetch_property_live(prop_id)
-    if not live:
-        return {"error": f"Couldn't fetch live data for property {prop_id} from the Upland API.",
-                 "matches": []}
-
-    target_area = live.get("area") or 0
-    on_market = live.get("on_market") or {}
-    is_listed = bool(live.get("on_market"))
-    listing_currency = on_market.get("currency", "") if is_listed else None
-    listing_price = live.get("price") if is_listed else None
-    buildings = live.get("buildings") or []
+    details_note = None
+    if live:
+        target_area = live.get("area") or cached_area(
+            prop_id, match["address"], match["neighborhood"]) or 0
+        on_market = live.get("on_market") or {}
+        is_listed = bool(live.get("on_market"))
+        listing_currency = on_market.get("currency", "") if is_listed else None
+        listing_price = live.get("price") if is_listed else None
+        buildings = live.get("buildings") or []
+        details_source = "live"
+    else:
+        # The public API did not answer. Size and asking price can still come
+        # from files already on disk. Structures are not in those files.
+        target_area = cached_area(prop_id, match["address"], match["neighborhood"]) or 0
+        listed = snapshot_listing(prop_id)
+        is_listed = listed is not None
+        listing_currency = listed["currency"] if listed else None
+        listing_price = listed["price"] if listed else None
+        buildings = []
+        details_source = "local"
+        details_note = (
+            "Upland didn't answer for this property. "
+            "The size and the asking price, if shown, are from data already stored here. "
+            "Structures on the lot are not included."
+        )
+        if not target_area:
+            details_note += " This property's size is not stored, so there is no total estimate."
 
     comp_result = find_comps(match["neighborhood"], match["city"], exclude_prop_id=prop_id)
     comps = comp_result["comps"]
@@ -356,14 +427,20 @@ def estimate_value(query: str, include_floor: bool = True) -> dict:
     floor = None
     if include_floor:
         try:
-            from floor_price import get_floor_prices
-            floor_result = get_floor_prices(match["neighborhood"])
-            if not floor_result.get("error"):
+            if details_source == "local":
+                from floor_price import floor_from_snapshot
+                floor_result = floor_from_snapshot(match["neighborhood"], match["city"]) or {}
+            else:
+                from floor_price import get_floor_prices
+                floor_result = get_floor_prices(match["neighborhood"])
+            if floor_result and not floor_result.get("error"):
                 floor = {
                     "floor_upx": floor_result.get("floor_upx"),
                     "floor_upx_address": floor_result.get("floor_upx_address"),
                     "floor_usd": floor_result.get("floor_usd"),
                     "floor_usd_address": floor_result.get("floor_usd_address"),
+                    "coverage": floor_result.get("coverage"),
+                    "note": floor_result.get("note"),
                 }
                 if floor["floor_upx"] and upx_val["estimated_value"]:
                     floor["upx_vs_floor_pct"] = round(
@@ -385,6 +462,8 @@ def estimate_value(query: str, include_floor: bool = True) -> dict:
             "is_listed": is_listed,
             "listing_currency": listing_currency,
             "listing_price": listing_price,
+            "details_source": details_source,
+            "details_note": details_note,
             "structure_count": len(buildings),
             "structure_names": [b.get("buildingName") or b.get("buildingType") or "Unknown"
                                  for b in buildings],

@@ -82,8 +82,9 @@
     <h2>{{ result.property.address }}</h2>
     <p class="card-subtitle">
         {{ result.property.neighborhood }}, {{ result.property.city }}
-        &middot; {{ result.property.area }} UP²
-        {% if result.property.structure_count %}
+        &middot; {% if result.property.area %}{{ result.property.area }} UP²{% else %}size not stored{% endif %}
+        {% if result.property.details_source == "local" %}
+        {% elif result.property.structure_count %}
             &middot; {{ result.property.structure_count }} structure{{ 's' if result.property.structure_count != 1 else '' }}
             ({{ result.property.structure_names|join(', ') }})
             {% if result.property.sparks_invested %}
@@ -93,12 +94,15 @@
             &middot; undeveloped
         {% endif %}
     </p>
+    {% if result.property.details_note %}
+    <p class="scope-note">{{ result.property.details_note }}</p>
+    {% endif %}
 
     <div class="results-header">
         {% if result.property.is_listed %}
         <div class="stat-card highlight">
             <div class="value">{{ "{:,}".format(result.property.listing_price|round|int) }}</div>
-            <div class="label">Current Listing ({{ result.property.listing_currency }})</div>
+            <div class="label">{% if result.property.details_source == "local" %}Snapshot ask{% else %}Current Listing{% endif %} ({{ result.property.listing_currency }})</div>
         </div>
         {% endif %}
         <div class="stat-card {% if result.upx_valuation.estimated_value %}green{% endif %}">
@@ -129,7 +133,7 @@
 
     {% if result.floor and (result.floor.floor_upx or result.floor.floor_usd) %}
     <p class="scope-note">
-        Neighborhood floor (cheapest active listing right now):
+        Neighborhood floor ({% if result.floor.coverage == "partial" %}lowest stored ask, not a full scan{% else %}cheapest active listing right now{% endif %}):
         {% if result.floor.floor_upx %}
             {{ "{:,}".format(result.floor.floor_upx|round|int) }} UPX ({{ result.floor.floor_upx_address }})
             {% if result.floor.upx_vs_floor_pct is defined %} — this property's UPX estimate is {{ "%+.1f%%"|format(result.floor.upx_vs_floor_pct) }} vs. the floor{% endif %}

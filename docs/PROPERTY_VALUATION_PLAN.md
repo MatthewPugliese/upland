@@ -32,6 +32,11 @@ numeric property ID.
   each with their own confidence tier) rather than one blended estimate — the two markets don't mix.
 - If the property is currently listed, its listing price is compared against the matching-currency
   estimate and shown as a % over/under.
+- If the public API does not answer, the page still estimates from stored data. UP² comes from the
+  area cache or a neighborhood lot-size cache. The asking price comes from the local listings
+  snapshot. The page says structures were not loaded. A missing size means there is no total
+  estimate. The neighborhood floor in that case is the snapshot floor only, so a failed API call
+  does not start another scan.
 
 **Not shipped:** structures adjustment (demolish cost / SU contribution as a value modifier — no
 UPX cost data exists for demolishing/replacing a structure, same gap as the Portfolio Analyzer's
