@@ -21,6 +21,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from structure_fitter import STRUCTURES
 from known_builds import apply_missing_builds
+from structure_cache import load_preferred_structures
 from recommender import ACTION_SORT, auto_recommend, compute_lu_balance
 
 ZONE_COLORS = {
@@ -420,7 +421,6 @@ def main():
     output_dir = Path(args.output_dir)
 
     props_path    = cache_dir / f"{safe_name}_props_cache.json"
-    structs_path  = cache_dir / f"{safe_name}_structures_cache.json"
     dims_path     = cache_dir / f"{safe_name}_api_dims_cache.json"
     zones_path    = cache_dir / f"{safe_name}_osm_zones_cache.json"
     blockchain_path = cache_dir / "pugs08_blockchain_cache.json"
@@ -432,7 +432,7 @@ def main():
         sys.exit(1)
 
     props      = json.loads(props_path.read_text())
-    structures = json.loads(structs_path.read_text()) if structs_path.exists() else {}
+    structures = load_preferred_structures(args.neighborhood) or {}
     apply_missing_builds(args.neighborhood, props, structures)
     dims_raw   = json.loads(dims_path.read_text()) if dims_path.exists() else {}
     api_dims   = {k: v for k, v in dims_raw.items() if k != "_ts"}

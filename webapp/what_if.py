@@ -679,6 +679,49 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8) -> 
     }
 
 
+_ACTION_RANK = {"BUILD": 0, "DEMOLISH → BUILD": 1, "KEEP": 2}
+
+
+def apply_build_order(hood_name: str, rows: list[dict]) -> list[dict]:
+    """Put the neighborhood build order on those lots.
+
+    Every other row stays the largest structure that fits the lot.
+    """
+    if not rows:
+        return rows
+    payload = build_what_if(hood_name)
+    picks = (payload.get("best") or {}).get("picks") or []
+    by_id = {str(pick.get("prop_id")): pick for pick in picks}
+    for row in rows:
+        pick = by_id.get(str(row.get("prop_id") or ""))
+        if not pick or row.get("action") != "BUILD" or row.get("current_names"):
+            continue
+        row["recommended_name"] = pick["structure"]
+        row["recommended_su"] = pick["su"]
+        row["su_cat"] = pick["category"]
+        row["su_gain"] = pick["su"]
+        row["build_order"] = (pick.get("step") or 0) + 1
+        width = row.get("eff_width")
+        width_txt = f"{width}^ × " if width is not None else ""
+        row["desc"] = (
+            f"{row.get('up2')} UP² ({width_txt}{row.get('depth_up')}^) | "
+            f"{pick['structure']} ({pick['su']} {pick.get('category_label') or pick['category']} SU) "
+            f"[build order {row['build_order']}]"
+        )
+    try:
+        from spark_estimator import enrich_rows
+        enrich_rows(rows)
+    except Exception:
+        pass
+    rows.sort(key=lambda row: (
+        0 if row.get("is_mine") else 1,
+        row.get("build_order") or 99,
+        _ACTION_RANK.get(row.get("action"), 9),
+        -(row.get("su_gain") or 0),
+    ))
+    return rows
+
+
 def build_what_if(hood_name: str, prop_id: str | None = None, structure: str | None = None,
                   scope: str | None = None, plan_step: str | None = None) -> dict:
     hood_name = (hood_name or "").strip() or "Dongan Hills"

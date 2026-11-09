@@ -310,5 +310,42 @@ class CacheGapTests(unittest.TestCase):
         self.assertEqual(what_if.pending_builds("Dongan Hills", props, structs), [])
 
 
+class BuildOrderAlignTests(unittest.TestCase):
+    def test_a_build_order_lot_uses_that_structure(self):
+        rows = [
+            {
+                "prop_id": "10", "address": "302 BUEL AVE", "is_mine": True,
+                "action": "BUILD", "recommended_name": "Funeral Home",
+                "recommended_su": 3, "su_gain": 3, "su_cat": "public",
+                "current_names": [], "up2": 50, "eff_width": 5.6, "depth_up": 9,
+            },
+            {
+                "prop_id": "11", "address": "96 LIBERTY AVE", "is_mine": True,
+                "action": "BUILD", "recommended_name": "Coffee Stand",
+                "recommended_su": 3, "su_gain": 3, "current_names": [],
+            },
+            {
+                "prop_id": "12", "address": "114 SEAVIEW AVE", "is_mine": True,
+                "action": "KEEP", "recommended_name": "Bike Shop",
+                "recommended_su": 4, "su_gain": 0, "current_names": ["Barn & Nobles"],
+            },
+        ]
+        payload = {"best": {"picks": [
+            {"prop_id": "10", "step": 0, "structure": "Pool Hall", "su": 5,
+             "category": "entertainment", "category_label": "Entertainment"},
+            {"prop_id": "12", "step": 1, "structure": "Something Else", "su": 9,
+             "category": "essential", "category_label": "Essential"},
+        ]}}
+        with patch.object(what_if, "build_what_if", return_value=payload):
+            what_if.apply_build_order("Dongan Hills", rows)
+        self.assertEqual(rows[0]["recommended_name"], "Pool Hall")
+        self.assertEqual(rows[0]["su_gain"], 5)
+        self.assertEqual(rows[0]["build_order"], 1)
+        self.assertEqual(rows[1]["recommended_name"], "Coffee Stand")
+        self.assertNotIn("build_order", rows[1])
+        self.assertEqual(rows[2]["action"], "KEEP")
+        self.assertEqual(rows[2]["current_names"], ["Barn & Nobles"])
+
+
 if __name__ == "__main__":
     unittest.main()

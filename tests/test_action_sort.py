@@ -37,8 +37,9 @@ class ActionSortTests(unittest.TestCase):
 class PageOrderTests(unittest.TestCase):
     def test_score_page_opens_with_builds_before_demolitions(self):
         html = (Path(__file__).resolve().parent.parent / "webapp" / "templates" / "score.html").read_text()
-        self.assertIn("Empty-lot builds are listed first.", html)
-        self.assertIn("The build order above is the one that moves the neighborhood score.", html)
+        self.assertIn("The first rows follow the build order above.", html)
+        self.assertIn("Demolitions stay under the other empty-lot builds.", html)
+        self.assertIn("a.build_order", html)
         self.assertIn("const ACTION_RANK = {'BUILD': 0, 'DEMOLISH → BUILD': 1, 'KEEP': 2};", html)
         self.assertIn("let _sortCol = null;", html)
         self.assertNotIn('data-col="su_gain" class="sort-desc"', html)

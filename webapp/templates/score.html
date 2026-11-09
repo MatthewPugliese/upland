@@ -507,7 +507,7 @@
 
 <!-- ── Recommendations ──────────────────────────────────────────────────── -->
 <h3 class="section-heading">Recommendations</h3>
-<p class="spark-note">Empty-lot builds are listed first. Demolitions stay in the list under them. This list is the largest structure that fits each lot. The build order above is the one that moves the neighborhood score.</p>
+<p class="spark-note">The first rows follow the build order above. Demolitions stay under the other empty-lot builds. Every other row is the largest structure that fits that lot.</p>
 
 <div id="spark-panel" class="spark-panel" style="display:none">
     <div class="spark-panel-title">⚡ Spark Hours Estimator <span style="font-weight:400;color:#999;font-size:11px">(time @ min stack)</span></div>
@@ -671,6 +671,13 @@ function renderRows() {
         if (!_sortCol) {
             const mine = (b.is_mine ? 1 : 0) - (a.is_mine ? 1 : 0);
             if (mine) return mine;
+            const aOrder = a.build_order || 0;
+            const bOrder = b.build_order || 0;
+            if (aOrder !== bOrder) {
+                if (!aOrder) return 1;
+                if (!bOrder) return -1;
+                return aOrder - bOrder;
+            }
             const rank = (ACTION_RANK[a.action] ?? 9) - (ACTION_RANK[b.action] ?? 9);
             if (rank) return rank;
             const gain = (b.su_gain || 0) - (a.su_gain || 0);
@@ -723,7 +730,7 @@ function renderRows() {
             <td style="text-align:right">${up2}</td>
             <td style="text-align:right">${effW}</td>
             <td style="white-space:nowrap">${actionBadge(r.action)}</td>
-            <td>${r.recommended_name || '<span style="color:#bbb">—</span>'}${addons}</td>
+            <td>${r.recommended_name || '<span style="color:#bbb">—</span>'}${r.build_order ? ` <span class="est-tag">order ${r.build_order}</span>` : ''}${addons}</td>
             <td style="text-align:right">${suGainPill(r.su_gain, r.action)}</td>
             <td style="text-align:right">${sparkHoursPill(r)}</td>
             <td style="text-align:right">${suPerHourPill(r)}</td>

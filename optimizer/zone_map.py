@@ -820,8 +820,12 @@ Examples:
         except Exception as e:
             print(f"[~] Zone overrides file unreadable: {e}")
 
-    # Known buildings the structures cache has not recorded yet. In memory only.
+    # Newer structures file wins. Known buildings are still in memory only.
     from known_builds import apply_missing_builds
+    from structure_cache import load_preferred_structures
+    preferred = load_preferred_structures(args.neighborhood)
+    if preferred is not None:
+        structures = preferred
     apply_missing_builds(args.neighborhood, props, structures)
 
     # Step 10: Render map

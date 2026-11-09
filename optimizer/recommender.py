@@ -11,6 +11,7 @@ from pathlib import Path
 # Make structure_fitter importable from either the optimizer dir or from the webapp
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from known_builds import apply_missing_builds
+from structure_cache import load_preferred_structures
 from structure_fitter import STRUCTURES, best_service_for_zone
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -443,7 +444,6 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
     """
     cache_dir = CACHE_DIR
     props_path = cache_dir / f"{neighborhood}_props_cache.json"
-    structs_path = cache_dir / f"{neighborhood}_structures_cache.json"
     dims_path = cache_dir / f"{neighborhood}_api_dims_cache.json"
     blockchain_path = cache_dir / "pugs08_blockchain_cache.json"
 
@@ -451,7 +451,7 @@ def generate_report(neighborhood: str = "Dongan_Hills") -> dict:
         return []
 
     props = json.loads(props_path.read_text())
-    structures = json.loads(structs_path.read_text()) if structs_path.exists() else {}
+    structures = load_preferred_structures(neighborhood) or {}
     apply_missing_builds(neighborhood, props, structures)
     dims_raw = json.loads(dims_path.read_text()) if dims_path.exists() else {}
     api_dims = {k: v for k, v in dims_raw.items() if k != "_ts"}

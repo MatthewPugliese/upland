@@ -22,6 +22,7 @@ CACHE_DIR = SCRIPT_DIR / "cache" / "neighborhoods"
 
 sys.path.insert(0, str(SCRIPT_DIR.parent / "optimizer"))
 from structure_fitter import STRUCTURES
+from structure_cache import load_preferred_structures
 from building_images import get_image_url
 
 # ── SU category display names ──────────────────────────────────────────────
@@ -70,12 +71,12 @@ def _safe_name(hood_name: str) -> str:
 
 
 def get_cached_structures(hood_name: str) -> dict | None:
-    """Load structures cache if it exists. Returns None if not cached."""
-    path = CACHE_DIR / f"{_safe_name(hood_name)}_structures_cache.json"
-    if path.exists():
-        with open(path) as f:
-            return json.load(f)
-    return None
+    """Structures for this neighborhood, preferring the newer cache file.
+
+    The webapp copy and the optimizer copy can disagree. Returns None when
+    neither file exists.
+    """
+    return load_preferred_structures(hood_name)
 
 
 def get_cached_props(hood_name: str) -> list | None:

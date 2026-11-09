@@ -546,6 +546,8 @@ def score_report():
     hood_key = hood.replace(" ", "_")
     result = generate_report(hood_key)
     rows = result.get("rows", []) if isinstance(result, dict) else (result or [])
+    from what_if import apply_build_order
+    apply_build_order(hood, rows)
     lu_balance = result.get("lu_balance") if isinstance(result, dict) else None
     spark_summary = result.get("spark_summary") if isinstance(result, dict) else None
     plan_progress = result.get("plan_progress") if isinstance(result, dict) else None
