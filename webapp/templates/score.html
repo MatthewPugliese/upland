@@ -220,6 +220,19 @@
     .su-hr-pill.heavy { background: #FEE2E2; color: #B91C1C; }
     .su-hr-pill.zero { background: #f4f5f7; color: #aaa; }
     .est-tag { font-size: 9px; color: #aaa; font-weight: 500; margin-left: 2px; }
+
+    .what-if-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 8px 0 12px; }
+    .what-if-controls label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
+    .what-if-controls select, .what-if-controls input[type="search"] {
+        padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; background: white;
+        max-width: 100%;
+    }
+    .what-if-check { font-size: 13px; color: #444; display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
+    .what-if-delta { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .what-if-delta th, .what-if-delta td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; }
+    .what-if-delta th:first-child, .what-if-delta td:first-child { text-align: left; }
+    .delta-up { color: #1E8449; font-weight: 600; }
+    .delta-down { color: #C0392B; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -377,6 +390,31 @@
     </div>
 </div>
 {% endfor %}
+
+<div class="spark-panel" id="what-if-panel">
+    <div class="spark-panel-title">What if you built here</div>
+    <p class="spark-note">Pick an empty lot and a structure that fits it. The table is the neighborhood score with that one building added. Offices and factories do not change Resident SU.</p>
+    <div class="what-if-controls">
+        <div>
+            <label for="what-if-lot">Empty lot</label>
+            <select id="what-if-lot"></select>
+        </div>
+        <div id="what-if-filter-wrap" style="display:none">
+            <label for="what-if-filter">Find a lot</label>
+            <input type="search" id="what-if-filter" placeholder="street name">
+        </div>
+        <div>
+            <label for="what-if-struct">Structure</label>
+            <select id="what-if-struct"></select>
+        </div>
+        <label class="what-if-check">
+            <input type="checkbox" id="what-if-mine" checked>
+            Only my empty lots
+        </label>
+    </div>
+    <div id="what-if-gaps" class="spark-note"></div>
+    <div id="what-if-result" class="spark-picks">Loading empty lots…</div>
+</div>
 
 {% if score.empty_residential %}
 <h3 class="section-heading">Underperforming Housing ({{ score.empty_residential|length }} with 0 residents)</h3>
@@ -810,5 +848,181 @@ async function loadForSale() {
 
 loadReport();
 loadForSale();
+
+(function initWhatIf() {
+    const panel = document.getElementById('what-if-panel');
+    if (!panel) return;
+    const lotSel = document.getElementById('what-if-lot');
+    const structSel = document.getElementById('what-if-struct');
+    const mineBox = document.getElementById('what-if-mine');
+    const filterWrap = document.getElementById('what-if-filter-wrap');
+    const filterBox = document.getElementById('what-if-filter');
+    const gapBox = document.getElementById('what-if-gaps');
+    const resultBox = document.getElementById('what-if-result');
+    let lots = [];
+    let settingScope = false;
+
+    function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[ch]));
+    }
+
+    function option(value, label) {
+        const node = document.createElement('option');
+        node.value = value;
+        node.textContent = label;
+        return node;
+    }
+
+    function lotLabel(lot) {
+        const mine = lot.is_mine ? ' · yours' : '';
+        return `${lot.address} · ${lot.up2} UP² · ${lot.width}^${mine}`;
+    }
+
+    function structLabel(row) {
+        let detail = row.type;
+        if (row.su) detail = `${row.su} ${row.category_label || row.category} SU`;
+        else if (row.lu) detail = `${row.lu} LU`;
+        const already = row.existing ? ` · ${row.existing} already` : '';
+        return `${row.name} · ${detail}${already}`;
+    }
+
+    function visibleLots() {
+        const q = (filterBox.value || '').trim().toUpperCase();
+        if (!q) return lots;
+        return lots.filter(lot => lot.address.toUpperCase().includes(q));
+    }
+
+    function fillLots(selected) {
+        const shown = visibleLots();
+        lotSel.replaceChildren();
+        if (!shown.length) {
+            lotSel.appendChild(option('', 'No empty lots'));
+            return;
+        }
+        shown.forEach(lot => lotSel.appendChild(option(lot.prop_id, lotLabel(lot))));
+        if (selected && shown.some(lot => lot.prop_id === selected)) lotSel.value = selected;
+    }
+
+    function fillStructures(rows, selected) {
+        structSel.replaceChildren();
+        if (!rows || !rows.length) {
+            structSel.appendChild(option('', 'Nothing fits'));
+            return;
+        }
+        rows.forEach(row => structSel.appendChild(option(row.name, structLabel(row))));
+        if (selected && rows.some(row => row.name === selected)) structSel.value = selected;
+    }
+
+    function renderResult(data) {
+        if (data.error) {
+            resultBox.textContent = data.error;
+            return;
+        }
+        const result = data.result;
+        if (!result) {
+            resultBox.textContent = data.note || (data.structures && data.structures.length
+                ? 'Pick a structure.'
+                : (data.note || 'Pick a lot.'));
+            return;
+        }
+        if (!result.fits) {
+            resultBox.textContent = `${result.structure} does not fit. ${result.reason}.`;
+            return;
+        }
+        const rows = result.before.categories.map((before, i) => {
+            const after = result.after.categories[i];
+            const suDelta = after.su - before.su;
+            const cls = suDelta > 0 ? 'delta-up' : (after.ratio < before.ratio ? 'delta-down' : '');
+            return `<tr>
+                <td>${esc(before.label)}</td>
+                <td class="${cls}">${before.su} → ${after.su}</td>
+                <td class="${cls}">${before.ratio.toFixed(3)} → ${after.ratio.toFixed(3)}</td>
+                <td class="${cls}">${before.pct_of_target}% → ${after.pct_of_target}%</td>
+                <td>${before.variety} → ${after.variety}</td>
+            </tr>`;
+        }).join('');
+        resultBox.innerHTML = `
+            <p><strong>${esc(result.structure)}</strong> on ${esc(result.address)}. ${esc(result.summary)}</p>
+            <p class="spark-note">Living units ${result.before.total_lu} → ${result.after.total_lu}.
+            SU/LU ${result.before.su_per_lu.toFixed(3)} → ${result.after.su_per_lu.toFixed(3)}.
+            This is the whole neighborhood, not just your properties.</p>
+            <table class="what-if-delta">
+                <thead><tr><th>Category</th><th>SU</th><th>SU/LU</th><th>Of target</th><th>Types</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    }
+
+    function showLotFilter() {
+        filterWrap.style.display = mineBox.checked ? 'none' : '';
+    }
+
+    function showGaps(data) {
+        const gaps = data.cache_gaps || [];
+        gapBox.textContent = gaps.map(gap =>
+            `${gap.address} already has a ${gap.structure} the cache has not recorded. This estimate counts it.`
+        ).join(' ');
+    }
+
+    function firstBuildable(rows) {
+        return (rows || []).find(lot => lot.fit_count) || (rows || [])[0];
+    }
+
+    async function load(propId, structure, opts) {
+        opts = opts || {};
+        const params = new URLSearchParams({ neighborhood: NEIGHBORHOOD });
+        if (!opts.omitScope) params.set('scope', mineBox.checked ? 'mine' : 'all');
+        if (propId) params.set('prop_id', propId);
+        if (structure) params.set('structure', structure);
+        const resp = await fetch('/api/score/what-if?' + params.toString());
+        const data = await resp.json();
+        if (opts.omitScope && data.scope) {
+            settingScope = true;
+            mineBox.checked = data.scope !== 'all';
+            settingScope = false;
+        }
+        lots = data.lots || [];
+        showGaps(data);
+        showLotFilter();
+        fillLots(data.lot && data.lot.prop_id);
+        fillStructures(data.structures || [], resultStructure(data));
+        renderResult(data);
+        return data;
+    }
+
+    function resultStructure(data) {
+        return data.result && data.result.structure;
+    }
+
+    lotSel.addEventListener('change', async () => {
+        const data = await load(lotSel.value, '');
+        const first = (data.structures || [])[0];
+        if (first) await load(lotSel.value, first.name);
+    });
+    structSel.addEventListener('change', () => {
+        if (structSel.value) load(lotSel.value, structSel.value);
+    });
+    mineBox.addEventListener('change', async () => {
+        if (settingScope) return;
+        const data = await load('', '');
+        const firstLot = firstBuildable(data.lots);
+        if (!firstLot) return;
+        const withStructs = await load(firstLot.prop_id, '');
+        const first = (withStructs.structures || [])[0];
+        if (first) await load(firstLot.prop_id, first.name);
+    });
+    filterBox.addEventListener('input', () => fillLots(lotSel.value));
+
+    load('', '', {omitScope: true}).then(async data => {
+        const firstLot = firstBuildable(data.lots);
+        if (!firstLot) return;
+        const withStructs = await load(firstLot.prop_id, '');
+        const first = (withStructs.structures || [])[0];
+        if (first) await load(firstLot.prop_id, first.name);
+    }).catch(() => {
+        resultBox.textContent = 'Could not load the what-if simulator.';
+    });
+})();
 </script>
 {% endblock %}

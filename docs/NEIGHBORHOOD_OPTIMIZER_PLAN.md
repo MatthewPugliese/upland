@@ -268,10 +268,11 @@ dongan_hills_zone_map.py
   - Show total plan cost: "$142 USD + 4,200 spark hours remaining"
   - Sortable by cost-efficiency: SU gained per dollar spent
 
-- [ ] **"What if" build simulator**
-  - Let the user select any empty lot and any structure from a dropdown
-  - Show how SU/LU ratios and variety counts change if that structure were built
-  - No API call needed — runs entirely off cached data + structure DB
+- [x] **"What if" build simulator** — shipped 2026-11-09 on `/score`
+  - Empty lots with a cached size, yours first. The page opens on the first lot something fits. Structure dropdown is only what fits the lot (area, effective width, depth)
+  - Shows the neighborhood SU/LU and variety change if that one structure were added
+  - 114 Seaview Ave is left out of the empty list. The estimate counts its Barn & Nobles, which the structures cache still misses
+  - No API call — structures cache + `{neighborhood}_api_dims_cache.json` + the structure database
 
 - [ ] **Multi-owner coordination view**
   - For each property in the neighborhood NOT owned by the user, show what the current owner has built

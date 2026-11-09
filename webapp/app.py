@@ -524,6 +524,16 @@ def score():
     return render_template("score.html", score=score, neighborhood=hood, cached=cached)
 
 
+@app.route("/api/score/what-if")
+def score_what_if():
+    from what_if import build_what_if
+    hood = request.args.get("neighborhood", "Dongan Hills").strip()
+    prop_id = request.args.get("prop_id") or None
+    structure = request.args.get("structure") or None
+    scope = request.args.get("scope") or None
+    return jsonify(build_what_if(hood, prop_id, structure, scope))
+
+
 @app.route("/api/score/report")
 def score_report():
     hood = request.args.get("neighborhood", "Dongan Hills").strip()
