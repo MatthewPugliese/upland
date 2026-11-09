@@ -372,8 +372,10 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   price. Built without the `n2`/`n4` ingestion originally planned here — the scraper doesn't
   ingest listing events at all (only `n5`/`n52`/`n111`/`n112`, confirmed empty query on `transactions`
   for `n2`/`n4`), so this reuses `forsale_finder.py`'s existing live-listing lookup (webapp's
-  precached `{hood}_props_cache.json`, ~1,900 neighborhoods already have one, else falls back to
-  a live Developers API scan) plus a live price fetch per listing, cached 30 min. This is a
+  precached `{hood}_props_cache.json`, ~1,900 neighborhoods already have one). As of
+  2026-11-09 a neighborhood with no stored listings uses for-sale rows in that local file and
+  prices up to 60 of them from the public property page. It does not start a developers-API
+  city scan. This is a
   point-in-time snapshot on request, not a live-updating tracker — true "update live as events
   arrive" still needs `n2`/`n4` ingestion, which would be a scraper change, not just a webapp one.
 
@@ -433,6 +435,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
 - [x] Live transaction feed with 30s JS polling and marketplace filter
 - [x] Webapp deployed to Pi at `http://192.168.1.115:8080/economy` (LAN only — port 8080 not forwarded externally)
 - [x] Median UPX property-sale price for the selected period, and the timestamp of the newest stored sale. All-time skips the median so that sort does not run over the full sales table.
+- [x] Volume chart separates property UPX from spark and NFT UPX for today, 7d, 30d, and 90d. All-time keeps the stored hourly total, which mixes those sales, and the chart says so.
 
 ### Phase 4 — Polish
 - [x] City/neighborhood breakdown table (sortable) — city breakdown's city/neighborhood resolution

@@ -28,14 +28,14 @@ class FloorSnapshotTests(unittest.TestCase):
         db.DEFAULT_DB = self.db_path
         floor_price.CACHE_DIR = self.cache
         self.old_price = floor_price._public_api_price
-        self.old_candidates = floor_price._get_neighborhood_candidates
+        self.old_file = floor_price._load_neighborhood_cache
         self.old_resolve = floor_price._resolve_neighborhood
 
         def boom(*args, **kwargs):
             raise AssertionError("live floor lookup")
 
         floor_price._public_api_price = boom
-        floor_price._get_neighborhood_candidates = boom
+        floor_price._load_neighborhood_cache = lambda hood, allow_unknown=False: []
         floor_price._resolve_neighborhood = lambda name: {
             "name": "Gardens",
             "city_name": "Cape Town",
@@ -46,7 +46,7 @@ class FloorSnapshotTests(unittest.TestCase):
         db.DEFAULT_DB = self.old_db
         floor_price.CACHE_DIR = self.old_cache
         floor_price._public_api_price = self.old_price
-        floor_price._get_neighborhood_candidates = self.old_candidates
+        floor_price._load_neighborhood_cache = self.old_file
         floor_price._resolve_neighborhood = self.old_resolve
         self.conn.close()
 
@@ -83,7 +83,27 @@ class FloorSnapshotTests(unittest.TestCase):
         cached = json.loads((self.cache / "GARDENS.json").read_text())
         self.assertEqual(cached["coverage"], "partial")
 
-    def test_no_stored_rows_still_uses_the_live_lookup(self):
+    def test_no_stored_rows_does_not_scan_a_city(self):
         self.conn.commit()
-        with self.assertRaises(AssertionError):
-            floor_price.get_floor_prices("Gardens")
+        result = floor_price.get_floor_prices("Gardens")
+        self.assertIn("city scan was not started", result["error"])
+
+    def test_neighborhood_file_sets_the_floor_without_a_city_scan(self):
+        self.conn.commit()
+        floor_price._load_neighborhood_cache = lambda hood, allow_unknown=False: [
+            {"id": "1", "address": "22 WOODBURN CRES", "status": "For sale", "mintPrice": 1000},
+            {"id": "2", "address": "1 INVERMARK CRES", "status": "Owned", "mintPrice": 1000},
+        ]
+
+        def price(prop_id):
+            if str(prop_id) == "1":
+                return 15999, None, "UPX", "seller"
+            raise AssertionError("priced a row that is not for sale")
+
+        floor_price._public_api_price = price
+        result = floor_price.get_floor_prices("Gardens")
+        self.assertEqual(result["coverage"], "neighborhood")
+        self.assertEqual(result["floor_upx"], 15999)
+        self.assertEqual(result["floor_upx_address"], "22 WOODBURN CRES")
+        self.assertEqual(result["total_for_sale"], 1)
+        self.assertIn("city scan was not started", result["note"])

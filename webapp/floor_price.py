@@ -5,14 +5,10 @@ Given a neighborhood, finds every currently "For sale" property there and
 reports the floor (lowest) UPX and USD asking price, plus the full sorted
 listing table for each currency.
 
-Reuses forsale_finder's neighborhood candidate lookup (fast path: webapp's
-precached {hood}_props_cache.json — ~1,900 neighborhoods already have one;
-slow path: live Developers API scan) and the same per-property live price
-fetch (`_public_api_price`) used there and by the Collection Tracker's
-for-sale finder. Property statuses in the cache can be stale (last
-precached, not live) — self-corrects naturally, since a property that's
-sold since the cache was built simply returns no live listing price and is
-dropped from the results.
+Uses stored listings when the snapshot has any for this neighborhood.
+Otherwise it prices for-sale rows in the local neighborhood file, up to 60,
+from the public property page. It does not scan a city. A property that
+sold after the file was saved usually has no live price and is left out.
 """
 
 from __future__ import annotations
@@ -23,7 +19,7 @@ from pathlib import Path
 
 import sys
 
-from forsale_finder import _get_neighborhood_candidates, _public_api_price  # noqa: E402
+from forsale_finder import _load_neighborhood_cache, _public_api_price  # noqa: E402
 from neighborhoods import get_all_neighborhoods
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -110,6 +106,76 @@ def floor_from_snapshot(hood_name: str, city_name: str) -> dict | None:
     }
 
 
+def _priced_listings(for_sale: list) -> list:
+    """Ask the public property page for a price. Capped. Does not scan a city."""
+    listings = []
+    for prop in for_sale[:MAX_LISTINGS_PRICED]:
+        prop_id = prop.get("id") or prop.get("prop_id")
+        price_upx, price_usd, currency, owner = _public_api_price(prop_id)
+        if price_upx is None and price_usd is None:
+            continue
+        mint = prop.get("mintPrice")
+        price = price_upx if currency == "UPX" else price_usd
+        markup_pct = (
+            round(100 * (price - mint) / mint, 1)
+            if (currency == "UPX" and mint and price) else None
+        )
+        listings.append({
+            "prop_id": str(prop_id),
+            "address": prop.get("address") or prop.get("full_address", ""),
+            "currency": currency,
+            "price": price,
+            "mint_price": mint,
+            "markup_pct": markup_pct,
+            "owner_username": owner or "",
+        })
+    return listings
+
+
+def _floor_result(hood_name: str, city_name: str, listings: list, **extra) -> dict:
+    upx_listings = sorted((item for item in listings if item["currency"] == "UPX"), key=lambda item: item["price"])
+    usd_listings = sorted((item for item in listings if item["currency"] == "USD"), key=lambda item: item["price"])
+    result = {
+        "neighborhood": hood_name,
+        "city": city_name,
+        "total_for_sale": extra.get("total_for_sale", len(listings)),
+        "priced_count": len(listings),
+        "truncated": extra.get("truncated", False),
+        "coverage": extra.get("coverage"),
+        "note": extra.get("note"),
+        "floor_upx": upx_listings[0]["price"] if upx_listings else None,
+        "floor_upx_address": upx_listings[0]["address"] if upx_listings else None,
+        "floor_usd": usd_listings[0]["price"] if usd_listings else None,
+        "floor_usd_address": usd_listings[0]["address"] if usd_listings else None,
+        "upx_listings": upx_listings,
+        "usd_listings": usd_listings,
+    }
+    return result
+
+
+def _floor_from_neighborhood_file(hood_name: str, city_name: str) -> dict | None:
+    """For-sale rows in the local neighborhood file, with live prices. No city scan."""
+    props = _load_neighborhood_cache(hood_name, allow_unknown=True)
+    if not props:
+        return None
+    for_sale = [prop for prop in props if prop.get("status") == "For sale"]
+    if not for_sale:
+        return _floor_result(
+            hood_name, city_name, [],
+            total_for_sale=0,
+            coverage="neighborhood",
+            note="The local neighborhood file has no for-sale rows. A city scan was not started.",
+        )
+    listings = _priced_listings(for_sale)
+    return _floor_result(
+        hood_name, city_name, listings,
+        total_for_sale=len(for_sale),
+        truncated=len(for_sale) > MAX_LISTINGS_PRICED,
+        coverage="neighborhood",
+        note="Prices are for rows marked for sale in the local neighborhood file. A city scan was not started.",
+    )
+
+
 def get_floor_prices(neighborhood: str) -> dict:
     """
     Returns {"error": "..."} if the neighborhood can't be resolved, otherwise:
@@ -130,57 +196,18 @@ def get_floor_prices(neighborhood: str) -> dict:
             return json.loads(cache_path.read_text())
 
     # Stored prices answer the neighborhood without calling Upland. No rows
-    # means this snapshot cannot name a floor, so the live lookup still runs.
+    # means this snapshot cannot name a floor. The neighborhood file is the
+    # next local source. A city scan is not started.
     snapshot = floor_from_snapshot(hood_name, hood["city_name"])
     if snapshot is not None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(snapshot))
         return snapshot
 
-    parsed_req = {"type": "neighborhood", "neighborhood": hood_name}
-    candidates = _get_neighborhood_candidates(parsed_req, hood["city_id"])
-    for_sale = [c for c in candidates if c.get("status") == "For sale"]
+    local = _floor_from_neighborhood_file(hood_name, hood["city_name"])
+    if local is not None:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(local))
+        return local
 
-    listings = []
-    for c in for_sale[:MAX_LISTINGS_PRICED]:
-        pid = c.get("id") or c.get("prop_id")
-        price_upx, price_usd, currency, owner = _public_api_price(pid)
-        if price_upx is None and price_usd is None:
-            continue  # no longer actually listed (stale cache) or fetch failed
-        mint = c.get("mintPrice")
-        price = price_upx if currency == "UPX" else price_usd
-        # markup % only makes sense against mint price in the same currency (UPX) —
-        # mint price is always in UPX, so a USD listing has no comparable mint figure
-        # without a live exchange rate, which isn't available here.
-        markup_pct = (round(100 * (price - mint) / mint, 1)
-                      if (currency == "UPX" and mint and price) else None)
-        listings.append({
-            "prop_id": str(pid),
-            "address": c.get("address") or c.get("full_address", ""),
-            "currency": currency,
-            "price": price,
-            "mint_price": mint,
-            "markup_pct": markup_pct,
-            "owner_username": owner,
-        })
-
-    upx_listings = sorted([l for l in listings if l["currency"] == "UPX"], key=lambda x: x["price"])
-    usd_listings = sorted([l for l in listings if l["currency"] == "USD"], key=lambda x: x["price"])
-
-    result = {
-        "neighborhood": hood_name,
-        "city": hood["city_name"],
-        "total_for_sale": len(for_sale),
-        "priced_count": len(listings),
-        "truncated": len(for_sale) > MAX_LISTINGS_PRICED,
-        "floor_upx": upx_listings[0]["price"] if upx_listings else None,
-        "floor_upx_address": upx_listings[0]["address"] if upx_listings else None,
-        "floor_usd": usd_listings[0]["price"] if usd_listings else None,
-        "floor_usd_address": usd_listings[0]["address"] if usd_listings else None,
-        "upx_listings": upx_listings,
-        "usd_listings": usd_listings,
-    }
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(result))
-    return result
+    return {"error": f"No stored listings for {hood_name}. A city scan was not started."}
