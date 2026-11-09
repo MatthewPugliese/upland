@@ -488,6 +488,12 @@ def floor_price():
         return render_template("floor_price.html", error=f"Error: {e}", neighborhood=neighborhood)
 
 
+@app.route("/listings")
+def listings_page():
+    from listings_view import build_listings_page
+    return render_template("listings.html", page=build_listings_page(request.args))
+
+
 @app.route("/floor/run", methods=["POST"])
 def floor_price_run():
     get_floor_prices = _floor_price()

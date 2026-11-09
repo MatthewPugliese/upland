@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}For-Sale Snapshot — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { max-width: 1100px; }
+    .results-header {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin: 16px 0;
+    }
+    .stat-card { background: #f8f9fa; border-radius: 10px; padding: 14px 16px; text-align: center; }
+    .stat-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 2px; }
+    .filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .filter-row .form-group { margin: 0; min-width: 140px; }
+    .filter-row select, .filter-row input[type="number"] {
+        width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+    }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .full-table tr:hover td { background: #fafafa; }
+    .markup-neg { color: #1E8449; font-weight: 600; }
+    .markup-pos { color: #C0392B; }
+    .coverage { margin-top: 28px; }
+    .coverage li { font-size: 13px; color: #555; margin: 4px 0; }
+    .status-complete { color: #1E8449; }
+    .status-partial, .status-running { color: #B9770E; }
+    .status-deferred, .status-error { color: #888; }
+    .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
+    .empty-note code { font-size: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>For-Sale Snapshot</h2>
+    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan.</p>
+
+    <div class="results-header">
+        <div class="stat-card">
+            <div class="value">{{ "{:,}".format(page.summary.listings) }}</div>
+            <div class="label">Listings stored</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ "{:,}".format(page.summary.upx) }}</div>
+            <div class="label">UPX</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ "{:,}".format(page.summary.usd) }}</div>
+            <div class="label">USD</div>
+        </div>
+        <div class="stat-card">
+            <div class="value" style="font-size:14px">{{ page.summary.freshest_listing or "—" }}</div>
+            <div class="label">Newest confirmation (UTC)</div>
+        </div>
+    </div>
+
+    {% if not page.db_exists %}
+    <p class="empty-note">
+        No snapshot database yet. On a machine with Upland API credentials, run
+        <code>python3 scraper/listings_snapshot.py --city "Park City"</code>
+        for one small city, or <code>python3 scraper/listings_snapshot.py --dry-queue</code>
+        to see the owned-city plan. Cities bigger than 9,900 properties are not
+        page-scanned; the crawler covers the neighborhoods you own there by street search.
+    </p>
+    {% else %}
+    <form action="/listings" method="GET" class="filter-row">
+        <div class="form-group">
+            <label for="currency">Currency</label>
+            <select id="currency" name="currency">
+                {% for opt in ["UPX", "USD", "any"] %}
+                <option value="{{ opt }}" {% if page.filters.currency == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="city">City</label>
+            <select id="city" name="city">
+                <option value="">All</option>
+                {% for city in page.cities %}
+                <option value="{{ city }}" {% if page.filters.city == city %}selected{% endif %}>{{ city }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="neighborhood">Neighborhood</label>
+            <select id="neighborhood" name="neighborhood">
+                <option value="">All</option>
+                {% for hood in page.neighborhoods %}
+                <option value="{{ hood }}" {% if page.filters.neighborhood == hood %}selected{% endif %}>{{ hood }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="sort">Sort</label>
+            <select id="sort" name="sort">
+                <option value="markup" {% if page.filters.sort == "markup" %}selected{% endif %}>Lowest markup</option>
+                <option value="price" {% if page.filters.sort == "price" %}selected{% endif %}>Lowest price</option>
+                <option value="seen" {% if page.filters.sort == "seen" %}selected{% endif %}>Newest</option>
+            </select>
+        </div>
+        <div class="form-group" style="max-width:90px">
+            <label for="limit">Limit</label>
+            <input type="number" id="limit" name="limit" min="1" max="500" value="{{ page.filters.limit }}">
+        </div>
+        <button type="submit" class="btn-primary">Filter</button>
+    </form>
+
+    {% if page.listings %}
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Markup</th>
+                <th>Price</th>
+                <th>Mint</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>City</th>
+                <th>Seller</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.listings %}
+            <tr>
+                <td class="{% if row.markup_pct is not none and row.markup_pct < 0 %}markup-neg{% elif row.markup_pct is not none %}markup-pos{% endif %}">
+                    {{ "%+.1f%%"|format(row.markup_pct) if row.markup_pct is not none else "—" }}
+                </td>
+                <td>
+                    {% if row.price is not none %}
+                        {% if row.currency == "USD" %}${{ "%.2f"|format(row.price) }}{% else %}{{ "{:,}".format(row.price|round|int) }} {{ row.currency or "" }}{% endif %}
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ "{:,}".format(row.mint_price|round|int) if row.mint_price else "—" }}</td>
+                <td>{{ row.address }}</td>
+                <td>{{ row.neighborhood or "—" }}</td>
+                <td>{{ row.city }}</td>
+                <td>{{ row.owner_username or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-note" style="margin-top:16px">No listings match this filter.</p>
+    {% endif %}
+
+    {% if page.coverage %}
+    <div class="coverage">
+        <h3>Crawl coverage</h3>
+        <ul>
+        {% for target in page.coverage %}
+            <li>
+                <span class="status-{{ target.status }}">{{ target.status }}</span>
+                — {{ target.neighborhood ~ ", " if target.neighborhood else "" }}{{ target.city }}
+                {% if target.units_total %}({{ target.units_done or 0 }}/{{ target.units_total }}){% endif %}
+                {% if target.listing_count is not none %}· {{ target.listing_count }} listed{% endif %}
+                {% if target.finished_at %}· {{ target.finished_at }}{% endif %}
+                {% if target.note %}<br><span style="color:#888">{{ target.note }}</span>{% endif %}
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

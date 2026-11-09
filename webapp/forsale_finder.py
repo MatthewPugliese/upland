@@ -184,6 +184,50 @@ def _get_street_candidates(parsed_req: dict, city_id: int) -> list:
     return _search_city_by_street(city_id, search_term)
 
 
+def _snapshot_candidates(coll_entry: dict):
+    """Priced listings from the local snapshot, or None when it cannot answer.
+
+    None keeps the live scan. An empty list means the snapshot is fresh and
+    nothing matching is listed, so the live scan stays idle.
+    """
+    scraper_dir = str(SCRIPT_DIR.parent / "scraper")
+    if scraper_dir not in sys.path:
+        sys.path.insert(0, scraper_dir)
+    try:
+        from listings_db import DEFAULT_DB, connect, listings_for_requirement
+    except Exception:
+        return None
+    if not DEFAULT_DB.exists():
+        return None
+
+    req_type = coll_entry.get("req_type", "")
+    parsed = coll_entry.get("parsed_req") or {}
+    city_id = coll_entry.get("city_id")
+    if not city_id:
+        return None
+    neighborhood = None
+    street = None
+    if req_type in ("neighborhood_city", "neighborhood"):
+        neighborhood = parsed.get("neighborhood")
+    elif req_type in ("street_city", "street"):
+        street = parsed.get("street")
+    else:
+        return None
+
+    conn = connect(DEFAULT_DB)
+    try:
+        return listings_for_requirement(
+            conn,
+            city_id=int(city_id),
+            neighborhood=neighborhood,
+            street=street,
+        )
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
 def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
     """
     Find for-sale properties that would qualify for a collection.
@@ -209,6 +253,17 @@ def find_forsale_for_collection(coll_entry: dict, user_prop_ids: set) -> list:
 
     if req_type not in SUPPORTABLE_TYPES:
         return []
+
+    # A fresh snapshot already has prices. Fall through to the live scan only
+    # when this city (or neighborhood) has not been crawled recently.
+    snapshot = _snapshot_candidates(coll_entry)
+    if snapshot is not None:
+        snapshot = [row for row in snapshot if str(row["id"]) not in user_prop_ids]
+        snapshot.sort(key=lambda row: (row["price_upx"] is None, row["price_upx"] or 0))
+        snapshot = snapshot[:20]
+        with open(cache_path, "w") as f:
+            json.dump(snapshot, f)
+        return snapshot
 
     # Get candidates
     if req_type in ("street_city", "street"):
