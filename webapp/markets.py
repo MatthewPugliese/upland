@@ -27,6 +27,21 @@ def _median(amounts: list) -> float:
     return (ordered[mid - 1] + ordered[mid]) / 2
 
 
+def _cheaper(left: dict | None, right: dict) -> bool:
+    """True when right is the ask to keep: lower price, then address, then id."""
+    if left is None:
+        return True
+    return (
+        right["price"],
+        right["address"].casefold(),
+        right["id"],
+    ) < (
+        left["price"],
+        left["address"].casefold(),
+        left["id"],
+    )
+
+
 def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict:
     path = Path(db_path) if db_path else DEFAULT_DB
     page = {
@@ -51,7 +66,7 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         snap = summary(conn)
         rows = conn.execute(
             """
-            SELECT neighborhood, city, price
+            SELECT property_id, address, owner_username, neighborhood, city, price
             FROM current_listings
             WHERE currency = 'UPX' AND price > 0
               AND neighborhood IS NOT NULL AND trim(neighborhood) != ''
@@ -71,8 +86,17 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             "neighborhood": row["neighborhood"],
             "cities": {},
             "prices": [],
+            "lowest": None,
         })
         bucket["prices"].append(row["price"])
+        candidate = {
+            "id": row["property_id"] or "",
+            "address": row["address"] or "",
+            "owner": (row["owner_username"] or "").strip(),
+            "price": row["price"],
+        }
+        if _cheaper(bucket["lowest"], candidate):
+            bucket["lowest"] = candidate
         city = (row["city"] or "").strip() or "—"
         bucket["cities"][city] = bucket["cities"].get(city, 0) + 1
 
@@ -90,12 +114,16 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             continue
         city = max(bucket["cities"].items(), key=lambda item: item[1])[0]
         prices = bucket["prices"]
+        lowest = bucket["lowest"]
         candidates.append({
             "neighborhood": bucket["neighborhood"],
             "city": city,
             "asks": len(prices),
             "median_ask": _median(prices),
-            "lowest_ask": min(prices),
+            "lowest_ask": lowest["price"],
+            "lowest_id": lowest["id"],
+            "lowest_address": lowest["address"],
+            "lowest_owner": lowest["owner"],
             "prices": prices,
         })
 

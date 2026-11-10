@@ -84,6 +84,7 @@
                 <th class="num">At or under sales</th>
                 <th>Ask spread</th>
                 <th class="num">Lowest ask</th>
+                <th>Lowest property</th>
                 <th class="num">Median ask</th>
                 <th class="num">Recent median</th>
                 <th class="num">Sales, 90 days</th>
@@ -101,7 +102,7 @@
                         <a href="/listings?neighborhood={{ row.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">listings</a>
                         <a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">floor</a>
                     </div>
-                    <div class="empty-note">{{ row.city }}</div>
+                    <div class="empty-note">{% if row.city and row.city != "—" %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX">{{ row.city }}</a>{% else %}{{ row.city }}{% endif %}</div>
                 </td>
                 <td class="num">{{ row.asks }}</td>
                 <td class="num">{{ row.at_or_under }}</td>
@@ -112,6 +113,14 @@
                     <div>{{ row.over_double }} more than double</div>
                 </td>
                 <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
+                <td>
+                    {% if row.lowest_id %}
+                    <a href="/valuation?query={{ row.lowest_id|urlencode }}">{{ row.lowest_address }}</a>
+                    {% else %}{{ row.lowest_address or "—" }}{% endif %}
+                    {% if row.lowest_owner %}
+                    <div class="empty-note"><a href="/listings?owner={{ row.lowest_owner|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.lowest_owner }}</a></div>
+                    {% endif %}
+                </td>
                 <td class="num">{{ "{:,.0f}".format(row.median_ask) }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.sale_median_upx) }}</td>
                 <td class="num">{{ row.sales }}</td>

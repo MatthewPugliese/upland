@@ -35,6 +35,7 @@ class MarketTests(unittest.TestCase):
         """)
         now = datetime.now(timezone.utc)
         sales = [("gardens", amount) for amount in (100, 200, 300, 400, 500)]
+        sales += [("tied", amount) for amount in (100, 200, 300, 400, 500)]
         sales += [("richhood", amount) for amount in (100, 200, 300, 400, 500)]
         sales += [("quiet", 10), ("quiet", 20)]
         sales += [("lastone", amount) for amount in (100, 200, 300, 400, 500)]
@@ -54,6 +55,9 @@ class MarketTests(unittest.TestCase):
             ("g1", 100, "GARDENS", "UPX"),
             ("g2", 200, "gardens", "UPX"),
             ("g3", 400, "GARDENS", "UPX"),
+            ("tie-b", 100, "TIED", "UPX"),
+            ("tie-a", 100, "TIED", "UPX"),
+            ("tie-c", 400, "TIED", "UPX"),
             ("g-usd", 1, "GARDENS", "USD"),
             ("r1", 400, "RICHHOOD", "UPX"),
             ("r2", 500, "RICHHOOD", "UPX"),
@@ -74,7 +78,7 @@ class MarketTests(unittest.TestCase):
                 "currency": currency,
                 "price": price,
                 "mint_price": 100,
-                "owner_username": "seller",
+                "owner_username": {"tie-a": "Ada", "tie-b": "Bea"}.get(prop_id, "seller"),
                 "last_seen": "2026-11-09T18:00:00Z",
             })
         self.listings.commit()
@@ -86,7 +90,10 @@ class MarketTests(unittest.TestCase):
     def test_markets_compare_median_and_lowest_ask(self):
         from markets import build_markets
         page = build_markets(db_path=self.listings_path)
-        self.assertEqual([row["neighborhood"] for row in page["markets"]], ["GARDENS", "RICHHOOD"])
+        self.assertEqual(
+            [row["neighborhood"] for row in page["markets"]],
+            ["GARDENS", "TIED", "RICHHOOD"],
+        )
         gardens = page["markets"][0]
         self.assertEqual(gardens["asks"], 3)
         self.assertEqual(gardens["median_ask"], 200)
@@ -94,11 +101,18 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(gardens["sale_median_upx"], 300)
         self.assertEqual(gardens["median_vs_sales_pct"], -33.3)
         self.assertEqual(gardens["floor_vs_sales_pct"], -66.7)
+        self.assertEqual(gardens["lowest_id"], "g1")
+        self.assertEqual(gardens["lowest_address"], "g1 MAIN")
+        self.assertEqual(gardens["lowest_owner"], "seller")
+        tied = page["markets"][1]
+        self.assertEqual(tied["lowest_id"], "tie-a")
+        self.assertEqual(tied["lowest_address"], "tie-a MAIN")
+        self.assertEqual(tied["lowest_owner"], "Ada")
         self.assertEqual(gardens["at_or_under"], 2)
         self.assertEqual(gardens["near_over"], 0)
         self.assertEqual(gardens["up_to_double"], 1)
         self.assertEqual(gardens["over_double"], 0)
-        rich = page["markets"][1]
+        rich = page["markets"][2]
         self.assertEqual(rich["at_or_under"], 0)
         self.assertEqual(rich["near_over"], 0)
         self.assertEqual(rich["up_to_double"], 3)
@@ -137,6 +151,10 @@ class MarketTests(unittest.TestCase):
         self.assertIn("Ask spread", html)
         self.assertIn("1 25-100% over", html)
         self.assertIn("1 more than double", html)
+        self.assertIn("/valuation?query=g1", html)
+        self.assertIn("g1 MAIN", html)
+        self.assertIn("owner=Ada", html)
+        self.assertIn("city=Cape%20Town", html)
 
     def test_median_query_includes_a_name_past_the_old_80_cap(self):
         names = [f"empty{i}" for i in range(80)] + ["Gardens"]
