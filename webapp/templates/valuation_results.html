@@ -77,11 +77,19 @@
 </style>
 {% endblock %}
 
+{% macro party(name, account, currency) -%}
+  {%- if name -%}
+    <a href="https://play.upland.me/profile?username={{ name|urlencode }}" target="_blank" rel="noopener">{{ name }}</a>
+    <a href="/listings?owner={{ name|urlencode }}&amp;currency={{ currency }}&amp;sort=deal">asks</a>
+  {%- elif account -%}{{ account }}{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
 <div class="card">
     <h2>{{ result.property.address }}</h2>
     <p class="card-subtitle">
-        {{ result.property.neighborhood }}, {{ result.property.city }}
+        {% if result.property.neighborhood %}<a href="/listings?neighborhood={{ result.property.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ result.property.neighborhood }}</a>{% else %}—{% endif %},
+        {% if result.property.city %}<a href="/listings?city={{ result.property.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ result.property.city }}</a>{% else %}—{% endif %}
         &middot; {% if result.property.area %}{{ result.property.area }} UP²{% else %}size not stored{% endif %}
         {% if result.property.details_source == "local" %}
         {% elif result.property.structure_count %}
@@ -160,7 +168,7 @@
     </p>
     <table class="full-table">
         <thead>
-            <tr><th>Address</th><th>Date</th><th>UP²</th><th>Price (UPX)</th><th>UPX/UP²</th></tr>
+            <tr><th>Address</th><th>Date</th><th>UP²</th><th>Price (UPX)</th><th>UPX/UP²</th><th>Sale</th></tr>
         </thead>
         <tbody>
         {% for c in result.upx_valuation.comps %}
@@ -170,6 +178,7 @@
                 <td>{{ c.area }}</td>
                 <td>{{ "{:,}".format(c.upx_amount|round|int) }}</td>
                 <td>{{ c.per_up2 }}</td>
+                <td>{% if c.buyer_name or c.buyer or c.seller_name or c.seller %}{{ party(c.buyer_name, c.buyer, "UPX") }} ← {{ party(c.seller_name, c.seller, "UPX") }}{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -190,7 +199,7 @@
     </p>
     <table class="full-table">
         <thead>
-            <tr><th>Address</th><th>Date</th><th>UP²</th><th>Price (USD)</th><th>USD/UP²</th></tr>
+            <tr><th>Address</th><th>Date</th><th>UP²</th><th>Price (USD)</th><th>USD/UP²</th><th>Sale</th></tr>
         </thead>
         <tbody>
         {% for c in result.usd_valuation.comps %}
@@ -200,6 +209,7 @@
                 <td>{{ c.area }}</td>
                 <td>${{ "%.2f"|format(c.usd_amount) }}</td>
                 <td>${{ "%.2f"|format(c.per_up2) }}</td>
+                <td>{% if c.buyer_name or c.buyer or c.seller_name or c.seller %}{{ party(c.buyer_name, c.buyer, "USD") }} ← {{ party(c.seller_name, c.seller, "USD") }}{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

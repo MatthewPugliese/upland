@@ -418,7 +418,8 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   economy sales table links to those stored listings and to the floor page. The floor
   page's address opens that property. Its neighborhood and city open the stored asks. Each city
   name links to the stored listings for that city, and the click still filters the
-  sales feed. A valuation also links to those stored asks. Seller neighborhoods do too.
+  sales feed. A valuation also links to those stored asks. Comparable sales name the buyer
+  and the seller, and a known username opens that player's stored asks. Seller neighborhoods do too.
   The map page links to the deals, markets, and sellers pages. A portfolio neighborhood
   opens its stored asks sorted against recent sales.
   The economy totals also compare property UPX

@@ -208,7 +208,7 @@ def _days_ago(days: int) -> str:
 def _query_comps(conn: sqlite3.Connection, where_clause: str, params: tuple, since: str) -> list:
     rows = conn.execute(f"""
         SELECT t.property_id, t.timestamp, t.action, t.upx_amount, t.usd_amount,
-               p.address, p.city, p.neighborhood
+               t.buyer, t.seller, p.address, p.city, p.neighborhood
         FROM transactions t
         JOIN pc.properties p ON t.property_id = p.prop_id
         WHERE t.asset_type = 'property'
@@ -281,6 +281,25 @@ def _confidence_tier(count: int, scope: str) -> tuple:
     if count >= MIN_COMPS_CITY:
         return "Low — broadened", "low"
     return "Very low — insufficient data", "very-low"
+
+
+def _attach_party_names(comps: list) -> None:
+    """Fill buyer_name and seller_name from the local username cache."""
+    accounts = []
+    for comp in comps:
+        for key in ("buyer", "seller"):
+            account = (comp.get(key) or "").strip()
+            if account:
+                accounts.append(account)
+    names = {}
+    if accounts:
+        import username_lookup
+        names = username_lookup.lookup_many(accounts)
+    for comp in comps:
+        buyer = (comp.get("buyer") or "").strip()
+        seller = (comp.get("seller") or "").strip()
+        comp["buyer_name"] = names.get(buyer)
+        comp["seller_name"] = names.get(seller)
 
 
 def _build_currency_valuation(comps: list, scope: str, window_days: int, amount_key: str,
@@ -400,6 +419,8 @@ def estimate_value(query: str, include_floor: bool = True) -> dict:
                                          "upx_amount", target_area, areas)
     usd_val = _build_currency_valuation(comps, comp_result["scope"], comp_result["window_days"],
                                          "usd_amount", target_area, areas)
+    _attach_party_names(upx_val["comps"])
+    _attach_party_names(usd_val["comps"])
 
     if is_listed and listing_price is not None:
         if listing_currency == "UPX" and upx_val["estimated_value"]:

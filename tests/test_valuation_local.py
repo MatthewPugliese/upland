@@ -244,3 +244,109 @@ class ValuationLinkTests(unittest.TestCase):
             })
         self.assertIn('href="/valuation?query=42"', listings)
         self.assertIn('href="/valuation?query=42"', floor)
+
+
+class CompPartyTests(unittest.TestCase):
+    def test_comp_rows_keep_the_buyer_and_seller(self):
+        import sqlite3
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        eco_path = root / "economy.db"
+        pc_path = root / "property_cache.db"
+        eco = sqlite3.connect(eco_path)
+        eco.row_factory = sqlite3.Row
+        eco.execute("""
+            CREATE TABLE transactions (
+                property_id TEXT, timestamp TEXT, action TEXT,
+                upx_amount REAL, usd_amount REAL, asset_type TEXT,
+                buyer TEXT, seller TEXT
+            )
+        """)
+        eco.execute(
+            "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?)",
+            ("99", "2026-10-01T00:00:00", "n5", 20000, None, "property", "buyeracct", "selleracct"),
+        )
+        pc = sqlite3.connect(pc_path)
+        pc.execute("""
+            CREATE TABLE properties (
+                prop_id TEXT, address TEXT, city TEXT, neighborhood TEXT
+            )
+        """)
+        pc.execute(
+            "INSERT INTO properties VALUES (?,?,?,?)",
+            ("99", "1 MAIN ST", "Cape Town", "GARDENS"),
+        )
+        pc.commit()
+        pc.close()
+        eco.execute("ATTACH DATABASE ? AS pc", (str(pc_path),))
+        rows = valuation._query_comps(
+            eco, "p.neighborhood = ?", ("GARDENS",), "2026-01-01T00:00:00",
+        )
+        eco.close()
+        self.assertEqual(rows[0]["buyer"], "buyeracct")
+        self.assertEqual(rows[0]["seller"], "selleracct")
+        self.assertEqual(rows[0]["address"], "1 MAIN ST")
+
+    def test_known_username_is_attached_and_linked(self):
+        import username_lookup
+        comps = [{"buyer": "buyeracct", "seller": "selleracct"}]
+        old = username_lookup.lookup_many
+        username_lookup.lookup_many = lambda accounts: {"selleracct": "Ada"}
+        try:
+            valuation._attach_party_names(comps)
+        finally:
+            username_lookup.lookup_many = old
+        self.assertEqual(comps[0]["seller_name"], "Ada")
+        self.assertIsNone(comps[0]["buyer_name"])
+
+        import app as webapp
+        result = {
+            "property": {
+                "address": "22 WOODBURN CRES",
+                "neighborhood": "Gardens",
+                "city": "Cape Town",
+                "area": 10,
+                "details_source": "local",
+                "details_note": None,
+                "is_listed": False,
+                "structure_count": 0,
+            },
+            "floor": None,
+            "upx_valuation": {
+                "comp_count": 1,
+                "scope": "neighborhood",
+                "window_days": 90,
+                "median_per_up2": 2000,
+                "estimated_value": 20000,
+                "confidence": "Medium",
+                "confidence_slug": "medium",
+                "comps": [{
+                    "property_id": "99",
+                    "address": "1 MAIN ST",
+                    "timestamp": "2026-10-01T00:00:00",
+                    "area": 10,
+                    "upx_amount": 20000,
+                    "per_up2": 2000,
+                    "buyer": "buyeracct",
+                    "buyer_name": None,
+                    "seller": "selleracct",
+                    "seller_name": "Ada",
+                }],
+            },
+            "usd_valuation": {
+                "comp_count": 0,
+                "estimated_value": None,
+                "confidence": "Very low — insufficient data",
+                "confidence_slug": "very-low",
+                "comps": [],
+            },
+        }
+        with webapp.app.test_request_context("/valuation"):
+            from flask import render_template
+            html = render_template("valuation_results.html", result=result)
+        self.assertIn("owner=Ada", html)
+        self.assertIn("currency=UPX", html)
+        self.assertIn("buyeracct", html)
+        self.assertIn("neighborhood=Gardens", html)
+        self.assertIn("city=Cape%20Town", html)
