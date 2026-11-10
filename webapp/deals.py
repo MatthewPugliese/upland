@@ -12,7 +12,8 @@ from listings_view import build_listings_page
 MIN_DISCOUNT_PCT = 10
 NEAR_PCT = 25
 WIDER_CAP = 40
-OVER_SELLER_CAP = 20
+JUST_OVER_CAP = 20
+OVER_SELLER_CAP = 40
 
 
 def build_deals(db_path: Path | None = None, limit: int = 500,
@@ -46,6 +47,7 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         row for row in page["listings"]
         if row.get("vs_median_pct") is not None and row["vs_median_pct"] > SALE_DOUBLE_PCT
     ]
+    over_rows.sort(key=lambda row: (row["vs_median_pct"], row.get("price") or 0, row.get("address") or ""))
     over_groups: dict = {}
     for row in over_rows:
         name = (row.get("owner_username") or "").strip()
@@ -82,6 +84,7 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         "wider": wider[:WIDER_CAP],
         "wider_count": len(wider),
         "over_double": len(over_rows),
+        "just_over": over_rows[:JUST_OVER_CAP],
         "over_sellers": repeat_sellers[:OVER_SELLER_CAP],
         "over_seller_count": len(over_sellers),
         "over_repeat_count": len(repeat_sellers),

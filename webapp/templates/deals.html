@@ -127,6 +127,38 @@
         {{ 'is' if page.over_double == 1 else 'are' }} more than double the recent median.
         {% if page.over_single_asks == 1 %}1 of those asks is that seller's only one in this band.{% elif page.over_single_asks %}{{ page.over_single_asks }} of those asks are that seller's only one in this band.{% endif %}
     </p>
+    {% if page.just_over %}
+    <p class="empty-note">
+        Closest asks past double.
+        {% if page.over_double > page.just_over|length %}Showing {{ page.just_over|length }} of {{ page.over_double }}.{% endif %}
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>vs sales</th>
+                <th>Ask</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>City</th>
+                <th>Seller</th>
+                <th>Last confirmed</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.just_over %}
+            <tr>
+                <td class="markup-pos">{{ "%+.1f"|format(row.vs_median_pct) }}%</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
+                <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
+                <td>{{ row.city }}</td>
+                <td>{{ row.owner_username or "—" }}</td>
+                <td>{{ row.last_seen or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
     {% if page.over_sellers %}
     <p class="empty-note">
         Sellers with more than one of those asks.
