@@ -198,6 +198,30 @@ class ListingDealTests(unittest.TestCase):
             "last_seen": "2026-11-09T00:00:00Z",
         })
         db.upsert_listing(self.listings, {
+            "property_id": "bo1",
+            "address": "bo1 MAIN",
+            "city_id": 1,
+            "city": "Cape Town",
+            "neighborhood": "GARDENS",
+            "currency": "UPX",
+            "price": 750,
+            "mint_price": 100,
+            "owner_username": "Bo",
+            "last_seen": "2026-11-09T00:00:00Z",
+        })
+        db.upsert_listing(self.listings, {
+            "property_id": "bo2",
+            "address": "bo2 MAIN",
+            "city_id": 1,
+            "city": "Cape Town",
+            "neighborhood": "GARDENS",
+            "currency": "UPX",
+            "price": 1200,
+            "mint_price": 100,
+            "owner_username": "Bo",
+            "last_seen": "2026-11-09T00:00:00Z",
+        })
+        db.upsert_listing(self.listings, {
             "property_id": "triple",
             "address": "triple MAIN",
             "city_id": 1,
@@ -217,7 +241,13 @@ class ListingDealTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in page["near"]], ["close", "band"])
         self.assertEqual([row["id"] for row in page["wider"]], ["far", "rich"])
         self.assertEqual(page["wider_count"], 2)
-        self.assertEqual(page["over_double"], 1)
+        self.assertEqual(page["over_double"], 3)
+        self.assertEqual(page["over_seller_count"], 2)
+        self.assertEqual(page["over_single_asks"], 1)
+        self.assertEqual(page["over_sellers"][0]["owner_username"], "Bo")
+        self.assertEqual(page["over_sellers"][0]["asks"], 2)
+        self.assertEqual(page["over_sellers"][0]["closest_id"], "bo1")
+        self.assertEqual(page["over_sellers"][0]["closest_pct"], 150.0)
         self.assertEqual(page["deals"][0]["vs_median_pct"], -50.0)
 
         import app as webapp
@@ -237,4 +267,8 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("rich MAIN", html)
         self.assertIn("+100.0%", html)
         self.assertIn("more than double the recent median", html)
+        self.assertIn("1 of those asks is that seller's only one", html)
+        self.assertIn("play.upland.me/profile?username=Bo", html)
+        self.assertIn("bo1 MAIN", html)
+        self.assertIn("+150.0%", html)
         self.assertNotIn("triple MAIN", html)

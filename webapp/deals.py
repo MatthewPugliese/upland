@@ -12,6 +12,7 @@ from listings_view import build_listings_page
 MIN_DISCOUNT_PCT = 10
 NEAR_PCT = 25
 WIDER_CAP = 40
+OVER_SELLER_CAP = 20
 
 
 def build_deals(db_path: Path | None = None, limit: int = 500,
@@ -41,10 +42,37 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         and NEAR_PCT < row["vs_median_pct"] <= SALE_DOUBLE_PCT
     ]
     wider.sort(key=lambda row: (row["vs_median_pct"], row.get("price") or 0, row.get("address") or ""))
-    over_double = sum(
-        1 for row in page["listings"]
+    over_rows = [
+        row for row in page["listings"]
         if row.get("vs_median_pct") is not None and row["vs_median_pct"] > SALE_DOUBLE_PCT
+    ]
+    over_groups: dict = {}
+    for row in over_rows:
+        name = (row.get("owner_username") or "").strip()
+        slot = over_groups.setdefault(name.casefold(), {
+            "owner_username": name,
+            "asks": 0,
+            "closest_pct": None,
+            "closest_address": "",
+            "closest_id": "",
+            "closest_neighborhood": "",
+            "closest_price": None,
+        })
+        slot["asks"] += 1
+        pct = row["vs_median_pct"]
+        if slot["closest_pct"] is None or (pct, row.get("price") or 0) < (
+            slot["closest_pct"], slot["closest_price"] or 0
+        ):
+            slot["closest_pct"] = pct
+            slot["closest_address"] = row.get("address") or ""
+            slot["closest_id"] = row.get("id") or ""
+            slot["closest_neighborhood"] = row.get("neighborhood") or ""
+            slot["closest_price"] = row.get("price")
+    over_sellers = sorted(
+        over_groups.values(),
+        key=lambda row: (-row["asks"], row["closest_pct"], row["owner_username"].casefold()),
     )
+    repeat_sellers = [row for row in over_sellers if row["asks"] >= 2]
     summary = page.get("deals") or {}
     return {
         "db_exists": page["db_exists"],
@@ -53,7 +81,11 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         "near": near[:30],
         "wider": wider[:WIDER_CAP],
         "wider_count": len(wider),
-        "over_double": over_double,
+        "over_double": len(over_rows),
+        "over_sellers": repeat_sellers[:OVER_SELLER_CAP],
+        "over_seller_count": len(over_sellers),
+        "over_repeat_count": len(repeat_sellers),
+        "over_single_asks": sum(row["asks"] for row in over_sellers if row["asks"] == 1),
         "near_pct": NEAR_PCT,
         "double_pct": SALE_DOUBLE_PCT,
         "checked": summary.get("compared", 0),

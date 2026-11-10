@@ -383,6 +383,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   and lists those asks. It also lists asks within 25% of that median that are not
   already shown as a 10% discount or an exact match. It also lists asks that are
   over 25% and up to double that median, and counts asks that are more than double.
+  Sellers with more than one of those asks are listed, with the closest of their asks.
   The floor page counts how many
   of its UPX asks are at or under the same median. Collection
   for-sale rows show the same comparison. `/markets` groups the same snapshot by

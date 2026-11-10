@@ -9,6 +9,7 @@
         color: #555; font-weight: 600; white-space: nowrap; }
     .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
     .full-table tr:hover td { background: #fafafa; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
     .markup-neg { color: #1E8449; font-weight: 600; }
     .markup-pos { color: #922B21; font-weight: 600; }
     .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
@@ -120,7 +121,44 @@
     </table>
     {% endif %}
     {% if page.over_double %}
-    <p class="empty-note">{{ page.over_double }} compared ask{{ '' if page.over_double == 1 else 's' }} {{ 'is' if page.over_double == 1 else 'are' }} more than double the recent median.</p>
+    <p class="empty-note">
+        {{ page.over_double }} compared ask{{ '' if page.over_double == 1 else 's' }}
+        from {{ page.over_seller_count }} seller{{ '' if page.over_seller_count == 1 else 's' }}
+        {{ 'is' if page.over_double == 1 else 'are' }} more than double the recent median.
+        {% if page.over_single_asks == 1 %}1 of those asks is that seller's only one in this band.{% elif page.over_single_asks %}{{ page.over_single_asks }} of those asks are that seller's only one in this band.{% endif %}
+    </p>
+    {% if page.over_sellers %}
+    <p class="empty-note">
+        Sellers with more than one of those asks.
+        {% if page.over_repeat_count > page.over_sellers|length %}Showing {{ page.over_sellers|length }} of {{ page.over_repeat_count }}.{% endif %}
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th class="num">Asks</th>
+                <th>Seller</th>
+                <th>Closest of those</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.over_sellers %}
+            <tr>
+                <td class="num">{{ row.asks }}</td>
+                <td>
+                    {% if row.owner_username %}
+                    <a href="https://play.upland.me/profile?username={{ row.owner_username|urlencode }}" target="_blank" rel="noopener">{{ row.owner_username }}</a>
+                    {% else %}Unknown seller{% endif %}
+                </td>
+                <td class="markup-pos">{{ "%+.1f"|format(row.closest_pct) }}%</td>
+                <td>{% if row.closest_id %}<a href="/valuation?query={{ row.closest_id|urlencode }}">{{ row.closest_address }}</a>{% else %}{{ row.closest_address }}{% endif %}</td>
+                <td>{{ row.closest_neighborhood }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
     {% endif %}
 
     {% if not page.db_exists %}
