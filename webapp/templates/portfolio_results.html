@@ -151,6 +151,7 @@
                 <td>
                     <strong><a href="/score?neighborhood={{ h.neighborhood|urlencode }}">{{ h.neighborhood }}</a></strong>
                     <a href="/floor?neighborhood={{ h.neighborhood|urlencode }}" style="font-size:11px;color:#aaa;margin-left:4px;">(floor price)</a>
+                    <a href="/listings?neighborhood={{ h.neighborhood|urlencode }}" style="font-size:11px;color:#aaa;margin-left:4px;">(listings)</a>
                 </td>
                 <td>{{ h.count }}</td>
                 <td>{{ "{:,}".format(h.mint) }}</td>
@@ -213,7 +214,7 @@
         <tbody>
         {% for p in result.undeveloped %}
             <tr>
-                <td class="addr-cell">{{ p.address }} <span class="city">{{ p.city }}</span></td>
+                <td class="addr-cell">{% if p.id %}<a href="/valuation?query={{ p.id|urlencode }}">{{ p.address }}</a>{% else %}{{ p.address }}{% endif %} <span class="city">{{ p.city }}</span></td>
                 <td>{{ p.neighborhood }}</td>
                 <td>{{ "{:,}".format(p.mintPrice or 0) }}</td>
             </tr>

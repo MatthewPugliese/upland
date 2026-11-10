@@ -42,8 +42,10 @@ numeric property ID.
 UPX cost data exists for demolishing/replacing a structure, same gap as the Portfolio Analyzer's
 "net worth" line).
 
-Listings, floor prices, comparable sales, and property rows in the economy feed open this page
-by property id (`/valuation?query=`).
+Listings, floor prices, comparable sales, collection properties, collection for-sale rows,
+undeveloped portfolio properties, and property rows in the economy feed open this page by
+property id (`/valuation?query=`). A portfolio neighborhood also links to the stored listings
+for that name.
 
 Tested against a live property (`242 LIBERTY AVE`, Dongan Hills, prop ID `81296939123819`): only 2
 neighborhood comps existed in the last 90 days, correctly triggered a city-level broadening to

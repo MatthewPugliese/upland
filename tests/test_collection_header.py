@@ -256,6 +256,7 @@ class PageTests(unittest.TestCase):
         self.assertIn("The one before that was 12,695 UPX on Oct 16, 2026", page)
         self.assertIn("var ANNUAL_RATE_PCT = 12.25", page)
         self.assertIn("not the last collection payout", page)
+        self.assertIn("/valuation?query=", page)
         self.assertNotIn("Current UPX/month (12.25%)", page)
         self.assertIn("1.5x", page)
         self.assertIn("Own 1 property on MAIN ST in Chicago", page)

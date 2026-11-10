@@ -80,6 +80,8 @@ class PortfolioIncomeTests(unittest.TestCase):
         self.assertIn("Oct 30, 2026", page)
         self.assertIn("81,792 UPX", page)
         self.assertIn("The one before that was 12,695 UPX on Oct 16, 2026", page)
+        self.assertIn('href="/valuation?query=1"', page)
+        self.assertIn('href="/listings?neighborhood=LOOP"', page)
         self.assertNotIn("flat 12.25% annual rate against mint value (same model", page)
 
 

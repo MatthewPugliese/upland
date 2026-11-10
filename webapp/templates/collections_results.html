@@ -414,7 +414,7 @@
     </div>
     <div class="coll-props">
         {% for p in c.owned_props %}
-        <span class="addr">{{ p.address }}{% if p.city %} <span style="color:#aaa;font-size:10px">{{ p.city }}</span>{% endif %}</span>
+        <span class="addr">{% if p.id %}<a href="/valuation?query={{ p.id|urlencode }}">{{ p.address }}</a>{% else %}{{ p.address }}{% endif %}{% if p.city %} <span style="color:#aaa;font-size:10px">{{ p.city }}</span>{% endif %}</span>
         {% endfor %}
     </div>
 </div>
@@ -445,7 +445,7 @@
     </div>
     <div class="coll-props">
         {% for p in c.owned_props %}
-        <span class="addr">{{ p.address }}{% if p.city %} <span style="color:#aaa;font-size:10px">{{ p.city }}</span>{% endif %}</span>
+        <span class="addr">{% if p.id %}<a href="/valuation?query={{ p.id|urlencode }}">{{ p.address }}</a>{% else %}{{ p.address }}{% endif %}{% if p.city %} <span style="color:#aaa;font-size:10px">{{ p.city }}</span>{% endif %}</span>
         {% endfor %}
     </div>
     <div class="coll-need">Need {{ c.gap }} more: {{ c.requirements_text }}</div>
@@ -637,8 +637,13 @@ function renderForSaleListings(container) {
         var markup = (l.markup_pct !== null && l.markup_pct !== undefined)
             ? '<span class="forsale-markup ' + markupClass(l.markup_pct) + '">+' + l.markup_pct.toLocaleString() + '% vs mint</span>'
             : "";
+        var addressText = escapeHtml(l.address || "");
+        var cityText = l.city ? ' <span style="color:#bbb;font-size:10px">' + escapeHtml(l.city) + '</span>' : "";
+        var addressHtml = l.id
+            ? '<a href="/valuation?query=' + encodeURIComponent(l.id) + '">' + addressText + '</a>' + cityText
+            : addressText + cityText;
         html += '<div class="forsale-row">'
-            + '<span class="forsale-addr">' + l.address + (l.city ? ' <span style="color:#bbb;font-size:10px">' + l.city + '</span>' : '') + '</span>'
+            + '<span class="forsale-addr">' + addressHtml + '</span>'
             + (l.currency === "UPX" ? '<span class="forsale-price-upx">' + upx + '</span>' : '')
             + (l.currency === "USD" ? '<span class="forsale-price-usd">' + usd + '</span>' : '')
             + markup
