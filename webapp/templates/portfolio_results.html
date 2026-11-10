@@ -151,7 +151,7 @@
                 <td>
                     <strong><a href="/score?neighborhood={{ h.neighborhood|urlencode }}">{{ h.neighborhood }}</a></strong>
                     <a href="/floor?neighborhood={{ h.neighborhood|urlencode }}" style="font-size:11px;color:#aaa;margin-left:4px;">(floor price)</a>
-                    <a href="/listings?neighborhood={{ h.neighborhood|urlencode }}" style="font-size:11px;color:#aaa;margin-left:4px;">(listings)</a>
+                    <a href="/listings?neighborhood={{ h.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal" style="font-size:11px;color:#aaa;margin-left:4px;">(asks vs sales)</a>
                 </td>
                 <td>{{ h.count }}</td>
                 <td>{{ "{:,}".format(h.mint) }}</td>
