@@ -807,7 +807,7 @@ function renderCities() {
         const isActive = activeCityFilter === c.city;
         const esc = c.city.replace(/"/g, '&quot;');
         return `<tr data-city="${esc}"${isActive ? ' class="city-active"' : ''}>
-        <td>${c.city}</td>
+        <td><a href="/listings?city=${encodeURIComponent(c.city || '')}&currency=UPX" onclick="event.stopPropagation()">${escHtml(c.city)}</a></td>
         <td>${fmtNum(c.total_trades)}</td>
         <td>${fmtNum(c.upx_trades)}</td>
         <td>${fmtNum(c.usd_trades)}</td>

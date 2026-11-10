@@ -390,7 +390,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   neighborhoods, the ones with the most asks. `/sellers` lists usernames with at least
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
   The listings page shows the time of the newest stored ask. Each neighborhood on the
-  economy sales table links to those stored listings and to the floor page.
+  economy sales table links to those stored listings and to the floor page. Each city
+  name links to the stored listings for that city, and the click still filters the
+  sales feed. A valuation also links to those stored asks. Seller neighborhoods do too.
   The economy totals also compare property UPX
   volume with the previous period of the same length. All-time has no comparison. This is a
   point-in-time snapshot on request, not a live-updating tracker — true "update live as events

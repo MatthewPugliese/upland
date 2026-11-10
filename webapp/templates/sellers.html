@@ -77,7 +77,7 @@
                     {{ row.best_address }}
                     {% endif %}
                 </td>
-                <td>{{ row.neighborhoods|join(", ") }}</td>
+                <td>{% for name in row.neighborhoods %}<a href="/listings?neighborhood={{ name|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
             </tr>
         {% endfor %}
         </tbody>

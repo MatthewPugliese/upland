@@ -103,6 +103,7 @@ class SellerTests(unittest.TestCase):
         self.assertIn("play.upland.me/profile?username=Ada", html)
         self.assertIn("-50.0%", html)
         self.assertIn("a1 MAIN", html)
+        self.assertIn("/listings?neighborhood=GARDENS", html)
         self.assertNotIn("Dot", html)
         self.assertNotIn("d1 MAIN", html)
 

@@ -143,7 +143,8 @@
             ${{ "%.2f"|format(result.floor.floor_usd) }} ({{ result.floor.floor_usd_address }})
             {% if result.floor.usd_vs_floor_pct is defined %} — this property's USD estimate is {{ "%+.1f%%"|format(result.floor.usd_vs_floor_pct) }} vs. the floor{% endif %}
         {% endif %}
-        &nbsp;<a href="/floor?neighborhood={{ result.property.neighborhood|urlencode }}">See all listings &rarr;</a>
+        &nbsp;<a href="/floor?neighborhood={{ result.property.neighborhood|urlencode }}">Floor &rarr;</a>
+        &nbsp;<a href="/listings?neighborhood={{ result.property.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">Asks vs sales &rarr;</a>
     </p>
     {% endif %}
 
