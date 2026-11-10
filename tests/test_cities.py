@@ -99,6 +99,7 @@ class CityAskTests(unittest.TestCase):
         self.assertIn("low MAIN", html)
         self.assertIn("-66.7%", html)
         self.assertIn("Omaha", html)
+        self.assertIn("2 not compared", html)
 
     def test_missing_snapshot_is_an_empty_page(self):
         from cities import build_cities

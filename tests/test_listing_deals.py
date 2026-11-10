@@ -213,6 +213,7 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("-50%", html)
         self.assertIn("1 compared ask matches the recent median", html)
         self.assertIn("even MAIN", html)
+        self.assertIn("2026-11-09T00:00:00Z", html)
         self.assertIn("CLOSE MAIN", html)
         self.assertIn("band MAIN", html)
         self.assertIn("+25.0%", html)

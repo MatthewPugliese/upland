@@ -61,7 +61,7 @@
                     {% if row.usd_asks %}<div class="empty-note">{{ row.usd_asks }} USD</div>{% endif %}
                 </td>
                 <td class="num">{{ row.upx_asks }}</td>
-                <td class="num">{{ row.within_near }} of {{ row.compared }}</td>
+                <td class="num">{{ row.within_near }} of {{ row.compared }}{% if row.upx_asks > row.compared %}<div class="empty-note">{{ row.upx_asks - row.compared }} not compared</div>{% endif %}</td>
                 <td class="num">{% if row.lowest_ask is not none %}{{ "{:,.0f}".format(row.lowest_ask) }}{% else %}—{% endif %}</td>
                 <td class="num">{% if row.median_ask is not none %}{{ "{:,.0f}".format(row.median_ask) }}{% else %}—{% endif %}</td>
                 <td>

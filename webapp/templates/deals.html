@@ -38,6 +38,7 @@
                 <th>Neighborhood</th>
                 <th>City</th>
                 <th>Seller</th>
+                <th>Last confirmed</th>
             </tr>
         </thead>
         <tbody>
@@ -48,6 +49,7 @@
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
                 <td>{{ row.owner_username or "—" }}</td>
+                <td>{{ row.last_seen or "—" }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -64,6 +66,7 @@
                 <th>Neighborhood</th>
                 <th>City</th>
                 <th>Seller</th>
+                <th>Last confirmed</th>
             </tr>
         </thead>
         <tbody>
@@ -75,6 +78,7 @@
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
                 <td>{{ row.owner_username or "—" }}</td>
+                <td>{{ row.last_seen or "—" }}</td>
             </tr>
         {% endfor %}
         </tbody>
