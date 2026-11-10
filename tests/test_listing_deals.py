@@ -17,6 +17,14 @@ import listings_db as db  # noqa: E402
 import listings_view  # noqa: E402
 
 
+class HomeSaleLinkTests(unittest.TestCase):
+    def test_home_points_at_the_sale_pages(self):
+        import app as webapp
+        html = webapp.app.test_client().get("/").get_data(as_text=True)
+        self.assertIn("Asks compared with recent sales", html)
+        self.assertIn("within 25%", html)
+
+
 class ListingDealTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
