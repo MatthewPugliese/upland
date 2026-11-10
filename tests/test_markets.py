@@ -97,6 +97,7 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(page["markets"][1]["at_or_under"], 0)
         self.assertNotIn("prices", gardens)
         self.assertEqual(gardens["city"], "Cape Town")
+        self.assertEqual(gardens["sales_7d"], 5)
         self.assertEqual(page["skipped_thin"], 1)
         self.assertEqual(page["no_sales"], 1)
         self.assertEqual(page["freshest_listing"], "2026-11-09T18:00:00Z")

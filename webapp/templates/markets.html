@@ -58,7 +58,8 @@
                 <th class="num">Lowest ask</th>
                 <th class="num">Median ask</th>
                 <th class="num">Recent median</th>
-                <th class="num">Sales</th>
+                <th class="num">Sales, 90 days</th>
+                <th class="num">Sales, 7 days</th>
             </tr>
         </thead>
         <tbody>
@@ -80,6 +81,7 @@
                 <td class="num">{{ "{:,.0f}".format(row.median_ask) }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.sale_median_upx) }}</td>
                 <td class="num">{{ row.sales }}</td>
+                <td class="num">{{ row.sales_7d }}</td>
             </tr>
         {% endfor %}
         </tbody>

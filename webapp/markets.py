@@ -98,11 +98,11 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         return page
 
     import economy
-    medians = economy.neighborhood_sale_medians(
-        [row["neighborhood"] for row in chosen],
-        days=WINDOW_DAYS,
-    )
+    names = [row["neighborhood"] for row in chosen]
+    medians = economy.neighborhood_sale_medians(names, days=WINDOW_DAYS)
     folded = {name.casefold(): info for name, info in medians.items()}
+    week = economy.neighborhood_sale_medians(names, days=7, minimum_sales=1)
+    week_folded = {name.casefold(): info for name, info in week.items()}
 
     markets = []
     for row in chosen:
@@ -113,6 +113,8 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             continue
         row["sale_median_upx"] = median
         row["sales"] = info["sales"]
+        week_info = week_folded.get(row["neighborhood"].casefold())
+        row["sales_7d"] = week_info["sales"] if week_info else 0
         row["median_vs_sales_pct"] = round(100 * (row["median_ask"] - median) / median, 1)
         row["floor_vs_sales_pct"] = round(100 * (row["lowest_ask"] - median) / median, 1)
         row["at_or_under"] = sum(1 for price in row.pop("prices") if price <= median)
