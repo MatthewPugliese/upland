@@ -99,8 +99,10 @@ def floor_from_snapshot(hood_name: str, city_name: str) -> dict | None:
         "note": note,
         "floor_upx": upx_listings[0]["price"] if upx_listings else None,
         "floor_upx_address": upx_listings[0]["address"] if upx_listings else None,
+        "floor_upx_id": upx_listings[0]["prop_id"] if upx_listings else None,
         "floor_usd": usd_listings[0]["price"] if usd_listings else None,
         "floor_usd_address": usd_listings[0]["address"] if usd_listings else None,
+        "floor_usd_id": usd_listings[0]["prop_id"] if usd_listings else None,
         "upx_listings": upx_listings,
         "usd_listings": usd_listings,
     }
@@ -145,8 +147,10 @@ def _floor_result(hood_name: str, city_name: str, listings: list, **extra) -> di
         "note": extra.get("note"),
         "floor_upx": upx_listings[0]["price"] if upx_listings else None,
         "floor_upx_address": upx_listings[0]["address"] if upx_listings else None,
+        "floor_upx_id": upx_listings[0]["prop_id"] if upx_listings else None,
         "floor_usd": usd_listings[0]["price"] if usd_listings else None,
         "floor_usd_address": usd_listings[0]["address"] if usd_listings else None,
+        "floor_usd_id": usd_listings[0]["prop_id"] if usd_listings else None,
         "upx_listings": upx_listings,
         "usd_listings": usd_listings,
     }
@@ -180,7 +184,7 @@ def get_floor_prices(neighborhood: str) -> dict:
     """
     Returns {"error": "..."} if the neighborhood can't be resolved, otherwise:
     {neighborhood, city, total_for_sale, priced_count, truncated,
-     floor_upx, floor_upx_address, floor_usd, floor_usd_address,
+     floor_upx, floor_upx_address, floor_upx_id, floor_usd, floor_usd_address, floor_usd_id,
      upx_listings: [...], usd_listings: [...]}
     each listing: {prop_id, address, price, mint_price, markup_pct, owner_username}
     """

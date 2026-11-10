@@ -38,19 +38,21 @@
 
 {% block content %}
 <div class="card">
-    <h2>{{ result.neighborhood }}</h2>
-    <p class="card-subtitle">{{ result.city }} &middot; {{ result.total_for_sale }} propert{{ 'y' if result.total_for_sale == 1 else 'ies' }} {% if result.coverage == "partial" %}in the local snapshot{% elif result.coverage == "neighborhood" %}in the local neighborhood file{% else %}currently for sale{% endif %}{% if result.truncated %} (priced the first {{ result.priced_count }}){% endif %}{% if result.note %}<br><span style="color:#9A7D0A">{{ result.note }}</span>{% endif %}</p>
+    <h2>{% if result.neighborhood %}<a href="/listings?neighborhood={{ result.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ result.neighborhood }}</a>{% else %}{{ result.neighborhood }}{% endif %}</h2>
+    <p class="card-subtitle">{% if result.city %}<a href="/listings?city={{ result.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ result.city }}</a>{% else %}{{ result.city }}{% endif %} &middot; {{ result.total_for_sale }} propert{{ 'y' if result.total_for_sale == 1 else 'ies' }} {% if result.coverage == "partial" %}in the local snapshot{% elif result.coverage == "neighborhood" %}in the local neighborhood file{% else %}currently for sale{% endif %}{% if result.truncated %} (priced the first {{ result.priced_count }}){% endif %}{% if result.note %}<br><span style="color:#9A7D0A">{{ result.note }}</span>{% endif %}</p>
 
     <div class="results-header">
         <div class="stat-card green">
             <div class="value">{% if result.floor_upx %}{{ "{:,}".format(result.floor_upx|round|int) }}{% else %}—{% endif %}</div>
             <div class="label">Floor Price (UPX)</div>
-            {% if result.floor_upx_address %}<div class="sub">{{ result.floor_upx_address }}</div>{% endif %}
+            {% set upx_floor_id = result.floor_upx_id or (result.upx_listings[0].prop_id if result.upx_listings else '') %}
+            {% if result.floor_upx_address %}<div class="sub">{% if upx_floor_id and upx_floor_id != 'None' %}<a href="/valuation?query={{ upx_floor_id|urlencode }}">{{ result.floor_upx_address }}</a>{% else %}{{ result.floor_upx_address }}{% endif %}</div>{% endif %}
         </div>
         <div class="stat-card green">
             <div class="value">{% if result.floor_usd %}${{ "%.2f"|format(result.floor_usd) }}{% else %}—{% endif %}</div>
             <div class="label">Floor Price (USD)</div>
-            {% if result.floor_usd_address %}<div class="sub">{{ result.floor_usd_address }}</div>{% endif %}
+            {% set usd_floor_id = result.floor_usd_id or (result.usd_listings[0].prop_id if result.usd_listings else '') %}
+            {% if result.floor_usd_address %}<div class="sub">{% if usd_floor_id and usd_floor_id != 'None' %}<a href="/valuation?query={{ usd_floor_id|urlencode }}">{{ result.floor_usd_address }}</a>{% else %}{{ result.floor_usd_address }}{% endif %}</div>{% endif %}
         </div>
         <div class="stat-card">
             <div class="value">{{ result.upx_listings|length }}</div>

@@ -78,10 +78,22 @@ class FloorSnapshotTests(unittest.TestCase):
         self.assertEqual(result["coverage"], "partial")
         self.assertEqual(result["floor_upx"], 15999)
         self.assertEqual(result["floor_upx_address"], "22 WOODBURN CRES")
+        self.assertEqual(result["floor_upx_id"], "low")
         self.assertEqual(result["floor_usd"], 8)
+        self.assertEqual(result["floor_usd_id"], "usd")
         self.assertIn("not a full city scan", result["note"])
         cached = json.loads((self.cache / "GARDENS.json").read_text())
         self.assertEqual(cached["coverage"], "partial")
+        self.assertEqual(cached["floor_upx_id"], "low")
+
+        import app as webapp
+        with webapp.app.test_request_context("/floor"):
+            from flask import render_template
+            html = render_template("floor_price_results.html", result=result)
+        self.assertIn("/valuation?query=low", html)
+        self.assertIn("/valuation?query=usd", html)
+        self.assertIn("neighborhood=Gardens", html)
+        self.assertIn("city=Cape%20Town", html)
 
     def test_no_stored_rows_does_not_scan_a_city(self):
         self.conn.commit()
@@ -105,5 +117,6 @@ class FloorSnapshotTests(unittest.TestCase):
         self.assertEqual(result["coverage"], "neighborhood")
         self.assertEqual(result["floor_upx"], 15999)
         self.assertEqual(result["floor_upx_address"], "22 WOODBURN CRES")
+        self.assertEqual(result["floor_upx_id"], "1")
         self.assertEqual(result["total_for_sale"], 1)
         self.assertIn("city scan was not started", result["note"])
