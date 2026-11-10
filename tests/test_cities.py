@@ -53,6 +53,8 @@ class CityAskTests(unittest.TestCase):
             ("high", 400, "GARDENS", "Cape Town", "UPX"),
             ("usd", 9, "GARDENS", "Cape Town", "USD"),
             ("near", 330, "GARDENS", "Cape Town", "UPX"),
+            ("twice", 600, "GARDENS", "Far City", "UPX"),
+            ("triple", 900, "GARDENS", "Far City", "UPX"),
             ("q1", 50, "QUIET", "Omaha", "UPX"),
             ("q2", 80, "QUIET", "Omaha", "UPX"),
         ]
@@ -78,7 +80,10 @@ class CityAskTests(unittest.TestCase):
     def test_cities_sort_by_the_closest_ask(self):
         from cities import build_cities
         page = build_cities(db_path=self.listings_path)
-        self.assertEqual([row["city"] for row in page["cities"]], ["Cape Town", "Omaha"])
+        self.assertEqual(
+            [row["city"] for row in page["cities"]],
+            ["Cape Town", "Far City", "Omaha"],
+        )
         cape = page["cities"][0]
         self.assertEqual(cape["upx_asks"], 4)
         self.assertEqual(cape["usd_asks"], 1)
@@ -88,8 +93,19 @@ class CityAskTests(unittest.TestCase):
         self.assertEqual(cape["closest_id"], "low")
         self.assertEqual(cape["within_near"], 1)
         self.assertEqual(cape["compared"], 4)
-        self.assertIsNone(page["cities"][1]["closest_pct"])
-        self.assertEqual(page["cities"][1]["upx_asks"], 2)
+        self.assertEqual(cape["at_or_under"], 2)
+        self.assertEqual(cape["near_over"], 1)
+        self.assertEqual(cape["up_to_double"], 1)
+        self.assertEqual(cape["over_double"], 0)
+        far = page["cities"][1]
+        self.assertEqual(far["closest_pct"], 100.0)
+        self.assertEqual(far["at_or_under"], 0)
+        self.assertEqual(far["near_over"], 0)
+        self.assertEqual(far["up_to_double"], 1)
+        self.assertEqual(far["over_double"], 1)
+        self.assertIsNone(page["cities"][2]["closest_pct"])
+        self.assertEqual(page["cities"][2]["upx_asks"], 2)
+        self.assertEqual(page["cities"][2]["over_double"], 0)
 
         import app as webapp
         with webapp.app.test_request_context("/cities"):
@@ -100,6 +116,11 @@ class CityAskTests(unittest.TestCase):
         self.assertIn("-66.7%", html)
         self.assertIn("Omaha", html)
         self.assertIn("2 not compared", html)
+        self.assertIn("2 at or under", html)
+        self.assertIn("1 within 25% over", html)
+        self.assertIn("1 25-100% over", html)
+        self.assertIn("1 more than double", html)
+        self.assertIn("Ask spread", html)
 
     def test_missing_snapshot_is_an_empty_page(self):
         from cities import build_cities

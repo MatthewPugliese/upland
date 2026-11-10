@@ -16,6 +16,8 @@ from listings_db import DEFAULT_DB, connect, summary  # noqa: E402
 
 WINDOW_DAYS = 90
 NEAR_PCT = 25
+# An ask more than twice the sale median is over this percent.
+DOUBLE_PCT = 100
 MAX_NEIGHBORHOODS = 400
 
 
@@ -118,6 +120,19 @@ def build_cities(db_path: Path | None = None) -> dict:
             compared.append(ask)
         best = min(compared, key=lambda ask: (ask["vs_median_pct"], ask["price"])) if compared else None
         city_name = max(bucket["spellings"], key=bucket["spellings"].get)
+        at_or_under = near_over = up_to_double = over_double = within_near = 0
+        for ask in compared:
+            pct = ask["vs_median_pct"]
+            if abs(pct) <= NEAR_PCT:
+                within_near += 1
+            if pct <= 0:
+                at_or_under += 1
+            elif pct <= NEAR_PCT:
+                near_over += 1
+            elif pct <= DOUBLE_PCT:
+                up_to_double += 1
+            else:
+                over_double += 1
         cities.append({
             "city": city_name,
             "upx_asks": len(prices),
@@ -125,8 +140,11 @@ def build_cities(db_path: Path | None = None) -> dict:
             "lowest_ask": min(prices) if prices else None,
             "median_ask": _median(prices) if prices else None,
             "compared": len(compared),
-            "within_near": sum(1 for ask in compared if abs(ask["vs_median_pct"]) <= NEAR_PCT),
-            "at_or_under": sum(1 for ask in compared if ask["vs_median_pct"] <= 0),
+            "within_near": within_near,
+            "at_or_under": at_or_under,
+            "near_over": near_over,
+            "up_to_double": up_to_double,
+            "over_double": over_double,
             "closest_pct": best["vs_median_pct"] if best else None,
             "closest_address": best["address"] if best else "",
             "closest_id": best["id"] if best else "",

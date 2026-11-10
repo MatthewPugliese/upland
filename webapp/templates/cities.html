@@ -3,7 +3,8 @@
 
 {% block head %}
 <style>
-    main { max-width: 1100px; }
+    main { max-width: 1240px; }
+    .spread { font-size: 12px; line-height: 1.45; color: #444; white-space: nowrap; }
     .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
     .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
         color: #555; font-weight: 600; white-space: nowrap; }
@@ -24,6 +25,8 @@
         The closest ask is compared with the median property sale in its neighborhood
         over the last {{ page.window_days }} days, when that neighborhood has at least 5 sales.
         Within {{ page.near_pct }}% counts asks that close to the median, over or under.
+        Each compared ask is also in one band: at or under the sale median,
+        within {{ page.near_pct }}% over it, 25-100% over, or more than double.
         This does not scan a city.
         <a href="/markets">Neighborhoods, compared the same way &rarr;</a>
     </p>
@@ -45,6 +48,7 @@
                 <th>City</th>
                 <th class="num">UPX asks</th>
                 <th class="num">Within {{ page.near_pct }}%</th>
+                <th>Ask spread</th>
                 <th class="num">Lowest ask</th>
                 <th class="num">Median ask</th>
                 <th>Closest ask</th>
@@ -62,6 +66,14 @@
                 </td>
                 <td class="num">{{ row.upx_asks }}</td>
                 <td class="num">{{ row.within_near }} of {{ row.compared }}{% if row.upx_asks > row.compared %}<div class="empty-note">{{ row.upx_asks - row.compared }} not compared</div>{% endif %}</td>
+                <td class="spread">
+                    {% if row.compared %}
+                    <div>{{ row.at_or_under }} at or under</div>
+                    <div>{{ row.near_over }} within {{ page.near_pct }}% over</div>
+                    <div>{{ row.up_to_double }} 25-100% over</div>
+                    <div>{{ row.over_double }} more than double</div>
+                    {% else %}—{% endif %}
+                </td>
                 <td class="num">{% if row.lowest_ask is not none %}{{ "{:,.0f}".format(row.lowest_ask) }}{% else %}—{% endif %}</td>
                 <td class="num">{% if row.median_ask is not none %}{{ "{:,.0f}".format(row.median_ask) }}{% else %}—{% endif %}</td>
                 <td>
