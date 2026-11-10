@@ -403,7 +403,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   Asks in a neighborhood with fewer than 5 sales are
   counted as not compared, and the city row names those neighborhoods. The exact matches and the within-25% asks show when
   the crawler last confirmed them. `/sellers` lists usernames with at least
-  two stored UPX asks and shows the ask that sits furthest from that same sale median.
+  two stored UPX asks and shows the ask furthest under that sale median,
+  or the least over when none are under.
+  The lowest price names its property, which can be a different lot.
   Each of that seller's compared asks is in one band: at or under, within 25% over,
   25-100% over, or more than double. A seller name opens that username's stored asks.
   Collection for-sale rows do the same, and can be sorted by that sale comparison.

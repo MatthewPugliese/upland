@@ -58,6 +58,8 @@ class SellerTests(unittest.TestCase):
             ("c1", 10, "QUIET", "Cam", "UPX"),
             ("c2", 20, "QUIET", "Cam", "UPX"),
             ("d1", 50, "GARDENS", "Dot", "UPX"),
+            ("mix-cheap", 10, "QUIET", "Mix", "UPX"),
+            ("mix-best", 400, "RICHHOOD", "Mix", "UPX"),
             ("usd", 9, "GARDENS", "Ada", "USD"),
         ]
         for prop_id, price, hood, owner, currency in rows:
@@ -84,7 +86,7 @@ class SellerTests(unittest.TestCase):
         page = build_sellers(db_path=self.listings_path)
         self.assertEqual(
             [row["owner_username"] for row in page["sellers"]],
-            ["Ada", "Bea", "Cam"],
+            ["Ada", "Bea", "Mix", "Cam"],
         )
         ada = page["sellers"][0]
         self.assertEqual(ada["asks"], 2)
@@ -96,14 +98,23 @@ class SellerTests(unittest.TestCase):
         self.assertEqual(ada["up_to_double"], 1)
         self.assertEqual(ada["over_double"], 0)
         self.assertEqual(ada["best_id"], "a1")
+        self.assertEqual(ada["lowest_id"], "a1")
         bea = page["sellers"][1]
         self.assertEqual(bea["best_vs_median_pct"], 33.3)
         self.assertEqual(bea["at_or_under"], 0)
         self.assertEqual(bea["near_over"], 0)
         self.assertEqual(bea["up_to_double"], 3)
         self.assertEqual(bea["over_double"], 1)
-        self.assertIsNone(page["sellers"][2]["best_vs_median_pct"])
-        self.assertEqual(page["sellers"][2]["over_double"], 0)
+        mix = page["sellers"][2]
+        self.assertEqual(mix["lowest_id"], "mix-cheap")
+        self.assertEqual(mix["lowest_neighborhood"], "QUIET")
+        self.assertEqual(mix["best_id"], "mix-best")
+        self.assertEqual(mix["best_neighborhood"], "RICHHOOD")
+        self.assertEqual(mix["best_vs_median_pct"], 33.3)
+        cam = page["sellers"][3]
+        self.assertIsNone(cam["best_vs_median_pct"])
+        self.assertEqual(cam["over_double"], 0)
+        self.assertEqual(cam["lowest_id"], "c1")
         self.assertEqual(page["skipped_single"], 1)
 
         import app as webapp
@@ -115,6 +126,10 @@ class SellerTests(unittest.TestCase):
         self.assertIn("owner=Ada", html)
         self.assertIn("-50.0%", html)
         self.assertIn("a1 MAIN", html)
+        self.assertIn("Lowest property", html)
+        self.assertIn("/valuation?query=mix-cheap", html)
+        self.assertIn("neighborhood=QUIET", html)
+        self.assertIn("neighborhood=RICHHOOD", html)
         self.assertIn("/listings?neighborhood=GARDENS", html)
         self.assertIn("Ask spread", html)
         self.assertIn("1 at or under", html)

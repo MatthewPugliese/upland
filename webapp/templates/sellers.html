@@ -54,6 +54,7 @@
                 <th class="num">Under median</th>
                 <th>Ask spread</th>
                 <th class="num">Lowest ask</th>
+                <th>Lowest property</th>
                 <th>That ask</th>
                 <th>Neighborhoods</th>
             </tr>
@@ -84,10 +85,21 @@
                 </td>
                 <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
                 <td>
+                    {% if row.lowest_id %}
+                    <a href="/valuation?query={{ row.lowest_id|urlencode }}">{{ row.lowest_address }}</a>
+                    {% else %}{{ row.lowest_address or "—" }}{% endif %}
+                    {% if row.lowest_neighborhood %}
+                    <div class="empty-note"><a href="/listings?neighborhood={{ row.lowest_neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.lowest_neighborhood }}</a></div>
+                    {% endif %}
+                </td>
+                <td>
                     {% if row.best_id %}
                     <a href="/valuation?query={{ row.best_id|urlencode }}">{{ row.best_address }}</a>
                     {% else %}
                     {{ row.best_address }}
+                    {% endif %}
+                    {% if row.best_neighborhood and row.best_neighborhood != row.lowest_neighborhood %}
+                    <div class="empty-note"><a href="/listings?neighborhood={{ row.best_neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.best_neighborhood }}</a></div>
                     {% endif %}
                 </td>
                 <td>{% for name in row.neighborhoods %}<a href="/listings?neighborhood={{ name|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>

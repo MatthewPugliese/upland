@@ -98,8 +98,19 @@ def build_sellers(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             ask["vs_median_pct"] = round(100 * (ask["price"] - median) / median, 1)
             ask["sale_median_upx"] = median
             compared.append(ask)
-        best = min(compared, key=lambda ask: ask["vs_median_pct"]) if compared else None
-        lowest = min(bucket["asks"], key=lambda ask: ask["price"])
+        best = min(
+            compared,
+            key=lambda ask: (
+                ask["vs_median_pct"],
+                ask["price"],
+                ask["address"].casefold(),
+                ask["id"],
+            ),
+        ) if compared else None
+        lowest = min(
+            bucket["asks"],
+            key=lambda ask: (ask["price"], ask["address"].casefold(), ask["id"]),
+        )
         shown = best or lowest
         neighborhoods = sorted(bucket["neighborhoods"].values(), key=str.casefold)
         counts = economy.sale_distance_counts([ask["vs_median_pct"] for ask in compared])
@@ -114,6 +125,9 @@ def build_sellers(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             "over_double": counts["over_double"],
             "best_vs_median_pct": best["vs_median_pct"] if best else None,
             "lowest_ask": lowest["price"],
+            "lowest_id": lowest["id"],
+            "lowest_address": lowest["address"],
+            "lowest_neighborhood": lowest["neighborhood"],
             "best_address": shown["address"],
             "best_id": shown["id"],
             "best_neighborhood": shown["neighborhood"],
