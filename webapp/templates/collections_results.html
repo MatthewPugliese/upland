@@ -152,6 +152,7 @@
     .forsale-markup.mid { background: #FEF9E7; color: #9A7D0A; }
     .forsale-markup.high { background: #FDEDEC; color: #C0392B; }
     .forsale-owner { color: #aaa; font-size: 11px; }
+    .markup-pos { color: #922B21; font-weight: 600; }
     .forsale-none { color: #aaa; font-style: italic; }
     .forsale-note { color: #9A7D0A; font-size: 11px; margin-bottom: 6px; }
     .forsale-filters {
@@ -599,6 +600,13 @@ function renderForSaleListings(container) {
             var bm = b.markup_pct === null || b.markup_pct === undefined ? Infinity : b.markup_pct;
             return am - bm;
         }
+        if (sortBy === "sales") {
+            var aMissing = a.vs_median_pct === null || a.vs_median_pct === undefined;
+            var bMissing = b.vs_median_pct === null || b.vs_median_pct === undefined;
+            if (aMissing !== bMissing) return aMissing ? 1 : -1;
+            if (aMissing) return 0;
+            return a.vs_median_pct - b.vs_median_pct;
+        }
         // price: compare within the same currency lane, UPX-priced first
         var aHas = a.price_upx !== null && a.price_upx !== undefined;
         var bHas = b.price_upx !== null && b.price_upx !== undefined;
@@ -621,6 +629,7 @@ function renderForSaleListings(container) {
         + 'Sort: <select onchange="onForSaleFilterChange(this, \'' + container.id + '\', \'sort\')">'
         + '<option value="price"' + (sortBy === "price" ? " selected" : "") + '>Price</option>'
         + '<option value="markup"' + (sortBy === "markup" ? " selected" : "") + '>Markup %</option>'
+        + '<option value="sales"' + (sortBy === "sales" ? " selected" : "") + '>vs sales</option>'
         + '</select>'
         + '</div>';
 
@@ -633,7 +642,19 @@ function renderForSaleListings(container) {
     filtered.forEach(function(l) {
         var upx = l.price_upx ? l.price_upx.toLocaleString() + " UPX" : "—";
         var usd = l.price_usd ? "$" + l.price_usd.toFixed(2) : "";
-        var owner = l.owner_username ? "@ " + l.owner_username : "";
+        var owner = "";
+        if (l.owner_username) {
+            var ownerCurrency = l.currency === "USD" ? "USD" : "UPX";
+            owner = '<a class="forsale-owner" href="/listings?owner='
+                + encodeURIComponent(l.owner_username)
+                + '&currency=' + ownerCurrency
+                + '&sort=deal">@ ' + escapeHtml(l.owner_username) + '</a>';
+        }
+        var hood = l.neighborhood
+            ? ' <a href="/listings?neighborhood=' + encodeURIComponent(l.neighborhood)
+              + '&currency=UPX&sort=deal" style="color:#888;font-size:10px">'
+              + escapeHtml(l.neighborhood) + '</a>'
+            : "";
         var markup = (l.markup_pct !== null && l.markup_pct !== undefined)
             ? '<span class="forsale-markup ' + markupClass(l.markup_pct) + '">+' + l.markup_pct.toLocaleString() + '% vs mint</span>'
             : "";
@@ -649,9 +670,10 @@ function renderForSaleListings(container) {
             + markup
             + (l.vs_median_pct === null || l.vs_median_pct === undefined
                 ? ''
-                : '<span class="forsale-markup ' + (l.vs_median_pct < 0 ? 'markup-neg' : '') + '">'
+                : '<span class="forsale-markup ' + (l.vs_median_pct < 0 ? 'markup-neg' : 'markup-pos') + '">'
                   + (l.vs_median_pct > 0 ? '+' : '') + Math.round(l.vs_median_pct) + '% vs sales</span>')
-            + '<span class="forsale-owner">' + owner + '</span>'
+            + hood
+            + owner
             + '</div>';
     });
     container.innerHTML = html;

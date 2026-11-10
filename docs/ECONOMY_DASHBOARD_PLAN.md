@@ -405,6 +405,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
   Each of that seller's compared asks is in one band: at or under, within 25% over,
   25-100% over, or more than double. A seller name opens that username's stored asks.
+  Collection for-sale rows do the same, and can be sorted by that sale comparison.
   The listings page shows the time of the newest stored ask. Filtering it to one
   neighborhood also shows that neighborhood's recent sale median. Each neighborhood on the
   economy sales table links to those stored listings and to the floor page. Each city
