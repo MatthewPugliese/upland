@@ -53,6 +53,7 @@ class CityAskTests(unittest.TestCase):
             ("high", 400, "GARDENS", "Cape Town", "UPX"),
             ("usd", 9, "GARDENS", "Cape Town", "USD"),
             ("near", 330, "GARDENS", "Cape Town", "UPX"),
+            ("aaa", 600, "GARDENS", "Far City", "UPX"),
             ("twice", 600, "GARDENS", "Far City", "UPX"),
             ("triple", 900, "GARDENS", "Far City", "UPX"),
             ("q1", 50, "QUIET", "Omaha", "UPX"),
@@ -68,7 +69,7 @@ class CityAskTests(unittest.TestCase):
                 "currency": currency,
                 "price": price,
                 "mint_price": 100,
-                "owner_username": "seller",
+                "owner_username": {"low": "Ada", "aaa": "Bea"}.get(prop_id, "seller"),
                 "last_seen": "2026-11-09T18:00:00Z",
             })
         self.listings.commit()
@@ -91,6 +92,7 @@ class CityAskTests(unittest.TestCase):
         self.assertEqual(cape["median_ask"], 265)
         self.assertEqual(cape["closest_pct"], -66.7)
         self.assertEqual(cape["closest_id"], "low")
+        self.assertEqual(cape["closest_owner"], "Ada")
         self.assertEqual(cape["within_near"], 1)
         self.assertEqual(cape["compared"], 4)
         self.assertEqual(cape["at_or_under"], 2)
@@ -99,13 +101,16 @@ class CityAskTests(unittest.TestCase):
         self.assertEqual(cape["over_double"], 0)
         far = page["cities"][1]
         self.assertEqual(far["closest_pct"], 100.0)
+        self.assertEqual(far["closest_id"], "aaa")
+        self.assertEqual(far["closest_owner"], "Bea")
         self.assertEqual(far["at_or_under"], 0)
         self.assertEqual(far["near_over"], 0)
-        self.assertEqual(far["up_to_double"], 1)
+        self.assertEqual(far["up_to_double"], 2)
         self.assertEqual(far["over_double"], 1)
         self.assertEqual(cape["uncompared"], [])
         omaha = page["cities"][2]
         self.assertIsNone(omaha["closest_pct"])
+        self.assertEqual(omaha["closest_owner"], "")
         self.assertEqual(omaha["upx_asks"], 2)
         self.assertEqual(omaha["over_double"], 0)
         self.assertEqual(omaha["uncompared"], [{"neighborhood": "QUIET", "asks": 2}])
@@ -127,6 +132,9 @@ class CityAskTests(unittest.TestCase):
         self.assertIn("1 25-100% over", html)
         self.assertIn("1 more than double", html)
         self.assertIn("Ask spread", html)
+        self.assertIn("owner=Ada", html)
+        self.assertIn("owner=Bea", html)
+        self.assertIn("neighborhood=GARDENS", html)
 
     def test_missing_snapshot_is_an_empty_page(self):
         from cities import build_cities

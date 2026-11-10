@@ -90,7 +90,11 @@
                 <td>
                     {% if row.closest_id %}
                     <a href="/valuation?query={{ row.closest_id|urlencode }}">{{ row.closest_address }}</a>
-                    <div class="empty-note">{{ row.closest_neighborhood }} · {{ "{:,.0f}".format(row.closest_price) }} UPX</div>
+                    <div class="empty-note">
+                        {% if row.closest_neighborhood %}<a href="/listings?neighborhood={{ row.closest_neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.closest_neighborhood }}</a>{% endif %}
+                        · {{ "{:,.0f}".format(row.closest_price) }} UPX
+                        {% if row.closest_owner %}· <a href="/listings?owner={{ row.closest_owner|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.closest_owner }}</a>{% endif %}
+                    </div>
                     {% else %}—{% endif %}
                 </td>
             </tr>

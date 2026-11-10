@@ -397,7 +397,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   Neighborhoods with fewer than 3 asks are named too.
   It reads at most 400
   neighborhoods, the ones with the most asks. `/cities` rolls those stored asks up
-  by city and shows the ask closest to that sale median, plus how many compared
+  by city and shows the ask closest to that sale median, and names that seller, plus how many compared
   asks sit within 25% of it. Each compared ask is also in one band: at or under
   the sale median, within 25% over it, 25-100% over, or more than double.
   Asks in a neighborhood with fewer than 5 sales are

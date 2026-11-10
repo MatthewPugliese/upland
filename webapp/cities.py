@@ -128,7 +128,15 @@ def build_cities(db_path: Path | None = None) -> dict:
             ),
             key=lambda row: (-row["asks"], row["neighborhood"].casefold()),
         )
-        best = min(compared, key=lambda ask: (ask["vs_median_pct"], ask["price"])) if compared else None
+        best = min(
+            compared,
+            key=lambda ask: (
+                ask["vs_median_pct"],
+                ask["price"],
+                ask["address"].casefold(),
+                ask["id"],
+            ),
+        ) if compared else None
         city_name = max(bucket["spellings"], key=bucket["spellings"].get)
         import economy
         counts = economy.sale_distance_counts([ask["vs_median_pct"] for ask in compared])
@@ -149,6 +157,7 @@ def build_cities(db_path: Path | None = None) -> dict:
             "closest_address": best["address"] if best else "",
             "closest_id": best["id"] if best else "",
             "closest_neighborhood": best["neighborhood"] if best else "",
+            "closest_owner": best["owner_username"] if best else "",
             "closest_price": best["price"] if best else None,
         })
 
