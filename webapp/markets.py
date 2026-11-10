@@ -88,6 +88,7 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             "asks": len(prices),
             "median_ask": _median(prices),
             "lowest_ask": min(prices),
+            "prices": prices,
         })
 
     candidates.sort(key=lambda row: (-row["asks"], row["neighborhood"].casefold()))
@@ -114,6 +115,7 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         row["sales"] = info["sales"]
         row["median_vs_sales_pct"] = round(100 * (row["median_ask"] - median) / median, 1)
         row["floor_vs_sales_pct"] = round(100 * (row["lowest_ask"] - median) / median, 1)
+        row["at_or_under"] = sum(1 for price in row.pop("prices") if price <= median)
         markets.append(row)
 
     markets.sort(key=lambda row: (row["floor_vs_sales_pct"], row["neighborhood"].casefold()))

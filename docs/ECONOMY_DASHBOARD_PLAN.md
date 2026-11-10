@@ -381,7 +381,8 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   `/deals` lists the stored UPX asks that are at least 10% under that median. Collection
   for-sale rows show the same comparison. `/markets` groups the same snapshot by
   neighborhood: a row needs at least 3 stored UPX asks and at least 5 sales, then shows
-  the lowest ask and the median ask against that sale median. It reads at most 400
+  the lowest ask and the median ask against that sale median, and how many asks
+  are at or under that sale median. It reads at most 400
   neighborhoods, the ones with the most asks. `/sellers` lists usernames with at least
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
   The listings page shows the time of the newest stored ask. Each neighborhood on the

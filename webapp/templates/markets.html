@@ -54,6 +54,7 @@
                 <th>Median ask vs sales</th>
                 <th>Neighborhood</th>
                 <th class="num">Asks</th>
+                <th class="num">At or under sales</th>
                 <th class="num">Lowest ask</th>
                 <th class="num">Median ask</th>
                 <th class="num">Recent median</th>
@@ -74,6 +75,7 @@
                     <div class="empty-note">{{ row.city }}</div>
                 </td>
                 <td class="num">{{ row.asks }}</td>
+                <td class="num">{{ row.at_or_under }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.median_ask) }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.sale_median_upx) }}</td>
