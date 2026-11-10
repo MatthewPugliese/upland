@@ -103,9 +103,12 @@ class CityAskTests(unittest.TestCase):
         self.assertEqual(far["near_over"], 0)
         self.assertEqual(far["up_to_double"], 1)
         self.assertEqual(far["over_double"], 1)
-        self.assertIsNone(page["cities"][2]["closest_pct"])
-        self.assertEqual(page["cities"][2]["upx_asks"], 2)
-        self.assertEqual(page["cities"][2]["over_double"], 0)
+        self.assertEqual(cape["uncompared"], [])
+        omaha = page["cities"][2]
+        self.assertIsNone(omaha["closest_pct"])
+        self.assertEqual(omaha["upx_asks"], 2)
+        self.assertEqual(omaha["over_double"], 0)
+        self.assertEqual(omaha["uncompared"], [{"neighborhood": "QUIET", "asks": 2}])
 
         import app as webapp
         with webapp.app.test_request_context("/cities"):
@@ -116,6 +119,9 @@ class CityAskTests(unittest.TestCase):
         self.assertIn("-66.7%", html)
         self.assertIn("Omaha", html)
         self.assertIn("2 not compared", html)
+        self.assertIn("QUIET", html)
+        self.assertIn("neighborhood=QUIET", html)
+        self.assertIn("(2)", html)
         self.assertIn("2 at or under", html)
         self.assertIn("1 within 25% over", html)
         self.assertIn("1 25-100% over", html)

@@ -65,7 +65,18 @@
                     {% if row.usd_asks %}<div class="empty-note">{{ row.usd_asks }} USD</div>{% endif %}
                 </td>
                 <td class="num">{{ row.upx_asks }}</td>
-                <td class="num">{{ row.within_near }} of {{ row.compared }}{% if row.upx_asks > row.compared %}<div class="empty-note">{{ row.upx_asks - row.compared }} not compared</div>{% endif %}</td>
+                <td class="num">
+                    {{ row.within_near }} of {{ row.compared }}
+                    {% if row.uncompared %}
+                    <div class="empty-note">{{ row.upx_asks - row.compared }} not compared</div>
+                    {% for hood in row.uncompared[:8] %}
+                    <div class="empty-note"><a href="/listings?neighborhood={{ hood.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ hood.neighborhood }}</a> ({{ hood.asks }})</div>
+                    {% endfor %}
+                    {% if row.uncompared|length > 8 %}
+                    <div class="empty-note">+ {{ row.uncompared|length - 8 }} more</div>
+                    {% endif %}
+                    {% endif %}
+                </td>
                 <td class="spread">
                     {% if row.compared %}
                     <div>{{ row.at_or_under }} at or under</div>

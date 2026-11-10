@@ -109,15 +109,27 @@ def build_cities(db_path: Path | None = None) -> dict:
     for bucket in groups.values():
         prices = [ask["price"] for ask in bucket["upx"]]
         compared = []
+        skipped = {}
         for ask in bucket["upx"]:
             info = folded.get(ask["neighborhood"].casefold()) if ask["neighborhood"] else None
             median = info.get("median_upx") if info else None
             if not median:
+                label = ask["neighborhood"] or "No neighborhood"
+                slot = skipped.setdefault(label.casefold(), {"spellings": {}, "asks": 0})
+                slot["spellings"][label] = slot["spellings"].get(label, 0) + 1
+                slot["asks"] += 1
                 continue
             ask = dict(ask)
             ask["vs_median_pct"] = round(100 * (ask["price"] - median) / median, 1)
             ask["sale_median_upx"] = median
             compared.append(ask)
+        uncompared = sorted(
+            (
+                {"neighborhood": max(slot["spellings"], key=slot["spellings"].get), "asks": slot["asks"]}
+                for slot in skipped.values()
+            ),
+            key=lambda row: (-row["asks"], row["neighborhood"].casefold()),
+        )
         best = min(compared, key=lambda ask: (ask["vs_median_pct"], ask["price"])) if compared else None
         city_name = max(bucket["spellings"], key=bucket["spellings"].get)
         at_or_under = near_over = up_to_double = over_double = within_near = 0
@@ -145,6 +157,7 @@ def build_cities(db_path: Path | None = None) -> dict:
             "near_over": near_over,
             "up_to_double": up_to_double,
             "over_double": over_double,
+            "uncompared": uncompared,
             "closest_pct": best["vs_median_pct"] if best else None,
             "closest_address": best["address"] if best else "",
             "closest_id": best["id"] if best else "",

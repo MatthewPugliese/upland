@@ -393,7 +393,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   asks sit within 25% of it. Each compared ask is also in one band: at or under
   the sale median, within 25% over it, 25-100% over, or more than double.
   Asks in a neighborhood with fewer than 5 sales are
-  counted as not compared. The exact matches and the within-25% asks show when
+  counted as not compared, and the city row names those neighborhoods. The exact matches and the within-25% asks show when
   the crawler last confirmed them. `/sellers` lists usernames with at least
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
   The listings page shows the time of the newest stored ask. Filtering it to one
