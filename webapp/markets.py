@@ -37,6 +37,7 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         "neighborhoods_with_asks": 0,
         "skipped_thin": 0,
         "no_sales": 0,
+        "few_sales": [],
         "omitted_for_cap": 0,
         "freshest_listing": None,
         "stored_upx": 0,
@@ -110,6 +111,11 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         median = info.get("median_upx") if info else None
         if not median:
             page["no_sales"] += 1
+            page["few_sales"].append({
+                "neighborhood": row["neighborhood"],
+                "city": row["city"],
+                "asks": row["asks"],
+            })
             continue
         row["sale_median_upx"] = median
         row["sales"] = info["sales"]

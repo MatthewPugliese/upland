@@ -388,6 +388,7 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   the lowest ask and the median ask against that sale median, and how many asks
   are at or under that sale median. Each ask is also in one band: at or under,
   within 25% over, 25-100% over, or more than double. The row also counts property sales in the last 7 days.
+  Neighborhoods with enough asks but fewer than 5 sales are named.
   It reads at most 400
   neighborhoods, the ones with the most asks. `/cities` rolls those stored asks up
   by city and shows the ask closest to that sale median, plus how many compared

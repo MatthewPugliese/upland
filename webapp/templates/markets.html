@@ -41,6 +41,12 @@
         {{ page.skipped_thin }} neighborhood{{ '' if page.skipped_thin == 1 else 's' }}
         had fewer asks.
         {{ page.no_sales }} had enough asks but fewer than 5 sales.
+        {% if page.few_sales %}
+        {% for row in page.few_sales[:8] %}
+        <a href="/listings?neighborhood={{ row.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.neighborhood }}</a> ({{ row.asks }}){% if not loop.last %}, {% endif %}
+        {% endfor %}
+        {% if page.few_sales|length > 8 %}, + {{ page.few_sales|length - 8 }} more{% endif %}
+        {% endif %}
     </p>
     {% else %}
     <p class="empty-note">
@@ -48,7 +54,13 @@
         Sorted by how far the lowest ask sits under recent sales.
         {% if page.freshest_listing %}Newest stored ask: {{ page.freshest_listing }}.{% endif %}
         {% if page.skipped_thin %}{{ page.skipped_thin }} had fewer than {{ page.min_asks }} asks.{% endif %}
-        {% if page.no_sales %}{{ page.no_sales }} had asks but fewer than 5 sales.{% endif %}
+        {% if page.few_sales %}
+        Fewer than 5 sales:
+        {% for row in page.few_sales[:8] %}
+        <a href="/listings?neighborhood={{ row.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.neighborhood }}</a> ({{ row.asks }}){% if not loop.last %}, {% endif %}
+        {% endfor %}
+        {% if page.few_sales|length > 8 %}, + {{ page.few_sales|length - 8 }} more{% endif %}
+        {% elif page.no_sales %}{{ page.no_sales }} had asks but fewer than 5 sales.{% endif %}
     </p>
     <table class="full-table">
         <thead>

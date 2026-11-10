@@ -108,6 +108,11 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(gardens["sales_7d"], 5)
         self.assertEqual(page["skipped_thin"], 1)
         self.assertEqual(page["no_sales"], 1)
+        self.assertEqual(page["few_sales"], [{
+            "neighborhood": "QUIET",
+            "city": "Cape Town",
+            "asks": 3,
+        }])
         self.assertEqual(page["freshest_listing"], "2026-11-09T18:00:00Z")
 
         import app as webapp
@@ -118,7 +123,9 @@ class MarketTests(unittest.TestCase):
         self.assertIn("-66.7%", html)
         self.assertIn("GARDENS", html)
         self.assertIn("RICHHOOD", html)
-        self.assertNotIn("QUIET", html)
+        self.assertIn("QUIET", html)
+        self.assertIn("neighborhood=QUIET", html)
+        self.assertIn("(3)", html)
         self.assertNotIn("OTHER", html)
         self.assertIn("Ask spread", html)
         self.assertIn("1 25-100% over", html)
