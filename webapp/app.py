@@ -518,6 +518,12 @@ def deals_page():
     return render_template("deals.html", page=build_deals())
 
 
+@app.route("/markets")
+def markets_page():
+    from markets import build_markets
+    return render_template("markets.html", page=build_markets())
+
+
 @app.route("/floor/run", methods=["POST"])
 def floor_price_run():
     get_floor_prices = _floor_price()

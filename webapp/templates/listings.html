@@ -38,7 +38,8 @@
 {% block content %}
 <div class="card">
     <h2>For-Sale Snapshot</h2>
-    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan. "vs sales" compares an UPX ask with the median property sale in that neighborhood over the last 90 days, when at least 5 sales are stored. <a href="/deals">Asks at least 10% under those sales &rarr;</a></p>
+    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan. "vs sales" compares an UPX ask with the median property sale in that neighborhood over the last 90 days, when at least 5 sales are stored. <a href="/deals">Asks at least 10% under those sales &rarr;</a>
+        <a href="/markets">Neighborhoods, compared the same way &rarr;</a></p>
     {% if page.db_exists and not (page.coverage | selectattr("status", "equalto", "complete") | list) %}
     <p class="empty-note">These rows are not a full city scan. A property that is missing here may still be for sale.</p>
     {% endif %}

@@ -430,11 +430,16 @@ def neighborhoods(period: str = "30d", min_trades: int = 3) -> list:
         conn.close()
 
 
+# One sales read. Callers that pass more names only get the first 400.
+_MAX_SALE_MEDIAN_NEIGHBORHOODS = 400
+
+
 def neighborhood_sale_medians(neighborhoods: list, days: int = 90, minimum_sales: int = 5) -> dict:
     """Median UPX property sale for each neighborhood over the last `days`.
 
     Uses stored sales only. A neighborhood with fewer than `minimum_sales`
-    is left out. Names match without regard to capitalization. Returns
+    is left out. Names match without regard to capitalization. At most 400
+    names are read; later names are left out. Returns
     {requested_name: {"median_upx": n, "sales": n}}.
     """
     wanted = {}
@@ -442,9 +447,11 @@ def neighborhood_sale_medians(neighborhoods: list, days: int = 90, minimum_sales
         text = (name or "").strip()
         if text and text.casefold() not in wanted:
             wanted[text.casefold()] = text
+        if len(wanted) >= _MAX_SALE_MEDIAN_NEIGHBORHOODS:
+            break
     if not wanted or not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) < 100:
         return {}
-    names = list(wanted.values())[:80]
+    names = list(wanted.values())
     folds = [name.casefold() for name in names]
     cache_key = "sale_median_{0}_{1}_{2}".format(
         days, minimum_sales, hashlib.sha1("\n".join(sorted(folds)).encode()).hexdigest()[:16]

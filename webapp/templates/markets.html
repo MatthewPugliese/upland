@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Markets — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { max-width: 1100px; }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .full-table tr:hover td { background: #fafafa; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .markup-neg { color: #1E8449; font-weight: 600; }
+    .markup-pos { color: #922B21; font-weight: 600; }
+    .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
+    .row-links a { margin-right: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Neighborhood asks vs recent sales</h2>
+    <p class="card-subtitle">
+        Each row is a neighborhood with at least {{ page.min_asks }} stored UPX asks
+        and at least 5 property sales over the last {{ page.window_days }} days.
+        The lowest ask and the median ask are compared with that sale median.
+        This reads the local snapshot and stored sales. It does not scan a city.
+        <a href="/deals">Individual asks at least 10% under those sales &rarr;</a>
+    </p>
+
+    {% if not page.db_exists %}
+    <p class="empty-note">No listings snapshot is stored yet.</p>
+    {% elif not page.markets %}
+    <p class="empty-note">
+        No neighborhood in the snapshot has at least {{ page.min_asks }} UPX asks
+        and 5 recent sales.
+        {{ page.skipped_thin }} neighborhood{{ '' if page.skipped_thin == 1 else 's' }}
+        had fewer asks.
+        {{ page.no_sales }} had enough asks but fewer than 5 sales.
+    </p>
+    {% else %}
+    <p class="empty-note">
+        {{ page.markets|length }} neighborhood{{ '' if page.markets|length == 1 else 's' }}.
+        Sorted by how far the lowest ask sits under recent sales.
+        {% if page.freshest_listing %}Newest stored ask: {{ page.freshest_listing }}.{% endif %}
+        {% if page.skipped_thin %}{{ page.skipped_thin }} had fewer than {{ page.min_asks }} asks.{% endif %}
+        {% if page.no_sales %}{{ page.no_sales }} had asks but fewer than 5 sales.{% endif %}
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Lowest vs sales</th>
+                <th>Median ask vs sales</th>
+                <th>Neighborhood</th>
+                <th class="num">Asks</th>
+                <th class="num">Lowest ask</th>
+                <th class="num">Median ask</th>
+                <th class="num">Recent median</th>
+                <th class="num">Sales</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.markets %}
+            <tr>
+                <td class="{{ 'markup-neg' if row.floor_vs_sales_pct < 0 else 'markup-pos' }}">{{ "%+.1f"|format(row.floor_vs_sales_pct) }}%</td>
+                <td class="{{ 'markup-neg' if row.median_vs_sales_pct < 0 else 'markup-pos' }}">{{ "%+.1f"|format(row.median_vs_sales_pct) }}%</td>
+                <td>
+                    {{ row.neighborhood }}
+                    <div class="row-links">
+                        <a href="/listings?neighborhood={{ row.neighborhood|urlencode }}&amp;currency=UPX&amp;sort=deal">listings</a>
+                        <a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">floor</a>
+                    </div>
+                    <div class="empty-note">{{ row.city }}</div>
+                </td>
+                <td class="num">{{ row.asks }}</td>
+                <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
+                <td class="num">{{ "{:,.0f}".format(row.median_ask) }}</td>
+                <td class="num">{{ "{:,.0f}".format(row.sale_median_upx) }}</td>
+                <td class="num">{{ row.sales }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

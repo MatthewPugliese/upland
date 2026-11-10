@@ -379,7 +379,10 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   median stored property sale in that neighborhood over the last 90 days, when at least 5
   sales are stored. That read uses the sales table only. It does not scan a city for listings.
   `/deals` lists the stored UPX asks that are at least 10% under that median. Collection
-  for-sale rows show the same comparison. The economy totals also compare property UPX
+  for-sale rows show the same comparison. `/markets` groups the same snapshot by
+  neighborhood: a row needs at least 3 stored UPX asks and at least 5 sales, then shows
+  the lowest ask and the median ask against that sale median. It reads at most 400
+  neighborhoods, the ones with the most asks. The economy totals also compare property UPX
   volume with the previous period of the same length. All-time has no comparison. This is a
   point-in-time snapshot on request, not a live-updating tracker — true "update live as events
   arrive" still needs `n2`/`n4` ingestion, which would be a scraper change, not just a webapp one.
