@@ -38,7 +38,7 @@
 {% block content %}
 <div class="card">
     <h2>For-Sale Snapshot</h2>
-    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan.</p>
+    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan. "vs sales" compares an UPX ask with the median property sale in that neighborhood over the last 90 days, when at least 5 sales are stored.</p>
     {% if page.db_exists and not (page.coverage | selectattr("status", "equalto", "complete") | list) %}
     <p class="empty-note">These rows are not a full city scan. A property that is missing here may still be for sale.</p>
     {% endif %}
@@ -60,6 +60,12 @@
             <div class="value" style="font-size:14px">{{ page.summary.freshest_listing or "—" }}</div>
             <div class="label">Newest confirmation (UTC)</div>
         </div>
+        {% if page.deals is defined and page.deals.under_median %}
+        <div class="stat-card">
+            <div class="value">{{ page.deals.under_median }}</div>
+            <div class="label">Asks under recent sales</div>
+        </div>
+        {% endif %}
     </div>
 
     {% if not page.db_exists %}
@@ -104,6 +110,7 @@
                 <option value="markup" {% if page.filters.sort == "markup" %}selected{% endif %}>Lowest markup</option>
                 <option value="price" {% if page.filters.sort == "price" %}selected{% endif %}>Lowest price</option>
                 <option value="seen" {% if page.filters.sort == "seen" %}selected{% endif %}>Newest</option>
+                <option value="deal" {% if page.filters.sort == "deal" %}selected{% endif %}>Best vs recent sales</option>
             </select>
         </div>
         <div class="form-group" style="max-width:90px">
@@ -119,6 +126,7 @@
             <tr>
                 <th>Markup</th>
                 <th>Price</th>
+                <th>vs sales</th>
                 <th>Mint</th>
                 <th>Address</th>
                 <th>Neighborhood</th>
@@ -136,6 +144,9 @@
                     {% if row.price is not none %}
                         {% if row.currency == "USD" %}${{ "%.2f"|format(row.price) }}{% else %}{{ "{:,}".format(row.price|round|int) }} {{ row.currency or "" }}{% endif %}
                     {% else %}—{% endif %}
+                </td>
+                <td class="{% if row.vs_median_pct is defined and row.vs_median_pct is not none and row.vs_median_pct < 0 %}markup-neg{% elif row.vs_median_pct is defined and row.vs_median_pct is not none and row.vs_median_pct > 0 %}markup-pos{% endif %}">
+                    {% if row.vs_median_pct is defined and row.vs_median_pct is not none %}{{ "%+.0f"|format(row.vs_median_pct) }}%{% else %}—{% endif %}
                 </td>
                 <td>{{ "{:,}".format(row.mint_price|round|int) if row.mint_price else "—" }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>

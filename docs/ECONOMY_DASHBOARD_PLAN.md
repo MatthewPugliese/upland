@@ -375,7 +375,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   precached `{hood}_props_cache.json`, ~1,900 neighborhoods already have one). As of
   2026-11-09 a neighborhood with no stored listings uses for-sale rows in that local file and
   prices up to 60 of them from the public property page. It does not start a developers-API
-  city scan. This is a
+  city scan. Each UPX ask on the floor page and the listings page is also compared with the
+  median stored property sale in that neighborhood over the last 90 days, when at least 5
+  sales are stored. That read uses the sales table only. It does not scan a city for listings. This is a
   point-in-time snapshot on request, not a live-updating tracker — true "update live as events
   arrive" still needs `n2`/`n4` ingestion, which would be a scraper change, not just a webapp one.
 

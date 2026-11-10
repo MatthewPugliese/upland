@@ -64,18 +64,21 @@
 
     <div class="section-heading">
         UPX Listings
-        <span class="section-count">(sorted by price ascending)</span>
+        <span class="section-count">(sorted by price ascending{% if result.sale_median_upx is defined and result.sale_median_upx %} · recent sale median {{ "{:,}".format(result.sale_median_upx|round|int) }} UPX from {{ result.sale_count }} sales{% endif %})</span>
     </div>
     {% if result.upx_listings %}
     <table class="full-table">
         <thead>
-            <tr><th>Address</th><th>Price (UPX)</th><th>Mint Price</th><th>Markup</th><th>Owner</th></tr>
+            <tr><th>Address</th><th>Price (UPX)</th><th>vs sales</th><th>Mint Price</th><th>Markup</th><th>Owner</th></tr>
         </thead>
         <tbody>
         {% for l in result.upx_listings %}
             <tr>
                 <td>{% if l.prop_id and l.prop_id != "None" %}<a href="/valuation?query={{ l.prop_id|urlencode }}">{{ l.address }}</a>{% else %}{{ l.address }}{% endif %}</td>
                 <td>{{ "{:,}".format(l.price|round|int) }}</td>
+                <td class="{% if l.vs_median_pct is defined and l.vs_median_pct is not none and l.vs_median_pct < 0 %}markup-neg{% elif l.vs_median_pct is defined and l.vs_median_pct is not none and l.vs_median_pct > 0 %}markup-pos{% endif %}">
+                    {% if l.vs_median_pct is defined and l.vs_median_pct is not none %}{{ "%+.0f"|format(l.vs_median_pct) }}%{% else %}—{% endif %}
+                </td>
                 <td>{{ "{:,}".format(l.mint_price|round|int) if l.mint_price else "—" }}</td>
                 <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">
                     {{ "%+.1f%%"|format(l.markup_pct) if l.markup_pct is not none else "—" }}

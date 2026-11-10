@@ -29,7 +29,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
     city = (args.get("city") or "").strip()
     neighborhood = (args.get("neighborhood") or "").strip()
     sort = args.get("sort") or "markup"
-    if sort not in {"markup", "price", "seen"}:
+    if sort not in {"markup", "price", "seen", "deal"}:
         sort = "markup"
     try:
         limit = int(args.get("limit") or 100)
@@ -56,6 +56,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             "listings": 0, "upx": 0, "usd": 0,
             "freshest_listing": None, "freshest_crawl": None, "targets": {},
         },
+        "deals": {"compared": 0, "under_median": 0, "window_days": 90},
     }
     if not path.exists():
         return empty
@@ -68,9 +69,15 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             currency=None if filters["currency"].lower() == "any" else filters["currency"].upper(),
             city=city or None,
             neighborhood=neighborhood or None,
-            sort=sort,
+            sort="markup" if sort == "deal" else sort,
             limit=limit,
         )
+        deals = _annotate_deals(listings)
+        if sort == "deal":
+            listings.sort(key=lambda row: (
+                row.get("vs_median_pct") is None,
+                row.get("vs_median_pct") if row.get("vs_median_pct") is not None else 0,
+            ))
         return {
             "db_exists": True,
             "filters": filters,
@@ -79,6 +86,34 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             "neighborhoods": distinct_values(conn, "neighborhood"),
             "coverage": coverage_rows(conn),
             "summary": info,
+            "deals": deals,
         }
     finally:
         conn.close()
+
+
+def _annotate_deals(listings: list) -> dict:
+    """Mark each UPX ask against the recent neighborhood sale median."""
+    deals = {"compared": 0, "under_median": 0, "window_days": 90}
+    try:
+        from economy import neighborhood_sale_medians
+        medians = neighborhood_sale_medians([row.get("neighborhood") or "" for row in listings])
+    except Exception:
+        medians = {}
+    folded = {name.casefold(): info for name, info in medians.items()}
+    for row in listings:
+        info = folded.get((row.get("neighborhood") or "").casefold())
+        price = row.get("price_upx")
+        median = info.get("median_upx") if info else None
+        if not info or not price or not median:
+            row["sale_median_upx"] = None
+            row["vs_median_pct"] = None
+            row["sale_count"] = None
+            continue
+        row["sale_median_upx"] = median
+        row["sale_count"] = info["sales"]
+        row["vs_median_pct"] = round(100 * (price - median) / median, 1)
+        deals["compared"] += 1
+        if price < median:
+            deals["under_median"] += 1
+    return deals

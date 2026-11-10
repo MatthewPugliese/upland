@@ -193,7 +193,7 @@ def get_floor_prices(neighborhood: str) -> dict:
     if cache_path.exists():
         age = time.time() - cache_path.stat().st_mtime
         if age < FLOOR_CACHE_TTL:
-            return json.loads(cache_path.read_text())
+            return _attach_sale_comparison(json.loads(cache_path.read_text()))
 
     # Stored prices answer the neighborhood without calling Upland. No rows
     # means this snapshot cannot name a floor. The neighborhood file is the
@@ -202,12 +202,36 @@ def get_floor_prices(neighborhood: str) -> dict:
     if snapshot is not None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(snapshot))
-        return snapshot
+        return _attach_sale_comparison(snapshot)
 
     local = _floor_from_neighborhood_file(hood_name, hood["city_name"])
     if local is not None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(local))
-        return local
+        return _attach_sale_comparison(local)
 
     return {"error": f"No stored listings for {hood_name}. A city scan was not started."}
+
+
+def _attach_sale_comparison(result: dict) -> dict:
+    """Add the recent UPX sale median. Does not change stored asking prices."""
+    if not result or result.get("error"):
+        return result
+    try:
+        from economy import neighborhood_sale_medians
+        medians = neighborhood_sale_medians([result.get("neighborhood") or ""])
+    except Exception:
+        medians = {}
+    folded = {name.casefold(): info for name, info in medians.items()}
+    info = folded.get((result.get("neighborhood") or "").casefold())
+    median = info.get("median_upx") if info else None
+    result["sale_median_upx"] = median
+    result["sale_count"] = info.get("sales") if info else None
+    result["sale_window_days"] = 90
+    for listing in result.get("upx_listings") or []:
+        price = listing.get("price")
+        if median and price:
+            listing["vs_median_pct"] = round(100 * (price - median) / median, 1)
+        else:
+            listing["vs_median_pct"] = None
+    return result

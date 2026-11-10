@@ -390,6 +390,74 @@ def neighborhoods(period: str = "30d", min_trades: int = 3) -> list:
         conn.close()
 
 
+def neighborhood_sale_medians(neighborhoods: list, days: int = 90, minimum_sales: int = 5) -> dict:
+    """Median UPX property sale for each neighborhood over the last `days`.
+
+    Uses stored sales only. A neighborhood with fewer than `minimum_sales`
+    is left out. Names match without regard to capitalization. Returns
+    {requested_name: {"median_upx": n, "sales": n}}.
+    """
+    wanted = {}
+    for name in neighborhoods:
+        text = (name or "").strip()
+        if text and text.casefold() not in wanted:
+            wanted[text.casefold()] = text
+    if not wanted or not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) < 100:
+        return {}
+    names = list(wanted.values())[:80]
+    folds = [name.casefold() for name in names]
+    cache_key = "sale_median_{0}_{1}_{2}".format(
+        days, minimum_sales, hashlib.sha1("\n".join(sorted(folds)).encode()).hexdigest()[:16]
+    )
+    cached = _agg_cache_get(cache_key, _AGG_CACHE_TTL)
+    if cached is not None:
+        return cached
+
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+    conn = _connect()
+    if conn is None:
+        return {}
+    placeholders = ",".join("?" * len(folds))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT neighborhood, upx_amount
+            FROM transactions
+            WHERE timestamp >= ?
+              AND asset_type = 'property'
+              AND marketplace = 'upx'
+              AND upx_amount > 0
+              AND neighborhood IS NOT NULL
+              AND lower(neighborhood) IN ({placeholders})
+            """,
+            (since, *folds),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    finally:
+        conn.close()
+
+    grouped: dict = {}
+    for row in rows:
+        grouped.setdefault((row["neighborhood"] or "").casefold(), []).append(row["upx_amount"])
+    result = {}
+    for fold, requested in wanted.items():
+        amounts = grouped.get(fold) or []
+        if len(amounts) < minimum_sales:
+            continue
+        amounts.sort()
+        mid = len(amounts) // 2
+        if len(amounts) % 2:
+            median = amounts[mid]
+        else:
+            median = (amounts[mid - 1] + amounts[mid]) / 2
+        if not median:
+            continue
+        result[requested] = {"median_upx": median, "sales": len(amounts)}
+    _agg_cache_set(cache_key, result)
+    return result
+
+
 def whales(period: str = "30d", limit: int = 20) -> dict:
     cache_key = f"whales_{period}_{limit}"
     cached = _agg_cache_get(cache_key, _ttl(period))
