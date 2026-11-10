@@ -71,6 +71,22 @@ def _agg_cache_set(key: str, value) -> None:
     _cache_path(key).write_text(json.dumps(value))
 
 
+def _previous_start(period: str) -> str | None:
+    """Start of the window before this period. All-time has no pair."""
+    now = datetime.now(timezone.utc)
+    if period == "today":
+        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "7d":
+        start = now - timedelta(days=14)
+    elif period == "30d":
+        start = now - timedelta(days=60)
+    elif period == "90d":
+        start = now - timedelta(days=180)
+    else:
+        return None
+    return start.strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def _period_start(period: str) -> str:
     now = datetime.now(timezone.utc)
     if period == "today":
@@ -115,6 +131,8 @@ def _blank_summary(period: str, since: str = None, no_data: bool = True) -> dict
         "property_upx_trades": 0, "property_upx_volume": 0,
         "asset_upx_trades": 0, "asset_upx_volume": 0,
         "nft_upx_trades": 0, "nft_upx_volume": 0,
+        "previous_property_upx_volume": 0,
+        "property_upx_change_pct": None,
     }
 
 
@@ -128,20 +146,37 @@ def summary(period: str = "30d") -> dict:
         return _blank_summary(period)
     try:
         since = _period_start(period)
-        # Same timestamp scan as the old marketplace rollup. Grouping by
-        # asset_type splits property sales from spark/equipment and NFTs
-        # without a second pass over the table.
-        rows = conn.execute("""
-            SELECT marketplace, asset_type,
-                   COUNT(*) AS trade_count,
-                   COALESCE(SUM(upx_amount), 0) AS upx_volume,
-                   COALESCE(SUM(usd_amount), 0) AS usd_volume
-            FROM transactions
-            WHERE timestamp >= ?
-            GROUP BY marketplace, asset_type
-        """, (since,)).fetchall()
+        previous_since = _previous_start(period)
+        # One timestamp scan covers this period and the one before it.
+        # All-time stays a single scan. Grouping by asset_type splits
+        # property sales from spark/equipment and NFTs in that same pass.
+        if previous_since:
+            rows = conn.execute("""
+                SELECT CASE WHEN timestamp >= ? THEN 'current' ELSE 'previous' END AS span,
+                       marketplace, asset_type,
+                       COUNT(*) AS trade_count,
+                       COALESCE(SUM(upx_amount), 0) AS upx_volume,
+                       COALESCE(SUM(usd_amount), 0) AS usd_volume
+                FROM transactions
+                WHERE timestamp >= ?
+                GROUP BY span, marketplace, asset_type
+            """, (since, previous_since)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT 'current' AS span, marketplace, asset_type,
+                       COUNT(*) AS trade_count,
+                       COALESCE(SUM(upx_amount), 0) AS upx_volume,
+                       COALESCE(SUM(usd_amount), 0) AS usd_volume
+                FROM transactions
+                WHERE timestamp >= ?
+                GROUP BY marketplace, asset_type
+            """, (since,)).fetchall()
         result = _blank_summary(period, since, no_data=False)
         for row in rows:
+            if row["span"] == "previous":
+                if row["marketplace"] == "upx" and row["asset_type"] == "property":
+                    result["previous_property_upx_volume"] += row["upx_volume"]
+                continue
             if row["marketplace"] == "upx":
                 result["upx_volume"] += row["upx_volume"]
                 result["upx_trades"] += row["trade_count"]
@@ -152,6 +187,11 @@ def summary(period: str = "30d") -> dict:
             elif row["marketplace"] == "usd":
                 result["usd_volume"] += row["usd_volume"]
                 result["usd_trades"] += row["trade_count"]
+        previous_property = result["previous_property_upx_volume"]
+        if previous_property:
+            result["property_upx_change_pct"] = round(
+                100 * (result["property_upx_volume"] - previous_property) / previous_property, 1
+            )
         latest = conn.execute("SELECT MAX(timestamp) AS latest FROM transactions").fetchone()
         result["latest_sale"] = latest["latest"] if latest else None
         # All-time is a full-table sort on the Pi database. Skip the median there.

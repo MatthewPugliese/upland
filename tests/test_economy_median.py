@@ -80,6 +80,30 @@ class EconomyMedianTests(unittest.TestCase):
         # 10, 20, 30, 100000 → median of an even count is the mean of the middle pair.
         self.assertEqual(economy.summary("30d")["median_upx"], 25)
 
+    def test_property_volume_is_compared_with_the_previous_window(self):
+        now = datetime.now(timezone.utc)
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("DELETE FROM transactions")
+        conn.executemany(
+            "INSERT INTO transactions (trx_id, timestamp, marketplace, asset_type, upx_amount) VALUES (?,?,?,?,?)",
+            [
+                ("now", (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S"), "upx", "property", 100),
+                ("old", (now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%S"), "upx", "property", 40),
+                ("spark", (now - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%S"), "upx", "asset", 999),
+            ],
+        )
+        conn.commit()
+        conn.close()
+        other = str(Path(self.tmp.name) / "change.db")
+        with open(self.db_path, "rb") as src, open(other, "wb") as dst:
+            dst.write(src.read())
+        economy.DB_PATH = other
+        result = economy.summary("7d")
+        self.assertEqual(result["property_upx_volume"], 100)
+        self.assertEqual(result["previous_property_upx_volume"], 40)
+        self.assertEqual(result["property_upx_change_pct"], 150.0)
+        self.assertIsNone(economy.summary("all")["property_upx_change_pct"])
+
 
 if __name__ == "__main__":
     unittest.main()

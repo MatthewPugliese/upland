@@ -96,6 +96,7 @@ class EconomyFeedTests(unittest.TestCase):
         self.assertIn("does not say which is which", page)
         self.assertIn("property sales only · click a row to filter feed", page)
         self.assertIn("includes spark and NFT", page)
+        self.assertIn("vs the previous", page)
         self.assertIn("/valuation?query=", page)
         self.assertIn("loadBreakdowns", page)
         self.assertIn("property sales only · which neighborhoods are hot vs depressed", page)

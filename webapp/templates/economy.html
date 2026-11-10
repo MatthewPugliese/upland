@@ -260,6 +260,7 @@
         <div class="hero-volume" id="upx-volume">—</div>
         <div class="hero-trades" id="upx-trades">— trades</div>
         <div class="hero-trades" id="upx-split"></div>
+        <div class="hero-trades" id="upx-change"></div>
         <div class="hero-trades" id="upx-median"></div>
     </div>
     <div class="hero-card usd">
@@ -474,6 +475,15 @@ async function loadSummary() {
     if (d.asset_upx_trades) split.push(fmtNum(d.asset_upx_trades) + ' spark/equipment');
     if (d.nft_upx_trades) split.push(fmtNum(d.nft_upx_trades) + ' NFT');
     document.getElementById('upx-split').textContent = split.join(' · ');
+    const changeLabels = {today: 'day', '7d': '7 days', '30d': '30 days', '90d': '90 days'};
+    const changeEl = document.getElementById('upx-change');
+    if (d.property_upx_change_pct == null || !changeLabels[currentPeriod]) {
+        changeEl.textContent = '';
+    } else {
+        const pct = Number(d.property_upx_change_pct);
+        const sign = pct > 0 ? '+' : '';
+        changeEl.textContent = 'property UPX ' + sign + pct + '% vs the previous ' + changeLabels[currentPeriod];
+    }
     document.getElementById('usd-volume').textContent = fmtUsd(d.usd_volume);
     document.getElementById('usd-trades').textContent = fmtNum(d.usd_trades) + ' trades';
     const latest = document.getElementById('latest-sale');
