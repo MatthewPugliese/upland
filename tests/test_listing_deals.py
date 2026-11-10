@@ -277,3 +277,4 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("triple MAIN", html)
         self.assertIn("+200.0%", html)
         self.assertIn("Closest asks past double", html)
+        self.assertIn("city=Cape%20Town", html)

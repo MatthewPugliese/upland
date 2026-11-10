@@ -219,6 +219,9 @@ class StoreTests(unittest.TestCase):
             html = render_template("listings.html", page=page)
         self.assertIn('value="Ada"', html)
         self.assertIn("owner=Ada", html)
+        self.assertIn("neighborhood=OLD%20TOWN", html)
+        self.assertIn("city=Park%20City", html)
+        self.assertIn("currency=UPX&amp;sort=deal", html)
 
 
 class CacheSeedTests(unittest.TestCase):

@@ -161,8 +161,8 @@
                 </td>
                 <td>{{ "{:,}".format(row.mint_price|round|int) if row.mint_price else "—" }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
-                <td>{{ row.neighborhood or "—" }}</td>
-                <td>{{ row.city }}</td>
+                <td>{% if row.neighborhood %}<a href="/listings?neighborhood={{ row.neighborhood|urlencode }}&amp;currency={{ (row.currency or 'UPX')|urlencode }}&amp;sort=deal">{{ row.neighborhood }}</a>{% else %}—{% endif %}</td>
+                <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency={{ (row.currency or 'UPX')|urlencode }}&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
                 <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency={{ (row.currency or 'UPX')|urlencode }}&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}

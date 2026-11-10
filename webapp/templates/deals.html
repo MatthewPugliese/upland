@@ -50,7 +50,7 @@
                 <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
-                <td>{{ row.city }}</td>
+                <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
                 <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
@@ -79,7 +79,7 @@
                 <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
-                <td>{{ row.city }}</td>
+                <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
                 <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
@@ -112,7 +112,7 @@
                 <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
-                <td>{{ row.city }}</td>
+                <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
                 <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
@@ -151,7 +151,7 @@
                 <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
-                <td>{{ row.city }}</td>
+                <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
                 <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
@@ -224,7 +224,7 @@
                 <td>{{ "{:,}".format(row.sale_median_upx|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
-                <td>{{ row.city }}</td>
+                <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
                 <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}

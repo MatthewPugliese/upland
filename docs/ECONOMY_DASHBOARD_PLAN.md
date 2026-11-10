@@ -412,7 +412,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   The live sale feed and the top buyer and seller names do the same. A feed
   city and neighborhood open those stored listings too.
   The listings page shows the time of the newest stored ask. Filtering it to one
-  neighborhood also shows that neighborhood's recent sale median. Each neighborhood on the
+  neighborhood also shows that neighborhood's recent sale median. A neighborhood
+  or city on a listing row opens the stored asks for that place, in that row's
+  currency. A city on the deals page opens its stored UPX asks. Each neighborhood on the
   economy sales table links to those stored listings and to the floor page. Each city
   name links to the stored listings for that city, and the click still filters the
   sales feed. A valuation also links to those stored asks. Seller neighborhoods do too.
