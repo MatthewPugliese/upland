@@ -279,6 +279,8 @@ def api_collections_forsale():
         find_forsale_for_collection = _forsale()
         answer = find_forsale_for_collection(coll_entry, user_prop_ids)
         listings = answer["listings"]
+        from listings_view import _annotate_deals
+        _annotate_deals(listings)
         # Cache listings server-side so the budget optimizer can reuse them
         store.setdefault("listings", {})[str(coll_id)] = listings
         _save_coll_store(store)
@@ -508,6 +510,12 @@ def floor_price():
 def listings_page():
     from listings_view import build_listings_page
     return render_template("listings.html", page=build_listings_page(request.args))
+
+
+@app.route("/deals")
+def deals_page():
+    from deals import build_deals
+    return render_template("deals.html", page=build_deals())
 
 
 @app.route("/floor/run", methods=["POST"])

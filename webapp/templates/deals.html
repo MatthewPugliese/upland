@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Deals — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { max-width: 1100px; }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .full-table tr:hover td { background: #fafafa; }
+    .markup-neg { color: #1E8449; font-weight: 600; }
+    .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Asks under recent sales</h2>
+    <p class="card-subtitle">
+        UPX listings stored locally whose asking price is at least {{ page.min_discount_pct|round|int }}%
+        under the median property sale in that neighborhood over the last {{ page.window_days }} days.
+        A neighborhood needs at least 5 stored sales. This is not a live city scan.
+        <a href="/listings?sort=deal">All listings, sorted by the same comparison &rarr;</a>
+    </p>
+
+    {% if not page.db_exists %}
+    <p class="empty-note">No listings snapshot is stored yet.</p>
+    {% elif not page.deals %}
+    <p class="empty-note">
+        None of the {{ page.checked }} asks that could be compared are
+        {{ page.min_discount_pct|round|int }}% or more under recent sales.
+        {{ page.under_median }} are under the median at all.
+    </p>
+    {% else %}
+    <p class="empty-note">{{ page.deals|length }} of {{ page.checked }} compared asks.</p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>vs sales</th>
+                <th>Ask</th>
+                <th>Recent median</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>City</th>
+                <th>Seller</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.deals %}
+            <tr>
+                <td class="markup-neg">{{ "%+.0f"|format(row.vs_median_pct) }}%</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{{ "{:,}".format(row.sale_median_upx|round|int) }} UPX</td>
+                <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
+                <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
+                <td>{{ row.city }}</td>
+                <td>{{ row.owner_username or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

@@ -105,3 +105,32 @@ class ListingDealTests(unittest.TestCase):
         })
         self.assertEqual(result["sale_median_upx"], 300)
         self.assertEqual(result["upx_listings"][0]["vs_median_pct"], -50.0)
+
+    def test_deals_page_keeps_asks_at_least_10_percent_under(self):
+        import listings_db as db
+        from deals import build_deals
+        db.upsert_listing(self.listings, {
+            "property_id": "close",
+            "address": "CLOSE MAIN",
+            "city_id": 1,
+            "city": "Cape Town",
+            "neighborhood": "GARDENS",
+            "currency": "UPX",
+            "price": 285,
+            "mint_price": 100,
+            "owner_username": "seller",
+            "last_seen": "2026-11-09T00:00:00Z",
+        })
+        self.listings.commit()
+        page = build_deals(db_path=self.listings_path)
+        self.assertEqual([row["id"] for row in page["deals"]], ["cheap"])
+        self.assertEqual(page["deals"][0]["vs_median_pct"], -50.0)
+
+        import app as webapp
+        with webapp.app.test_request_context("/deals"):
+            from flask import render_template
+            html = render_template("deals.html", page=page)
+        self.assertIn("cheap MAIN", html)
+        self.assertIn("-50%", html)
+        self.assertNotIn("close MAIN", html)
+        self.assertNotIn("rich MAIN", html)

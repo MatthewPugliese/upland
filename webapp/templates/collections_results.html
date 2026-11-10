@@ -647,6 +647,10 @@ function renderForSaleListings(container) {
             + (l.currency === "UPX" ? '<span class="forsale-price-upx">' + upx + '</span>' : '')
             + (l.currency === "USD" ? '<span class="forsale-price-usd">' + usd + '</span>' : '')
             + markup
+            + (l.vs_median_pct === null || l.vs_median_pct === undefined
+                ? ''
+                : '<span class="forsale-markup ' + (l.vs_median_pct < 0 ? 'markup-neg' : '') + '">'
+                  + (l.vs_median_pct > 0 ? '+' : '') + Math.round(l.vs_median_pct) + '% vs sales</span>')
             + '<span class="forsale-owner">' + owner + '</span>'
             + '</div>';
     });
