@@ -843,6 +843,12 @@ async function loadHoods(gen) {
     renderHoods();
 }
 
+function escHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
 function renderHoods() {
     const sorted = [...hoodsData].sort((a, b) => {
         const av = a[hoodsSortCol] ?? 0;
@@ -854,15 +860,19 @@ function renderHoods() {
         body.innerHTML = '<tr><td colspan="7" class="loading-msg">No neighborhood data for this period.</td></tr>';
         return;
     }
-    body.innerHTML = sorted.map(h => `<tr>
-        <td>${h.neighborhood}</td>
-        <td>${h.city}</td>
+    body.innerHTML = sorted.map(h => {
+        const hood = encodeURIComponent(h.neighborhood || '');
+        return `<tr>
+        <td><a href="/listings?neighborhood=${hood}&currency=UPX&sort=deal">${escHtml(h.neighborhood)}</a>
+            · <a href="/floor?neighborhood=${hood}">floor</a></td>
+        <td>${escHtml(h.city)}</td>
         <td>${fmtNum(h.total_trades)}</td>
         <td>${fmtUpx(h.upx_volume)}</td>
         <td>${fmtUsd(h.usd_volume)}</td>
         <td>${h.avg_upx ? fmtUpx(h.avg_upx) : '—'}</td>
         <td>${h.avg_usd ? fmtUsd(h.avg_usd) : '—'}</td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
 
     document.querySelectorAll('#hoods-table th').forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');

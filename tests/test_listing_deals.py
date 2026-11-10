@@ -97,6 +97,7 @@ class ListingDealTests(unittest.TestCase):
             html = render_template("listings.html", page=page)
         self.assertIn("Asks under recent sales", html)
         self.assertIn("-50%", html)
+        self.assertIn("Newest stored ask: 2026-11-09T00:00:00Z", html)
 
     def test_floor_result_uses_the_same_median(self):
         result = floor_price._attach_sale_comparison({

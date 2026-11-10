@@ -100,6 +100,8 @@ class EconomyFeedTests(unittest.TestCase):
         self.assertIn("/valuation?query=", page)
         self.assertIn("loadBreakdowns", page)
         self.assertIn("property sales only · which neighborhoods are hot vs depressed", page)
+        self.assertIn("/listings?neighborhood=", page)
+        self.assertIn("/floor?neighborhood=", page)
         body = client.get("/api/economy/feed?asset=nft").get_json()
         self.assertEqual([row["id"] for row in body["transactions"]], [4])
         fallback = client.get("/api/economy/feed?asset=bogus").get_json()
