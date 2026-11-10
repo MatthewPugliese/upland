@@ -398,6 +398,8 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   counted as not compared, and the city row names those neighborhoods. The exact matches and the within-25% asks show when
   the crawler last confirmed them. `/sellers` lists usernames with at least
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
+  Each of that seller's compared asks is in one band: at or under, within 25% over,
+  25-100% over, or more than double.
   The listings page shows the time of the newest stored ask. Filtering it to one
   neighborhood also shows that neighborhood's recent sale median. Each neighborhood on the
   economy sales table links to those stored listings and to the floor page. Each city

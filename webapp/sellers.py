@@ -102,11 +102,16 @@ def build_sellers(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         lowest = min(bucket["asks"], key=lambda ask: ask["price"])
         shown = best or lowest
         neighborhoods = sorted(bucket["neighborhoods"].values(), key=str.casefold)
+        counts = economy.sale_distance_counts([ask["vs_median_pct"] for ask in compared])
         sellers.append({
             "owner_username": bucket["owner_username"],
             "asks": len(bucket["asks"]),
             "compared": len(compared),
             "under_median": sum(1 for ask in compared if ask["vs_median_pct"] < 0),
+            "at_or_under": counts["at_or_under"],
+            "near_over": counts["near_over"],
+            "up_to_double": counts["up_to_double"],
+            "over_double": counts["over_double"],
             "best_vs_median_pct": best["vs_median_pct"] if best else None,
             "lowest_ask": lowest["price"],
             "best_address": shown["address"],

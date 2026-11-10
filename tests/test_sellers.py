@@ -54,6 +54,7 @@ class SellerTests(unittest.TestCase):
             ("b1", 400, "RICHHOOD", "Bea", "UPX"),
             ("b2", 500, "RICHHOOD", "Bea", "UPX"),
             ("b3", 600, "RICHHOOD", "Bea", "UPX"),
+            ("b4", 900, "RICHHOOD", "Bea", "UPX"),
             ("c1", 10, "QUIET", "Cam", "UPX"),
             ("c2", 20, "QUIET", "Cam", "UPX"),
             ("d1", 50, "GARDENS", "Dot", "UPX"),
@@ -90,9 +91,19 @@ class SellerTests(unittest.TestCase):
         self.assertEqual(ada["best_vs_median_pct"], -50.0)
         self.assertEqual(ada["under_median"], 1)
         self.assertEqual(ada["compared"], 2)
+        self.assertEqual(ada["at_or_under"], 1)
+        self.assertEqual(ada["near_over"], 0)
+        self.assertEqual(ada["up_to_double"], 1)
+        self.assertEqual(ada["over_double"], 0)
         self.assertEqual(ada["best_id"], "a1")
-        self.assertEqual(page["sellers"][1]["best_vs_median_pct"], 33.3)
+        bea = page["sellers"][1]
+        self.assertEqual(bea["best_vs_median_pct"], 33.3)
+        self.assertEqual(bea["at_or_under"], 0)
+        self.assertEqual(bea["near_over"], 0)
+        self.assertEqual(bea["up_to_double"], 3)
+        self.assertEqual(bea["over_double"], 1)
         self.assertIsNone(page["sellers"][2]["best_vs_median_pct"])
+        self.assertEqual(page["sellers"][2]["over_double"], 0)
         self.assertEqual(page["skipped_single"], 1)
 
         import app as webapp
@@ -104,6 +115,10 @@ class SellerTests(unittest.TestCase):
         self.assertIn("-50.0%", html)
         self.assertIn("a1 MAIN", html)
         self.assertIn("/listings?neighborhood=GARDENS", html)
+        self.assertIn("Ask spread", html)
+        self.assertIn("1 at or under", html)
+        self.assertIn("1 25-100% over", html)
+        self.assertIn("1 more than double", html)
         self.assertNotIn("Dot", html)
         self.assertNotIn("d1 MAIN", html)
 

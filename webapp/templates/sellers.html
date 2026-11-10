@@ -3,7 +3,8 @@
 
 {% block head %}
 <style>
-    main { max-width: 1100px; }
+    main { max-width: 1280px; }
+    .spread { font-size: 12px; line-height: 1.45; color: #444; white-space: nowrap; }
     .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
     .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
         color: #555; font-weight: 600; white-space: nowrap; }
@@ -23,6 +24,8 @@
         Usernames with at least {{ page.min_asks }} UPX asks in the local snapshot.
         The percent is their lowest compared ask against the median property sale
         in that neighborhood over the last {{ page.window_days }} days.
+        Each compared ask is also in one band: at or under, within 25% over,
+        25-100% over, or more than double.
         A neighborhood needs at least 5 stored sales. This is not a live city scan.
         <a href="/markets">Neighborhoods, compared the same way &rarr;</a>
     </p>
@@ -49,6 +52,7 @@
                 <th>Seller</th>
                 <th class="num">Asks</th>
                 <th class="num">Under median</th>
+                <th>Ask spread</th>
                 <th class="num">Lowest ask</th>
                 <th>That ask</th>
                 <th>Neighborhoods</th>
@@ -69,6 +73,14 @@
                 </td>
                 <td class="num">{{ row.asks }}</td>
                 <td class="num">{{ row.under_median }} of {{ row.compared }}</td>
+                <td class="spread">
+                    {% if row.compared %}
+                    <div>{{ row.at_or_under }} at or under</div>
+                    <div>{{ row.near_over }} within 25% over</div>
+                    <div>{{ row.up_to_double }} 25-100% over</div>
+                    <div>{{ row.over_double }} more than double</div>
+                    {% else %}—{% endif %}
+                </td>
                 <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
                 <td>
                     {% if row.best_id %}
