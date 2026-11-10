@@ -243,8 +243,9 @@ def optimize_budget(options: list[dict], budget_upx: float) -> dict:
         "all_options_count": len(options),
         "viable_count": len(viable),
         "note": (
-            "Maximizes monthly UPX yield gain within budget (exact search for ≤14 options). "
-            "Partial = fewer UPX listings than the gap requires (estimate only). "
+            "Maximizes a mint-price estimate of monthly UPX within budget (exact search for ≤14 options). "
+            "That estimate is not the last collection payout. "
+            "Partial = fewer UPX listings than the gap requires. "
             "Near-complete collection listings are often heavily marked up — check payback days before buying."
         ),
     }

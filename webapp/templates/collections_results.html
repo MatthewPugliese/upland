@@ -508,6 +508,7 @@
 {% block scripts %}
 <script>
 var ANNUAL_RATE = {{ result.annual_rate }};
+var ANNUAL_RATE_PCT = {{ result.annual_rate_pct }};
 var USERNAME = {{ username|tojson }};
 
 function renderYieldImpact(btn, collId, listings) {
@@ -541,7 +542,8 @@ function renderYieldImpact(btn, collId, listings) {
 
     var html = '💰 Completing this collection: +' + Math.round(monthlyGain).toLocaleString() + ' UPX/mo'
         + ' (+' + hourlyGain.toFixed(2) + ' UPX/hr)'
-        + ' · Cost to acquire: ' + Math.round(cost).toLocaleString() + ' UPX';
+        + ' · Cost to acquire: ' + Math.round(cost).toLocaleString() + ' UPX'
+        + ' <span class="note">(mint-price estimate at ' + ANNUAL_RATE_PCT + '% a year, not the last collection payout)</span>';
 
     if (hourlyGain > 0) {
         var paybackHours = cost / hourlyGain;
@@ -788,7 +790,9 @@ function runBudgetOptimize() {
                 + data.collection_count + ' collection' + (data.collection_count !== 1 ? 's' : '')
                 + ' · spend ' + Math.round(data.spent_upx).toLocaleString() + ' UPX'
                 + ' · +' + data.total_monthly_yield_gain.toLocaleString() + ' UPX/mo'
-                + ' (+' + data.total_hourly_yield_gain + ' UPX/hr)</div>';
+                + ' (+' + data.total_hourly_yield_gain + ' UPX/hr)'
+                + ' <span class="muted">mint-price estimate at ' + ANNUAL_RATE_PCT
+                + '% a year, not the last collection payout</span></div>';
 
             (data.collections || []).forEach(function(c) {
                 html += '<div class="budget-pick">'
