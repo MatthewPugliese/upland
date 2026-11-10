@@ -433,6 +433,38 @@ def neighborhoods(period: str = "30d", min_trades: int = 3) -> list:
 # One sales read. Callers that pass more names only get the first 400.
 _MAX_SALE_MEDIAN_NEIGHBORHOODS = 400
 
+# Shared by /cities and /markets. An ask more than twice the sale median is over 100%.
+SALE_NEAR_PCT = 25
+SALE_DOUBLE_PCT = 100
+
+
+def sale_distance_counts(percents: list) -> dict:
+    """Count asks in exclusive bands. Each percent is already rounded to 0.1.
+
+    at or under, within 25% over, 25-100% over, and more than double.
+    within_near still counts both sides of the median, so it overlaps the
+    first two bands.
+    """
+    at_or_under = near_over = up_to_double = over_double = within_near = 0
+    for pct in percents:
+        if abs(pct) <= SALE_NEAR_PCT:
+            within_near += 1
+        if pct <= 0:
+            at_or_under += 1
+        elif pct <= SALE_NEAR_PCT:
+            near_over += 1
+        elif pct <= SALE_DOUBLE_PCT:
+            up_to_double += 1
+        else:
+            over_double += 1
+    return {
+        "at_or_under": at_or_under,
+        "near_over": near_over,
+        "up_to_double": up_to_double,
+        "over_double": over_double,
+        "within_near": within_near,
+    }
+
 
 def neighborhood_sale_medians(neighborhoods: list, days: int = 90, minimum_sales: int = 5) -> dict:
     """Median UPX property sale for each neighborhood over the last `days`.

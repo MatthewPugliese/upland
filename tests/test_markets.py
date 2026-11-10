@@ -58,6 +58,7 @@ class MarketTests(unittest.TestCase):
             ("r1", 400, "RICHHOOD", "UPX"),
             ("r2", 500, "RICHHOOD", "UPX"),
             ("r3", 600, "RICHHOOD", "UPX"),
+            ("r4", 900, "RICHHOOD", "UPX"),
             ("thin", 50, "OTHER", "UPX"),
             ("q1", 10, "QUIET", "UPX"),
             ("q2", 20, "QUIET", "UPX"),
@@ -94,7 +95,14 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(gardens["median_vs_sales_pct"], -33.3)
         self.assertEqual(gardens["floor_vs_sales_pct"], -66.7)
         self.assertEqual(gardens["at_or_under"], 2)
-        self.assertEqual(page["markets"][1]["at_or_under"], 0)
+        self.assertEqual(gardens["near_over"], 0)
+        self.assertEqual(gardens["up_to_double"], 1)
+        self.assertEqual(gardens["over_double"], 0)
+        rich = page["markets"][1]
+        self.assertEqual(rich["at_or_under"], 0)
+        self.assertEqual(rich["near_over"], 0)
+        self.assertEqual(rich["up_to_double"], 3)
+        self.assertEqual(rich["over_double"], 1)
         self.assertNotIn("prices", gardens)
         self.assertEqual(gardens["city"], "Cape Town")
         self.assertEqual(gardens["sales_7d"], 5)
@@ -112,6 +120,9 @@ class MarketTests(unittest.TestCase):
         self.assertIn("RICHHOOD", html)
         self.assertNotIn("QUIET", html)
         self.assertNotIn("OTHER", html)
+        self.assertIn("Ask spread", html)
+        self.assertIn("1 25-100% over", html)
+        self.assertIn("1 more than double", html)
 
     def test_median_query_includes_a_name_past_the_old_80_cap(self):
         names = [f"empty{i}" for i in range(80)] + ["Gardens"]

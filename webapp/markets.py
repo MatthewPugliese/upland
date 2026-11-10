@@ -117,7 +117,14 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         row["sales_7d"] = week_info["sales"] if week_info else 0
         row["median_vs_sales_pct"] = round(100 * (row["median_ask"] - median) / median, 1)
         row["floor_vs_sales_pct"] = round(100 * (row["lowest_ask"] - median) / median, 1)
-        row["at_or_under"] = sum(1 for price in row.pop("prices") if price <= median)
+        prices = row.pop("prices")
+        counts = economy.sale_distance_counts([
+            round(100 * (price - median) / median, 1) for price in prices
+        ])
+        row["at_or_under"] = counts["at_or_under"]
+        row["near_over"] = counts["near_over"]
+        row["up_to_double"] = counts["up_to_double"]
+        row["over_double"] = counts["over_double"]
         markets.append(row)
 
     markets.sort(key=lambda row: (row["floor_vs_sales_pct"], row["neighborhood"].casefold()))

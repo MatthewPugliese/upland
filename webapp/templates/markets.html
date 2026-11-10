@@ -3,7 +3,8 @@
 
 {% block head %}
 <style>
-    main { max-width: 1100px; }
+    main { max-width: 1280px; }
+    .spread { font-size: 12px; line-height: 1.45; color: #444; white-space: nowrap; }
     .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
     .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
         color: #555; font-weight: 600; white-space: nowrap; }
@@ -24,6 +25,7 @@
         Each row is a neighborhood with at least {{ page.min_asks }} stored UPX asks
         and at least 5 property sales over the last {{ page.window_days }} days.
         The lowest ask and the median ask are compared with that sale median.
+        Each ask is in one band: at or under, within 25% over, 25-100% over, or more than double.
         This reads the local snapshot and stored sales. It does not scan a city.
         <a href="/deals">Individual asks at least 10% under those sales &rarr;</a>
         <a href="/sellers">Sellers with more than one ask &rarr;</a>
@@ -56,6 +58,7 @@
                 <th>Neighborhood</th>
                 <th class="num">Asks</th>
                 <th class="num">At or under sales</th>
+                <th>Ask spread</th>
                 <th class="num">Lowest ask</th>
                 <th class="num">Median ask</th>
                 <th class="num">Recent median</th>
@@ -78,6 +81,12 @@
                 </td>
                 <td class="num">{{ row.asks }}</td>
                 <td class="num">{{ row.at_or_under }}</td>
+                <td class="spread">
+                    <div>{{ row.at_or_under }} at or under</div>
+                    <div>{{ row.near_over }} within 25% over</div>
+                    <div>{{ row.up_to_double }} 25-100% over</div>
+                    <div>{{ row.over_double }} more than double</div>
+                </td>
                 <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.median_ask) }}</td>
                 <td class="num">{{ "{:,.0f}".format(row.sale_median_upx) }}</td>

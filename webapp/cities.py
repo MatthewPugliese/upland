@@ -16,8 +16,6 @@ from listings_db import DEFAULT_DB, connect, summary  # noqa: E402
 
 WINDOW_DAYS = 90
 NEAR_PCT = 25
-# An ask more than twice the sale median is over this percent.
-DOUBLE_PCT = 100
 MAX_NEIGHBORHOODS = 400
 
 
@@ -132,19 +130,8 @@ def build_cities(db_path: Path | None = None) -> dict:
         )
         best = min(compared, key=lambda ask: (ask["vs_median_pct"], ask["price"])) if compared else None
         city_name = max(bucket["spellings"], key=bucket["spellings"].get)
-        at_or_under = near_over = up_to_double = over_double = within_near = 0
-        for ask in compared:
-            pct = ask["vs_median_pct"]
-            if abs(pct) <= NEAR_PCT:
-                within_near += 1
-            if pct <= 0:
-                at_or_under += 1
-            elif pct <= NEAR_PCT:
-                near_over += 1
-            elif pct <= DOUBLE_PCT:
-                up_to_double += 1
-            else:
-                over_double += 1
+        import economy
+        counts = economy.sale_distance_counts([ask["vs_median_pct"] for ask in compared])
         cities.append({
             "city": city_name,
             "upx_asks": len(prices),
@@ -152,11 +139,11 @@ def build_cities(db_path: Path | None = None) -> dict:
             "lowest_ask": min(prices) if prices else None,
             "median_ask": _median(prices) if prices else None,
             "compared": len(compared),
-            "within_near": within_near,
-            "at_or_under": at_or_under,
-            "near_over": near_over,
-            "up_to_double": up_to_double,
-            "over_double": over_double,
+            "within_near": counts["within_near"],
+            "at_or_under": counts["at_or_under"],
+            "near_over": counts["near_over"],
+            "up_to_double": counts["up_to_double"],
+            "over_double": counts["over_double"],
             "uncompared": uncompared,
             "closest_pct": best["vs_median_pct"] if best else None,
             "closest_address": best["address"] if best else "",
