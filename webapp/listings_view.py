@@ -57,6 +57,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             "freshest_listing": None, "freshest_crawl": None, "targets": {},
         },
         "deals": {"compared": 0, "under_median": 0, "at_median": 0, "window_days": 90},
+        "sale_context": None,
     }
     if not path.exists():
         return empty
@@ -73,6 +74,16 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             limit=limit,
         )
         deals = _annotate_deals(listings)
+        sale_context = None
+        if neighborhood:
+            for row in listings:
+                if row.get("sale_median_upx"):
+                    sale_context = {
+                        "median_upx": row["sale_median_upx"],
+                        "sales": row["sale_count"],
+                        "window_days": deals.get("window_days", 90),
+                    }
+                    break
         if sort == "deal":
             listings.sort(key=lambda row: (
                 row.get("vs_median_pct") is None,
@@ -87,6 +98,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             "coverage": coverage_rows(conn),
             "summary": info,
             "deals": deals,
+            "sale_context": sale_context,
         }
     finally:
         conn.close()

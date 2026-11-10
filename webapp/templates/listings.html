@@ -43,6 +43,9 @@
     {% if page.summary.freshest_listing %}
     <p class="empty-note">Newest stored ask: {{ page.summary.freshest_listing }}.</p>
     {% endif %}
+    {% if page.sale_context %}
+    <p class="empty-note">Recent sale median here: {{ "{:,.0f}".format(page.sale_context.median_upx) }} UPX from {{ page.sale_context.sales }} sales over {{ page.sale_context.window_days }} days.</p>
+    {% endif %}
     {% if page.db_exists and not (page.coverage | selectattr("status", "equalto", "complete") | list) %}
     <p class="empty-note">These rows are not a full city scan. A property that is missing here may still be for sale.</p>
     {% endif %}

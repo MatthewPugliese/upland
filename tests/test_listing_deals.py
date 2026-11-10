@@ -99,6 +99,25 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("-50%", html)
         self.assertIn("Newest stored ask: 2026-11-09T00:00:00Z", html)
 
+    def test_neighborhood_filter_shows_the_sale_median(self):
+        page = listings_view.build_listings_page(
+            {"neighborhood": "GARDENS", "currency": "UPX", "limit": 10},
+            db_path=self.listings_path,
+        )
+        self.assertEqual(page["sale_context"]["median_upx"], 300)
+        self.assertEqual(page["sale_context"]["sales"], 5)
+        thin = listings_view.build_listings_page(
+            {"neighborhood": "OTHER", "currency": "UPX", "limit": 10},
+            db_path=self.listings_path,
+        )
+        self.assertIsNone(thin["sale_context"])
+
+        import app as webapp
+        with webapp.app.test_request_context("/listings"):
+            from flask import render_template
+            html = render_template("listings.html", page=page)
+        self.assertIn("Recent sale median here: 300 UPX from 5 sales over 90 days.", html)
+
     def test_floor_result_uses_the_same_median(self):
         result = floor_price._attach_sale_comparison({
             "neighborhood": "gardens",

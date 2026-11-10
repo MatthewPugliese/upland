@@ -389,7 +389,8 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   are at or under that sale median. It reads at most 400
   neighborhoods, the ones with the most asks. `/sellers` lists usernames with at least
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
-  The listings page shows the time of the newest stored ask. Each neighborhood on the
+  The listings page shows the time of the newest stored ask. Filtering it to one
+  neighborhood also shows that neighborhood's recent sale median. Each neighborhood on the
   economy sales table links to those stored listings and to the floor page. Each city
   name links to the stored listings for that city, and the click still filters the
   sales feed. A valuation also links to those stored asks. Seller neighborhoods do too.
