@@ -95,6 +95,8 @@ class EconomyFeedTests(unittest.TestCase):
         self.assertIn("data-asset=\"nft\"", page)
         self.assertIn("does not say which is which", page)
         self.assertIn("property sales only · click a row to filter feed", page)
+        self.assertIn("includes spark and NFT", page)
+        self.assertIn("loadBreakdowns", page)
         self.assertIn("property sales only · which neighborhoods are hot vs depressed", page)
         body = client.get("/api/economy/feed?asset=nft").get_json()
         self.assertEqual([row["id"] for row in body["transactions"]], [4])

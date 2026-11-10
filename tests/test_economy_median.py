@@ -62,6 +62,24 @@ class EconomyMedianTests(unittest.TestCase):
         self.assertIsNone(result["median_upx"])
         self.assertIsNotNone(result["latest_sale"])
 
+    def test_summary_cache_stays_on_its_own_database_and_period(self):
+        first = economy.summary("30d")
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(
+            "INSERT INTO transactions (trx_id, timestamp, marketplace, asset_type, upx_amount) VALUES (?,?,?,?,?)",
+            ("z", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), "upx", "property", 100000),
+        )
+        conn.commit()
+        conn.close()
+        self.assertEqual(economy.summary("30d")["median_upx"], first["median_upx"])
+        self.assertIsNone(economy.summary("all")["median_upx"])
+        other = str(Path(self.tmp.name) / "other.db")
+        with open(self.db_path, "rb") as src, open(other, "wb") as dst:
+            dst.write(src.read())
+        economy.DB_PATH = other
+        # 10, 20, 30, 100000 → median of an even count is the mean of the middle pair.
+        self.assertEqual(economy.summary("30d")["median_upx"], 25)
+
 
 if __name__ == "__main__":
     unittest.main()

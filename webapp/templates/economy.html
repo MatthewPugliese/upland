@@ -433,9 +433,7 @@ document.querySelectorAll('.period-btn').forEach(btn => {
         currentPeriod = btn.dataset.period;
         loadSummary();
         loadChart();
-        loadCities();
-        loadHoods();
-        loadWhales();
+        loadBreakdowns();
     });
 });
 
@@ -468,7 +466,7 @@ async function loadSummary() {
         document.getElementById('no-data-banner').style.display = 'none';
     }
     document.getElementById('upx-volume').textContent = fmtUpx(d.upx_volume);
-    document.getElementById('upx-trades').textContent = fmtNum(d.upx_trades) + ' trades';
+    document.getElementById('upx-trades').textContent = fmtNum(d.upx_trades) + ' trades · includes spark and NFT';
     document.getElementById('upx-median').textContent = d.median_upx == null
         ? '' : 'median property sale ' + fmtUpxFull(d.median_upx);
     const split = [];
@@ -703,9 +701,49 @@ async function pollFeed() {
 }
 
 // ── Whales ────────────────────────────────────────────────────────────────
-async function loadWhales() {
+let breakdownGeneration = 0;
+
+function tableMessage(id, cols, text) {
+    const body = document.getElementById(id);
+    if (body) body.innerHTML = '<tr><td colspan="' + cols + '" class="loading-msg">' + text + '</td></tr>';
+}
+
+// Cities, neighborhoods, and buyers each scan the sales table. Run them one
+// at a time so a period change does not pile three heavy reads on the Pi.
+async function loadBreakdowns() {
+    const gen = ++breakdownGeneration;
+    tableMessage('cities-body', 8, 'Loading…');
+    tableMessage('hoods-body', 7, 'Loading…');
+    tableMessage('buyers-body', 4, 'Loading…');
+    tableMessage('sellers-body', 4, 'Loading…');
+    try {
+        await loadCities(gen);
+    } catch (e) {
+        if (gen === breakdownGeneration) tableMessage('cities-body', 8, 'Could not load cities.');
+    }
+    if (gen !== breakdownGeneration) return;
+    try {
+        await loadHoods(gen);
+    } catch (e) {
+        if (gen === breakdownGeneration) tableMessage('hoods-body', 7, 'Could not load neighborhoods.');
+    }
+    if (gen !== breakdownGeneration) return;
+    try {
+        await loadWhales(gen);
+    } catch (e) {
+        if (gen === breakdownGeneration) {
+            tableMessage('buyers-body', 4, 'Could not load buyers.');
+            tableMessage('sellers-body', 4, 'Could not load sellers.');
+        }
+    }
+}
+
+async function loadWhales(gen) {
     const r = await fetch('/api/economy/whales?period=' + currentPeriod);
+    if (gen !== breakdownGeneration) return;
+    if (!r.ok) throw new Error('whales');
     const d = await r.json();
+    if (gen !== breakdownGeneration) return;
     renderWhaleTable('buyers-body', d.buyers, 'upx_spent', 'usd_spent');
     renderWhaleTable('sellers-body', d.sellers, 'upx_earned', 'usd_earned');
 }
@@ -730,9 +768,12 @@ function renderWhaleTable(bodyId, rows, upxCol, usdCol) {
 }
 
 // ── Cities ────────────────────────────────────────────────────────────────
-async function loadCities() {
+async function loadCities(gen) {
     const r = await fetch('/api/economy/cities?period=' + currentPeriod);
+    if (gen !== breakdownGeneration) return;
+    if (!r.ok) throw new Error('cities');
     const d = await r.json();
+    if (gen !== breakdownGeneration) return;
     citiesData = d.cities || [];
     renderCities();
 }
@@ -774,9 +815,12 @@ function renderCities() {
 }
 
 // ── Neighborhoods ─────────────────────────────────────────────────────────
-async function loadHoods() {
+async function loadHoods(gen) {
     const r = await fetch('/api/economy/neighborhoods?period=' + currentPeriod);
+    if (gen !== breakdownGeneration) return;
+    if (!r.ok) throw new Error('neighborhoods');
     const d = await r.json();
+    if (gen !== breakdownGeneration) return;
     hoodsData = d.neighborhoods || [];
     hoodsTotal = d.total || hoodsData.length;
     document.getElementById('hoods-count-note').textContent =
@@ -874,8 +918,6 @@ function clearCityFilter() {
 loadSummary();
 loadChart();
 loadFeedInitial().then(() => { feedPollTimer = setTimeout(pollFeed, 30000); });
-loadCities();
-loadHoods();
-loadWhales();
+loadBreakdowns();
 </script>
 {% endblock %}

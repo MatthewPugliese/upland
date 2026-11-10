@@ -3,6 +3,7 @@ Economy dashboard DB queries — reads from economy.db written by the scraper.
 All functions return plain dicts/lists; Flask routes handle JSON serialisation.
 """
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -43,9 +44,21 @@ def _connect_with_property_cache():
     return conn
 
 
-def _agg_cache_get(key: str):
-    path = _AGG_CACHE_DIR / f"{key}.json"
-    if path.exists() and (time.time() - path.stat().st_mtime) < _AGG_CACHE_TTL:
+def _ttl(period: str) -> int:
+    # Today changes quickly. Longer periods are the scans that stall the Pi.
+    return 60 if period == "today" else _AGG_CACHE_TTL
+
+
+def _cache_path(key: str) -> Path:
+    # The file name includes the database path so a test database cannot
+    # reuse a cache written for the live database.
+    tag = hashlib.sha1(os.path.abspath(DB_PATH).encode()).hexdigest()[:12]
+    return _AGG_CACHE_DIR / f"{key}_{tag}.json"
+
+
+def _agg_cache_get(key: str, ttl: int = _AGG_CACHE_TTL):
+    path = _cache_path(key)
+    if path.exists() and (time.time() - path.stat().st_mtime) < ttl:
         try:
             return json.loads(path.read_text())
         except Exception:
@@ -55,7 +68,7 @@ def _agg_cache_get(key: str):
 
 def _agg_cache_set(key: str, value) -> None:
     _AGG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    (_AGG_CACHE_DIR / f"{key}.json").write_text(json.dumps(value))
+    _cache_path(key).write_text(json.dumps(value))
 
 
 def _period_start(period: str) -> str:
@@ -106,6 +119,10 @@ def _blank_summary(period: str, since: str = None, no_data: bool = True) -> dict
 
 
 def summary(period: str = "30d") -> dict:
+    cache_key = f"summary_{period}"
+    cached = _agg_cache_get(cache_key, _ttl(period))
+    if cached is not None:
+        return cached
     conn = _connect()
     if not conn:
         return _blank_summary(period)
@@ -140,6 +157,8 @@ def summary(period: str = "30d") -> dict:
         # All-time is a full-table sort on the Pi database. Skip the median there.
         if period != "all":
             result["median_upx"] = _median_property_upx(conn, since)
+        if not result.get("no_data"):
+            _agg_cache_set(cache_key, result)
         return result
     finally:
         conn.close()
@@ -183,6 +202,10 @@ def _add_upx_split(conn, since: str, buckets: dict, hourly: bool) -> None:
 
 
 def timeseries(period: str = "30d") -> list:
+    cache_key = f"timeseries_{period}"
+    cached = _agg_cache_get(cache_key, _ttl(period))
+    if cached is not None:
+        return cached
     conn = _connect()
     if not conn:
         return []
@@ -229,7 +252,9 @@ def timeseries(period: str = "30d") -> list:
         # UPX from spark and NFT sales.
         if period != "all":
             _add_upx_split(conn, since, buckets, hourly=use_hourly)
-        return sorted(buckets.values(), key=lambda x: x["timestamp"])
+        points = sorted(buckets.values(), key=lambda x: x["timestamp"])
+        _agg_cache_set(cache_key, points)
+        return points
     finally:
         conn.close()
 
@@ -289,7 +314,7 @@ def feed(limit: int = 50, marketplace: str = None, city: str = None, asset: str 
 
 def cities(period: str = "30d") -> list:
     cache_key = f"cities_{period}"
-    cached = _agg_cache_get(cache_key)
+    cached = _agg_cache_get(cache_key, _ttl(period))
     if cached is not None:
         return cached
 
@@ -330,7 +355,7 @@ def neighborhoods(period: str = "30d", min_trades: int = 3) -> list:
     neighborhoods with too few sales for the average to mean anything.
     """
     cache_key = f"neighborhoods_{period}_{min_trades}"
-    cached = _agg_cache_get(cache_key)
+    cached = _agg_cache_get(cache_key, _ttl(period))
     if cached is not None:
         return cached
 
@@ -366,6 +391,10 @@ def neighborhoods(period: str = "30d", min_trades: int = 3) -> list:
 
 
 def whales(period: str = "30d", limit: int = 20) -> dict:
+    cache_key = f"whales_{period}_{limit}"
+    cached = _agg_cache_get(cache_key, _ttl(period))
+    if cached is not None:
+        return cached
     conn = _connect()
     if not conn:
         return {"buyers": [], "sellers": []}
@@ -393,7 +422,9 @@ def whales(period: str = "30d", limit: int = 20) -> dict:
             ORDER BY upx_earned + usd_earned * 1000 DESC
             LIMIT ?
         """, (since, limit)).fetchall()
-        return {"buyers": [dict(r) for r in buyers], "sellers": [dict(r) for r in sellers]}
+        result = {"buyers": [dict(r) for r in buyers], "sellers": [dict(r) for r in sellers]}
+        _agg_cache_set(cache_key, result)
+        return result
     finally:
         conn.close()
 
