@@ -28,6 +28,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
     currency = (args.get("currency") or "UPX").strip()
     city = (args.get("city") or "").strip()
     neighborhood = (args.get("neighborhood") or "").strip()
+    owner = (args.get("owner") or "").strip()
     sort = args.get("sort") or "markup"
     if sort not in {"markup", "price", "seen", "deal"}:
         sort = "markup"
@@ -41,6 +42,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
         "currency": currency or "UPX",
         "city": city,
         "neighborhood": neighborhood,
+        "owner": owner,
         "sort": sort,
         "limit": limit,
     }
@@ -70,6 +72,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             currency=None if filters["currency"].lower() == "any" else filters["currency"].upper(),
             city=city or None,
             neighborhood=neighborhood or None,
+            owner=owner or None,
             sort="markup" if sort == "deal" else sort,
             limit=limit,
         )

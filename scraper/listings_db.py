@@ -533,6 +533,7 @@ def search_listings(
     currency: str | None = None,
     city: str | None = None,
     neighborhood: str | None = None,
+    owner: str | None = None,
     sort: str = "markup",
     limit: int = 100,
 ) -> list[dict]:
@@ -547,6 +548,9 @@ def search_listings(
     if neighborhood:
         clauses.append("LOWER(neighborhood) = LOWER(?)")
         params.append(neighborhood)
+    if owner:
+        clauses.append("LOWER(owner_username) = LOWER(?)")
+        params.append(owner)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     if sort == "price":
         order = "price IS NULL, price ASC, address"

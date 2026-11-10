@@ -112,6 +112,7 @@ class SellerTests(unittest.TestCase):
             html = render_template("sellers.html", page=page)
         self.assertIn("Sellers vs recent sales", html)
         self.assertIn("play.upland.me/profile?username=Ada", html)
+        self.assertIn("owner=Ada", html)
         self.assertIn("-50.0%", html)
         self.assertIn("a1 MAIN", html)
         self.assertIn("/listings?neighborhood=GARDENS", html)

@@ -51,7 +51,7 @@
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
-                <td>{{ row.owner_username or "—" }}</td>
+                <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
         {% endfor %}
@@ -80,7 +80,7 @@
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
-                <td>{{ row.owner_username or "—" }}</td>
+                <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
         {% endfor %}
@@ -113,7 +113,7 @@
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
-                <td>{{ row.owner_username or "—" }}</td>
+                <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
         {% endfor %}
@@ -152,7 +152,7 @@
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
-                <td>{{ row.owner_username or "—" }}</td>
+                <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
                 <td>{{ row.last_seen or "—" }}</td>
             </tr>
         {% endfor %}
@@ -181,6 +181,7 @@
                 <td>
                     {% if row.owner_username %}
                     <a href="https://play.upland.me/profile?username={{ row.owner_username|urlencode }}" target="_blank" rel="noopener">{{ row.owner_username }}</a>
+                    <div class="empty-note"><a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">asks</a></div>
                     {% else %}Unknown seller{% endif %}
                 </td>
                 <td class="markup-pos">{{ "%+.1f"|format(row.closest_pct) }}%</td>
@@ -224,7 +225,7 @@
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{{ row.city }}</td>
-                <td>{{ row.owner_username or "—" }}</td>
+                <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

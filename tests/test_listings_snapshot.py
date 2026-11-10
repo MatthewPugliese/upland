@@ -192,6 +192,34 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in rows], ["low", "high"])
         self.assertEqual(rows[0]["markup_pct"], 10.0)
 
+    def test_search_matches_seller_without_regard_to_case(self):
+        db.upsert_listing(self.conn, self._row("ada", owner_username="Ada"))
+        db.upsert_listing(self.conn, self._row("bea", owner_username="Bea"))
+        rows = db.search_listings(self.conn, owner="ada")
+        self.assertEqual([row["id"] for row in rows], ["ada"])
+
+    def test_listings_page_keeps_the_seller_filter(self):
+        import sys
+        from pathlib import Path
+        web = Path(__file__).resolve().parent.parent / "webapp"
+        if str(web) not in sys.path:
+            sys.path.insert(0, str(web))
+        from listings_view import build_listings_page
+        db.upsert_listing(self.conn, self._row("ada", owner_username="Ada"))
+        self.conn.commit()
+        page = build_listings_page(
+            {"owner": "Ada", "currency": "UPX", "sort": "deal"},
+            db_path=Path(self.tmp.name) / "listings.db",
+        )
+        self.assertEqual(page["filters"]["owner"], "Ada")
+        self.assertEqual([row["id"] for row in page["listings"]], ["ada"])
+        import app as webapp
+        with webapp.app.test_request_context("/listings"):
+            from flask import render_template
+            html = render_template("listings.html", page=page)
+        self.assertIn('value="Ada"', html)
+        self.assertIn("owner=Ada", html)
+
 
 class CacheSeedTests(unittest.TestCase):
     def test_collects_for_sale_rows_and_prefers_a_mint_price(self):

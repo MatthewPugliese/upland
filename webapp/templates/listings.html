@@ -112,6 +112,10 @@
             </select>
         </div>
         <div class="form-group">
+            <label for="owner">Seller</label>
+            <input type="text" id="owner" name="owner" value="{{ page.filters.owner }}" placeholder="username">
+        </div>
+        <div class="form-group">
             <label for="sort">Sort</label>
             <select id="sort" name="sort">
                 <option value="markup" {% if page.filters.sort == "markup" %}selected{% endif %}>Lowest markup</option>
@@ -159,7 +163,7 @@
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td>{{ row.neighborhood or "—" }}</td>
                 <td>{{ row.city }}</td>
-                <td>{{ row.owner_username or "—" }}</td>
+                <td>{% if row.owner_username %}<a href="/listings?owner={{ row.owner_username|urlencode }}&amp;currency={{ (row.currency or 'UPX')|urlencode }}&amp;sort=deal">{{ row.owner_username }}</a>{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

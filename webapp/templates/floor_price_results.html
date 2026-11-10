@@ -83,7 +83,7 @@
                 <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">
                     {{ "%+.1f%%"|format(l.markup_pct) if l.markup_pct is not none else "—" }}
                 </td>
-                <td>{{ l.owner_username or "—" }}</td>
+                <td>{% if l.owner_username %}<a href="/listings?owner={{ l.owner_username|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ l.owner_username }}</a>{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -110,7 +110,7 @@
                 <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">
                     {{ "%+.1f%%"|format(l.markup_pct) if l.markup_pct is not none else "—" }}
                 </td>
-                <td>{{ l.owner_username or "—" }}</td>
+                <td>{% if l.owner_username %}<a href="/listings?owner={{ l.owner_username|urlencode }}&amp;currency=USD&amp;sort=deal">{{ l.owner_username }}</a>{% else %}—{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

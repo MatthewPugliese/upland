@@ -271,6 +271,7 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("more than double the recent median", html)
         self.assertIn("1 of those asks is that seller's only one", html)
         self.assertIn("play.upland.me/profile?username=Bo", html)
+        self.assertIn("owner=Bo", html)
         self.assertIn("bo1 MAIN", html)
         self.assertIn("+150.0%", html)
         self.assertIn("triple MAIN", html)
