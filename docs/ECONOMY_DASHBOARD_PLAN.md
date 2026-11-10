@@ -381,7 +381,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   `/deals` lists the stored UPX asks that are at least 10% under that median.
   When none qualify, it also says how many compared asks match the median exactly
   and lists those asks. It also lists asks within 25% of that median that are not
-  already shown as a 10% discount or an exact match. The floor page counts how many
+  already shown as a 10% discount or an exact match. It also lists asks that are
+  over 25% and up to double that median, and counts asks that are more than double.
+  The floor page counts how many
   of its UPX asks are at or under the same median. Collection
   for-sale rows show the same comparison. `/markets` groups the same snapshot by
   neighborhood: a row needs at least 3 stored UPX asks and at least 5 sales, then shows

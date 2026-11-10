@@ -197,12 +197,27 @@ class ListingDealTests(unittest.TestCase):
             "owner_username": "seller",
             "last_seen": "2026-11-09T00:00:00Z",
         })
+        db.upsert_listing(self.listings, {
+            "property_id": "triple",
+            "address": "triple MAIN",
+            "city_id": 1,
+            "city": "Cape Town",
+            "neighborhood": "GARDENS",
+            "currency": "UPX",
+            "price": 900,
+            "mint_price": 100,
+            "owner_username": "seller",
+            "last_seen": "2026-11-09T00:00:00Z",
+        })
         self.listings.commit()
         page = build_deals(db_path=self.listings_path)
         self.assertEqual([row["id"] for row in page["deals"]], ["cheap"])
         self.assertEqual(page["at_median"], 1)
         self.assertEqual([row["id"] for row in page["matches"]], ["even"])
         self.assertEqual([row["id"] for row in page["near"]], ["close", "band"])
+        self.assertEqual([row["id"] for row in page["wider"]], ["far", "rich"])
+        self.assertEqual(page["wider_count"], 2)
+        self.assertEqual(page["over_double"], 1)
         self.assertEqual(page["deals"][0]["vs_median_pct"], -50.0)
 
         import app as webapp
@@ -217,5 +232,9 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("CLOSE MAIN", html)
         self.assertIn("band MAIN", html)
         self.assertIn("+25.0%", html)
-        self.assertNotIn("far MAIN", html)
-        self.assertNotIn("rich MAIN", html)
+        self.assertIn("far MAIN", html)
+        self.assertIn("+30.0%", html)
+        self.assertIn("rich MAIN", html)
+        self.assertIn("+100.0%", html)
+        self.assertIn("more than double the recent median", html)
+        self.assertNotIn("triple MAIN", html)

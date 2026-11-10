@@ -22,6 +22,8 @@
         UPX listings stored locally whose asking price is at least {{ page.min_discount_pct|round|int }}%
         under the median property sale in that neighborhood over the last {{ page.window_days }} days.
         A neighborhood needs at least 5 stored sales. This is not a live city scan.
+        Asks over {{ page.near_pct }}% and up to double that median are listed further down.
+        Asks more than double are counted.
         <a href="/listings?sort=deal">All listings, sorted by the same comparison &rarr;</a>
         <a href="/markets">Neighborhoods, compared the same way &rarr;</a>
     </p>
@@ -83,6 +85,42 @@
         {% endfor %}
         </tbody>
     </table>
+    {% endif %}
+    {% if page.wider %}
+    <p class="empty-note">
+        Over {{ page.near_pct }}% and up to double the recent median.
+        {{ page.wider_count }} ask{{ '' if page.wider_count == 1 else 's' }}.
+        {% if page.wider_count > page.wider|length %}Showing the closest {{ page.wider|length }}.{% endif %}
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>vs sales</th>
+                <th>Ask</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>City</th>
+                <th>Seller</th>
+                <th>Last confirmed</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.wider %}
+            <tr>
+                <td class="markup-pos">{{ "%+.1f"|format(row.vs_median_pct) }}%</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
+                <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
+                <td>{{ row.city }}</td>
+                <td>{{ row.owner_username or "—" }}</td>
+                <td>{{ row.last_seen or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% if page.over_double %}
+    <p class="empty-note">{{ page.over_double }} compared ask{{ '' if page.over_double == 1 else 's' }} {{ 'is' if page.over_double == 1 else 'are' }} more than double the recent median.</p>
     {% endif %}
 
     {% if not page.db_exists %}

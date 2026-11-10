@@ -11,6 +11,7 @@ from listings_view import build_listings_page
 
 MIN_DISCOUNT_PCT = 10
 NEAR_PCT = 25
+WIDER_CAP = 40
 
 
 def build_deals(db_path: Path | None = None, limit: int = 500,
@@ -33,13 +34,28 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         and -min_discount_pct < row["vs_median_pct"] <= NEAR_PCT
     ]
     near.sort(key=lambda row: (abs(row["vs_median_pct"]), row["vs_median_pct"], row.get("price") or 0))
+    from economy import SALE_DOUBLE_PCT
+    wider = [
+        row for row in page["listings"]
+        if row.get("vs_median_pct") is not None
+        and NEAR_PCT < row["vs_median_pct"] <= SALE_DOUBLE_PCT
+    ]
+    wider.sort(key=lambda row: (row["vs_median_pct"], row.get("price") or 0, row.get("address") or ""))
+    over_double = sum(
+        1 for row in page["listings"]
+        if row.get("vs_median_pct") is not None and row["vs_median_pct"] > SALE_DOUBLE_PCT
+    )
     summary = page.get("deals") or {}
     return {
         "db_exists": page["db_exists"],
         "deals": deals,
         "matches": matches[:20],
         "near": near[:30],
+        "wider": wider[:WIDER_CAP],
+        "wider_count": len(wider),
+        "over_double": over_double,
         "near_pct": NEAR_PCT,
+        "double_pct": SALE_DOUBLE_PCT,
         "checked": summary.get("compared", 0),
         "under_median": summary.get("under_median", 0),
         "at_median": summary.get("at_median", 0),
