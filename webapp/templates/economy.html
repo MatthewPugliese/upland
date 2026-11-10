@@ -621,9 +621,23 @@ function feedBadgeLabel(row) {
 
 function feedPlayer(name, account) {
     if (name) {
-        return `<a href="https://play.upland.me/profile?username=${encodeURIComponent(name)}" target="_blank" class="acct-link">${name}</a>`;
+        const safe = encodeURIComponent(name);
+        return `<a href="https://play.upland.me/profile?username=${safe}" target="_blank" class="acct-link">${escHtml(name)}</a>`
+            + ` <a href="/listings?owner=${safe}&currency=UPX&sort=deal" class="acct-link">asks</a>`;
     }
-    return account || '?';
+    return account ? escHtml(account) : '?';
+}
+
+function feedPlace(row) {
+    const bits = [];
+    if (row.neighborhood) {
+        const hood = encodeURIComponent(row.neighborhood);
+        bits.push(`<a href="/listings?neighborhood=${hood}&currency=UPX&sort=deal" class="acct-link">${escHtml(row.neighborhood)}</a>`);
+    }
+    if (row.city) {
+        bits.push(`<a href="/listings?city=${encodeURIComponent(row.city)}&currency=UPX" class="acct-link">${escHtml(row.city)}</a>`);
+    }
+    return bits.length ? ' · ' + bits.join(' · ') : '';
 }
 
 function assetLabel(row) {
@@ -636,7 +650,7 @@ function buildFeedItem(row, isNew) {
     const badge = feedBadge(row);
     const label = feedBadgeLabel(row);
     const addr = row.address || (row.asset_type === 'property' ? '(unknown address)' : assetLabel(row));
-    const city = row.city ? ' · ' + row.city : '';
+    const place = feedPlace(row);
     const buyer = feedPlayer(row.buyer_name, row.buyer);
     const seller = feedPlayer(row.seller_name, row.seller);
     const amount = row.marketplace === 'usd' ? fmtUsd(row.usd_amount) : fmtUpxFull(row.upx_amount);
@@ -644,15 +658,15 @@ function buildFeedItem(row, isNew) {
     const t = relTime(row.timestamp);
 
     const addrEl = row.property_id
-        ? `<a href="https://play.upland.me/properties?prop_id=${row.property_id}" target="_blank" class="acct-link">${addr}</a>`
+        ? `<a href="https://play.upland.me/properties?prop_id=${encodeURIComponent(row.property_id)}" target="_blank" class="acct-link">${escHtml(addr)}</a>`
           + (row.asset_type === 'property'
               ? ` <a href="/valuation?query=${encodeURIComponent(row.property_id)}" class="acct-link">value</a>`
               : '')
-        : addr;
+        : escHtml(addr);
     return `<div class="feed-item${isNew ? ' new' : ''}">
         <div class="feed-badge ${badge}">${label}</div>
         <div class="feed-info">
-            <div class="feed-address">${addrEl}${city}</div>
+            <div class="feed-address">${addrEl}${place}</div>
             <div class="feed-meta">${buyer} ← ${seller}</div>
         </div>
         <div>
@@ -769,8 +783,9 @@ function renderWhaleTable(bodyId, rows, upxCol, usdCol) {
     }
     body.innerHTML = rows.map((r, i) => {
         const displayName = r.username
-            ? `<a href="https://play.upland.me/profile?username=${encodeURIComponent(r.username)}" target="_blank" class="acct-link">${r.username}</a>`
-            : `<span style="color:#aaa;font-size:11px">${r.account}</span>`;
+            ? `<a href="https://play.upland.me/profile?username=${encodeURIComponent(r.username)}" target="_blank" class="acct-link">${escHtml(r.username)}</a>`
+              + ` <a href="/listings?owner=${encodeURIComponent(r.username)}&currency=UPX&sort=deal" class="acct-link">asks</a>`
+            : `<span style="color:#aaa;font-size:11px">${escHtml(r.account)}</span>`;
         return `<tr>
             <td>${i + 1}. ${displayName}</td>
             <td>${fmtNum(r.trades)}</td>

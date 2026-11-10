@@ -102,6 +102,8 @@ class EconomyFeedTests(unittest.TestCase):
         self.assertIn("property sales only · which neighborhoods are hot vs depressed", page)
         self.assertIn("/listings?neighborhood=", page)
         self.assertIn("/listings?city=", page)
+        self.assertIn("/listings?owner=", page)
+        self.assertIn(">asks</a>", page)
         self.assertIn("event.stopPropagation()", page)
         self.assertIn("/floor?neighborhood=", page)
         body = client.get("/api/economy/feed?asset=nft").get_json()

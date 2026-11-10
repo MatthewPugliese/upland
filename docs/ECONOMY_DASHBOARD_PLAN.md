@@ -406,6 +406,8 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   Each of that seller's compared asks is in one band: at or under, within 25% over,
   25-100% over, or more than double. A seller name opens that username's stored asks.
   Collection for-sale rows do the same, and can be sorted by that sale comparison.
+  The live sale feed and the top buyer and seller names do the same. A feed
+  city and neighborhood open those stored listings too.
   The listings page shows the time of the newest stored ask. Filtering it to one
   neighborhood also shows that neighborhood's recent sale median. Each neighborhood on the
   economy sales table links to those stored listings and to the floor page. Each city
