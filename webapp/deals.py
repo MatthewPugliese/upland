@@ -23,10 +23,13 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         if row.get("vs_median_pct") is not None and row["vs_median_pct"] <= -min_discount_pct
     ]
     deals.sort(key=lambda row: row["vs_median_pct"])
+    matches = [row for row in page["listings"] if row.get("vs_median_pct") == 0]
+    matches.sort(key=lambda row: (row.get("price") or 0, row.get("address") or ""))
     summary = page.get("deals") or {}
     return {
         "db_exists": page["db_exists"],
         "deals": deals,
+        "matches": matches[:20],
         "checked": summary.get("compared", 0),
         "under_median": summary.get("under_median", 0),
         "at_median": summary.get("at_median", 0),

@@ -379,7 +379,8 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   median stored property sale in that neighborhood over the last 90 days, when at least 5
   sales are stored. That read uses the sales table only. It does not scan a city for listings.
   `/deals` lists the stored UPX asks that are at least 10% under that median.
-  When none qualify, it also says how many compared asks match the median exactly. Collection
+  When none qualify, it also says how many compared asks match the median exactly
+  and lists those asks. Collection
   for-sale rows show the same comparison. `/markets` groups the same snapshot by
   neighborhood: a row needs at least 3 stored UPX asks and at least 5 sales, then shows
   the lowest ask and the median ask against that sale median, and how many asks

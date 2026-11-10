@@ -138,6 +138,7 @@ class ListingDealTests(unittest.TestCase):
         page = build_deals(db_path=self.listings_path)
         self.assertEqual([row["id"] for row in page["deals"]], ["cheap"])
         self.assertEqual(page["at_median"], 1)
+        self.assertEqual([row["id"] for row in page["matches"]], ["even"])
         self.assertEqual(page["deals"][0]["vs_median_pct"], -50.0)
 
         import app as webapp
@@ -147,5 +148,6 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("cheap MAIN", html)
         self.assertIn("-50%", html)
         self.assertIn("1 compared ask matches the recent median", html)
+        self.assertIn("even MAIN", html)
         self.assertNotIn("close MAIN", html)
         self.assertNotIn("rich MAIN", html)

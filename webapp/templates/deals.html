@@ -28,6 +28,30 @@
     {% if page.db_exists and page.at_median %}
     <p class="empty-note">{% if page.at_median == 1 %}1 compared ask matches the recent median.{% else %}{{ page.at_median }} compared asks match the recent median.{% endif %}</p>
     {% endif %}
+    {% if page.matches %}
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Ask</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>City</th>
+                <th>Seller</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.matches %}
+            <tr>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
+                <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
+                <td>{{ row.city }}</td>
+                <td>{{ row.owner_username or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
 
     {% if not page.db_exists %}
     <p class="empty-note">No listings snapshot is stored yet.</p>
