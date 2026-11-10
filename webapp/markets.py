@@ -36,6 +36,7 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
         "window_days": WINDOW_DAYS,
         "neighborhoods_with_asks": 0,
         "skipped_thin": 0,
+        "thin": [],
         "no_sales": 0,
         "few_sales": [],
         "omitted_for_cap": 0,
@@ -80,6 +81,12 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
     for bucket in groups.values():
         if len(bucket["prices"]) < min_asks:
             page["skipped_thin"] += 1
+            city = max(bucket["cities"].items(), key=lambda item: item[1])[0]
+            page["thin"].append({
+                "neighborhood": bucket["neighborhood"],
+                "city": city,
+                "asks": len(bucket["prices"]),
+            })
             continue
         city = max(bucket["cities"].items(), key=lambda item: item[1])[0]
         prices = bucket["prices"]
@@ -92,6 +99,7 @@ def build_markets(db_path: Path | None = None, min_asks: int = MIN_ASKS) -> dict
             "prices": prices,
         })
 
+    page["thin"].sort(key=lambda row: (-row["asks"], row["neighborhood"].casefold()))
     candidates.sort(key=lambda row: (-row["asks"], row["neighborhood"].casefold()))
     chosen = candidates[:MAX_NEIGHBORHOODS]
     page["omitted_for_cap"] = len(candidates) - len(chosen)

@@ -107,6 +107,11 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(gardens["city"], "Cape Town")
         self.assertEqual(gardens["sales_7d"], 5)
         self.assertEqual(page["skipped_thin"], 1)
+        self.assertEqual(page["thin"], [{
+            "neighborhood": "OTHER",
+            "city": "Cape Town",
+            "asks": 1,
+        }])
         self.assertEqual(page["no_sales"], 1)
         self.assertEqual(page["few_sales"], [{
             "neighborhood": "QUIET",
@@ -126,7 +131,9 @@ class MarketTests(unittest.TestCase):
         self.assertIn("QUIET", html)
         self.assertIn("neighborhood=QUIET", html)
         self.assertIn("(3)", html)
-        self.assertNotIn("OTHER", html)
+        self.assertIn("OTHER", html)
+        self.assertIn("neighborhood=OTHER", html)
+        self.assertIn("(1)", html)
         self.assertIn("Ask spread", html)
         self.assertIn("1 25-100% over", html)
         self.assertIn("1 more than double", html)
