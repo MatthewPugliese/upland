@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Cities — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { max-width: 1100px; }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .full-table tr:hover td { background: #fafafa; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .markup-neg { color: #1E8449; font-weight: 600; }
+    .markup-pos { color: #922B21; font-weight: 600; }
+    .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Stored asks by city</h2>
+    <p class="card-subtitle">
+        UPX asks in the local snapshot, one row per city.
+        The closest ask is compared with the median property sale in its neighborhood
+        over the last {{ page.window_days }} days, when that neighborhood has at least 5 sales.
+        Within {{ page.near_pct }}% counts asks that close to the median, over or under.
+        This does not scan a city.
+        <a href="/markets">Neighborhoods, compared the same way &rarr;</a>
+    </p>
+
+    {% if not page.db_exists %}
+    <p class="empty-note">No listings snapshot is stored yet.</p>
+    {% elif not page.cities %}
+    <p class="empty-note">The snapshot has no asks with a city.</p>
+    {% else %}
+    <p class="empty-note">
+        {{ page.cities|length }} cit{{ 'y' if page.cities|length == 1 else 'ies' }}.
+        Sorted by the ask closest to recent sales.
+        {% if page.freshest_listing %}Newest stored ask: {{ page.freshest_listing }}.{% endif %}
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Closest vs sales</th>
+                <th>City</th>
+                <th class="num">UPX asks</th>
+                <th class="num">Within {{ page.near_pct }}%</th>
+                <th class="num">Lowest ask</th>
+                <th class="num">Median ask</th>
+                <th>Closest ask</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.cities %}
+            <tr>
+                <td class="{{ 'markup-neg' if row.closest_pct is not none and row.closest_pct < 0 else ('markup-pos' if row.closest_pct is not none and row.closest_pct > 0 else '') }}">
+                    {% if row.closest_pct is not none %}{{ "%+.1f"|format(row.closest_pct) }}%{% else %}—{% endif %}
+                </td>
+                <td>
+                    <a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>
+                    {% if row.usd_asks %}<div class="empty-note">{{ row.usd_asks }} USD</div>{% endif %}
+                </td>
+                <td class="num">{{ row.upx_asks }}</td>
+                <td class="num">{{ row.within_near }} of {{ row.compared }}</td>
+                <td class="num">{% if row.lowest_ask is not none %}{{ "{:,.0f}".format(row.lowest_ask) }}{% else %}—{% endif %}</td>
+                <td class="num">{% if row.median_ask is not none %}{{ "{:,.0f}".format(row.median_ask) }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if row.closest_id %}
+                    <a href="/valuation?query={{ row.closest_id|urlencode }}">{{ row.closest_address }}</a>
+                    <div class="empty-note">{{ row.closest_neighborhood }} · {{ "{:,.0f}".format(row.closest_price) }} UPX</div>
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

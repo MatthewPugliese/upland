@@ -524,6 +524,12 @@ def markets_page():
     return render_template("markets.html", page=build_markets())
 
 
+@app.route("/cities")
+def cities_page():
+    from cities import build_cities
+    return render_template("cities.html", page=build_cities())
+
+
 @app.route("/sellers")
 def sellers_page():
     from sellers import build_sellers

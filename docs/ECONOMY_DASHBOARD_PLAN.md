@@ -388,7 +388,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   the lowest ask and the median ask against that sale median, and how many asks
   are at or under that sale median. The row also counts property sales in the last 7 days.
   It reads at most 400
-  neighborhoods, the ones with the most asks. `/sellers` lists usernames with at least
+  neighborhoods, the ones with the most asks. `/cities` rolls those stored asks up
+  by city and shows the ask closest to that sale median, plus how many compared
+  asks sit within 25% of it. `/sellers` lists usernames with at least
   two stored UPX asks and shows the ask that sits furthest from that same sale median.
   The listings page shows the time of the newest stored ask. Filtering it to one
   neighborhood also shows that neighborhood's recent sale median. Each neighborhood on the
