@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Sellers — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { max-width: 1100px; }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    .full-table th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+        color: #555; font-weight: 600; white-space: nowrap; }
+    .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .full-table tr:hover td { background: #fafafa; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .markup-neg { color: #1E8449; font-weight: 600; }
+    .markup-pos { color: #922B21; font-weight: 600; }
+    .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Sellers vs recent sales</h2>
+    <p class="card-subtitle">
+        Usernames with at least {{ page.min_asks }} UPX asks in the local snapshot.
+        The percent is their lowest compared ask against the median property sale
+        in that neighborhood over the last {{ page.window_days }} days.
+        A neighborhood needs at least 5 stored sales. This is not a live city scan.
+        <a href="/markets">Neighborhoods, compared the same way &rarr;</a>
+    </p>
+
+    {% if not page.db_exists %}
+    <p class="empty-note">No listings snapshot is stored yet.</p>
+    {% elif not page.sellers %}
+    <p class="empty-note">
+        No seller has {{ page.min_asks }} or more stored UPX asks.
+        {{ page.skipped_single }} seller{{ '' if page.skipped_single == 1 else 's' }}
+        had fewer.
+    </p>
+    {% else %}
+    <p class="empty-note">
+        {{ page.sellers|length }} seller{{ '' if page.sellers|length == 1 else 's' }}.
+        Sorted by the ask that sits furthest under recent sales.
+        {% if page.freshest_listing %}Newest stored ask: {{ page.freshest_listing }}.{% endif %}
+        {% if page.skipped_single %}{{ page.skipped_single }} had fewer than {{ page.min_asks }} asks.{% endif %}
+    </p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>Best vs sales</th>
+                <th>Seller</th>
+                <th class="num">Asks</th>
+                <th class="num">Under median</th>
+                <th class="num">Lowest ask</th>
+                <th>That ask</th>
+                <th>Neighborhoods</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.sellers %}
+            <tr>
+                <td class="{{ 'markup-neg' if row.best_vs_median_pct is not none and row.best_vs_median_pct < 0 else ('markup-pos' if row.best_vs_median_pct is not none else '') }}">
+                    {% if row.best_vs_median_pct is not none %}{{ "%+.1f"|format(row.best_vs_median_pct) }}%{% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if row.owner_username %}
+                    <a href="https://play.upland.me/profile?username={{ row.owner_username|urlencode }}" target="_blank" rel="noopener">{{ row.owner_username }}</a>
+                    {% else %}
+                    Unknown seller
+                    {% endif %}
+                </td>
+                <td class="num">{{ row.asks }}</td>
+                <td class="num">{{ row.under_median }} of {{ row.compared }}</td>
+                <td class="num">{{ "{:,.0f}".format(row.lowest_ask) }}</td>
+                <td>
+                    {% if row.best_id %}
+                    <a href="/valuation?query={{ row.best_id|urlencode }}">{{ row.best_address }}</a>
+                    {% else %}
+                    {{ row.best_address }}
+                    {% endif %}
+                </td>
+                <td>{{ row.neighborhoods|join(", ") }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

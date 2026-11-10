@@ -382,7 +382,9 @@ SQLite with WAL mode handles one writer (scraper) + multiple readers (Flask) saf
   for-sale rows show the same comparison. `/markets` groups the same snapshot by
   neighborhood: a row needs at least 3 stored UPX asks and at least 5 sales, then shows
   the lowest ask and the median ask against that sale median. It reads at most 400
-  neighborhoods, the ones with the most asks. The economy totals also compare property UPX
+  neighborhoods, the ones with the most asks. `/sellers` lists usernames with at least
+  two stored UPX asks and shows the ask that sits furthest from that same sale median.
+  The economy totals also compare property UPX
   volume with the previous period of the same length. All-time has no comparison. This is a
   point-in-time snapshot on request, not a live-updating tracker — true "update live as events
   arrive" still needs `n2`/`n4` ingestion, which would be a scraper change, not just a webapp one.

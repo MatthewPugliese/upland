@@ -524,6 +524,12 @@ def markets_page():
     return render_template("markets.html", page=build_markets())
 
 
+@app.route("/sellers")
+def sellers_page():
+    from sellers import build_sellers
+    return render_template("sellers.html", page=build_sellers())
+
+
 @app.route("/floor/run", methods=["POST"])
 def floor_price_run():
     get_floor_prices = _floor_price()
