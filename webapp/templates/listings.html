@@ -138,7 +138,7 @@
                     {% else %}—{% endif %}
                 </td>
                 <td>{{ "{:,}".format(row.mint_price|round|int) if row.mint_price else "—" }}</td>
-                <td>{{ row.address }}</td>
+                <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td>{{ row.neighborhood or "—" }}</td>
                 <td>{{ row.city }}</td>
                 <td>{{ row.owner_username or "—" }}</td>

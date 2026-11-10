@@ -635,6 +635,9 @@ function buildFeedItem(row, isNew) {
 
     const addrEl = row.property_id
         ? `<a href="https://play.upland.me/properties?prop_id=${row.property_id}" target="_blank" class="acct-link">${addr}</a>`
+          + (row.asset_type === 'property'
+              ? ` <a href="/valuation?query=${encodeURIComponent(row.property_id)}" class="acct-link">value</a>`
+              : '')
         : addr;
     return `<div class="feed-item${isNew ? ' new' : ''}">
         <div class="feed-badge ${badge}">${label}</div>

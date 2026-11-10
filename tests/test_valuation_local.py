@@ -134,3 +134,113 @@ class LocalValuationTests(unittest.TestCase):
         self.assertEqual(result["floor"]["coverage"], "partial")
         self.assertEqual(result["floor"]["floor_upx"], 15999)
         self.assertEqual(result["floor"]["floor_upx_address"], "22 WOODBURN CRES")
+
+
+class ValuationLinkTests(unittest.TestCase):
+    def test_a_query_link_runs_the_estimate(self):
+        import app as webapp
+        calls = []
+
+        def fake(query, include_floor=True):
+            calls.append(query)
+            return {
+                "property": {
+                    "address": "22 WOODBURN CRES",
+                    "neighborhood": "Gardens",
+                    "city": "Cape Town",
+                    "area": 50,
+                    "details_source": "local",
+                    "is_listed": False,
+                    "details_note": "",
+                },
+                "upx_valuation": {
+                    "estimated_value": 1000,
+                    "comp_count": 1,
+                    "confidence": "Low",
+                    "confidence_slug": "low",
+                    "scope": "neighborhood",
+                    "window_days": 90,
+                    "median_per_up2": 20,
+                    "comps": [{
+                        "property_id": "99",
+                        "address": "10 MAIN ST",
+                        "timestamp": "2026-11-01T00:00:00",
+                        "area": 40,
+                        "upx_amount": 800,
+                        "per_up2": 20,
+                    }],
+                },
+                "usd_valuation": {
+                    "estimated_value": None,
+                    "comp_count": 0,
+                    "confidence": "Low",
+                    "confidence_slug": "low",
+                },
+                "floor": None,
+            }
+
+        old = valuation.estimate_value
+        valuation.estimate_value = fake
+        try:
+            client = webapp.app.test_client()
+            blank = client.get("/valuation")
+            self.assertEqual(calls, [])
+            self.assertIn("Estimate Value", blank.get_data(as_text=True))
+            page = client.get("/valuation?query=42").get_data(as_text=True)
+        finally:
+            valuation.estimate_value = old
+
+        self.assertEqual(calls, ["42"])
+        self.assertIn("22 WOODBURN CRES", page)
+        self.assertIn("/valuation?query=99", page)
+
+    def test_listing_and_floor_addresses_link_to_valuation(self):
+        import app as webapp
+        with webapp.app.test_request_context("/listings"):
+            from flask import render_template
+            listings = render_template("listings.html", page={
+                "db_exists": True,
+                "filters": {
+                    "currency": "UPX", "city": "", "neighborhood": "",
+                    "sort": "markup", "limit": 100,
+                },
+                "cities": [],
+                "neighborhoods": [],
+                "coverage": [{"status": "partial"}],
+                "summary": {"listings": 1, "upx": 1, "usd": 0, "freshest_listing": None},
+                "listings": [{
+                    "id": "42",
+                    "address": "22 WOODBURN CRES",
+                    "city": "Cape Town",
+                    "neighborhood": "Gardens",
+                    "currency": "UPX",
+                    "price": 100,
+                    "mint_price": 80,
+                    "markup_pct": 25,
+                    "owner_username": "",
+                }],
+            })
+            floor = render_template("floor_price_results.html", result={
+                "neighborhood": "Gardens",
+                "city": "Cape Town",
+                "total_for_sale": 1,
+                "priced_count": 1,
+                "truncated": False,
+                "coverage": "partial",
+                "note": "",
+                "floor_upx": 100,
+                "floor_upx_address": "22 WOODBURN CRES",
+                "floor_usd": None,
+                "floor_usd_address": None,
+                "upx_listings": [{
+                    "prop_id": "42",
+                    "address": "22 WOODBURN CRES",
+                    "price": 100,
+                    "mint_price": 80,
+                    "markup_pct": 25,
+                    "owner_username": "",
+                }],
+                "usd_listings": [],
+            })
+        self.assertIn('href="/valuation?query=42"', listings)
+        self.assertIn('href="/valuation?query=42"', floor)

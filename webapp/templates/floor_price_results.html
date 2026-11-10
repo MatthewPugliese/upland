@@ -74,7 +74,7 @@
         <tbody>
         {% for l in result.upx_listings %}
             <tr>
-                <td>{{ l.address }}</td>
+                <td>{% if l.prop_id and l.prop_id != "None" %}<a href="/valuation?query={{ l.prop_id|urlencode }}">{{ l.address }}</a>{% else %}{{ l.address }}{% endif %}</td>
                 <td>{{ "{:,}".format(l.price|round|int) }}</td>
                 <td>{{ "{:,}".format(l.mint_price|round|int) if l.mint_price else "—" }}</td>
                 <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">
@@ -101,7 +101,7 @@
         <tbody>
         {% for l in result.usd_listings %}
             <tr>
-                <td>{{ l.address }}</td>
+                <td>{% if l.prop_id and l.prop_id != "None" %}<a href="/valuation?query={{ l.prop_id|urlencode }}">{{ l.address }}</a>{% else %}{{ l.address }}{% endif %}</td>
                 <td>${{ "%.2f"|format(l.price) }}</td>
                 <td>{{ "{:,}".format(l.mint_price|round|int) if l.mint_price else "—" }}</td>
                 <td class="{% if l.markup_pct is not none and l.markup_pct < 0 %}markup-neg{% elif l.markup_pct is not none and l.markup_pct > 0 %}markup-pos{% endif %}">

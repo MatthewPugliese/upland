@@ -164,7 +164,7 @@
         <tbody>
         {% for c in result.upx_valuation.comps %}
             <tr>
-                <td>{{ c.address }}</td>
+                <td>{% if c.property_id %}<a href="/valuation?query={{ c.property_id|urlencode }}">{{ c.address }}</a>{% else %}{{ c.address }}{% endif %}</td>
                 <td>{{ c.timestamp[:10] }}</td>
                 <td>{{ c.area }}</td>
                 <td>{{ "{:,}".format(c.upx_amount|round|int) }}</td>
@@ -194,7 +194,7 @@
         <tbody>
         {% for c in result.usd_valuation.comps %}
             <tr>
-                <td>{{ c.address }}</td>
+                <td>{% if c.property_id %}<a href="/valuation?query={{ c.property_id|urlencode }}">{{ c.address }}</a>{% else %}{{ c.address }}{% endif %}</td>
                 <td>{{ c.timestamp[:10] }}</td>
                 <td>{{ c.area }}</td>
                 <td>${{ "%.2f"|format(c.usd_amount) }}</td>

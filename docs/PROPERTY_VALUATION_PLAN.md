@@ -40,8 +40,10 @@ numeric property ID.
 
 **Not shipped:** structures adjustment (demolish cost / SU contribution as a value modifier — no
 UPX cost data exists for demolishing/replacing a structure, same gap as the Portfolio Analyzer's
-"net worth" line), batch mode, neighborhood floor comparison, and no `/economy` or `/portfolio`
-cross-links yet (planned in Related Tools below).
+"net worth" line).
+
+Listings, floor prices, comparable sales, and property rows in the economy feed open this page
+by property id (`/valuation?query=`).
 
 Tested against a live property (`242 LIBERTY AVE`, Dongan Hills, prop ID `81296939123819`): only 2
 neighborhood comps existed in the last 90 days, correctly triggered a city-level broadening to

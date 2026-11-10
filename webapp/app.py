@@ -430,19 +430,8 @@ def portfolio_run():
 
 # ── Property Valuation Tool ─────────────────────────────────────────────────
 
-@app.route("/valuation")
-def valuation():
-    return render_template("valuation.html")
-
-
-@app.route("/valuation/run", methods=["POST"])
-def valuation_run():
+def _render_valuation(query: str):
     estimate_value = _valuation()
-    query = request.form.get("query", "").strip()
-
-    if not query:
-        return render_template("valuation.html", error="Enter a property address or ID.")
-
     try:
         result = estimate_value(query)
         if result.get("error"):
@@ -454,6 +443,22 @@ def valuation_run():
         import traceback
         traceback.print_exc()
         return render_template("valuation.html", error=f"Error: {e}", query=query)
+
+
+@app.route("/valuation")
+def valuation():
+    query = (request.args.get("query") or "").strip()
+    if not query:
+        return render_template("valuation.html")
+    return _render_valuation(query)
+
+
+@app.route("/valuation/run", methods=["POST"])
+def valuation_run():
+    query = request.form.get("query", "").strip()
+    if not query:
+        return render_template("valuation.html", error="Enter a property address or ID.")
+    return _render_valuation(query)
 
 
 @app.route("/valuation/batch")
