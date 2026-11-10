@@ -10,6 +10,7 @@
     .full-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
     .full-table tr:hover td { background: #fafafa; }
     .markup-neg { color: #1E8449; font-weight: 600; }
+    .markup-pos { color: #922B21; font-weight: 600; }
     .empty-note { color: #666; font-size: 14px; line-height: 1.5; }
 </style>
 {% endblock %}
@@ -42,6 +43,33 @@
         <tbody>
         {% for row in page.matches %}
             <tr>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
+                <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
+                <td>{{ row.city }}</td>
+                <td>{{ row.owner_username or "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% if page.near %}
+    <p class="empty-note">Within {{ page.near_pct }}% of the recent median, and not already listed above.</p>
+    <table class="full-table">
+        <thead>
+            <tr>
+                <th>vs sales</th>
+                <th>Ask</th>
+                <th>Address</th>
+                <th>Neighborhood</th>
+                <th>City</th>
+                <th>Seller</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in page.near %}
+            <tr>
+                <td class="{{ 'markup-neg' if row.vs_median_pct < 0 else 'markup-pos' }}">{{ "%+.1f"|format(row.vs_median_pct) }}%</td>
                 <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>

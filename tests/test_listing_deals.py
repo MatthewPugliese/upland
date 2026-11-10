@@ -102,10 +102,22 @@ class ListingDealTests(unittest.TestCase):
     def test_floor_result_uses_the_same_median(self):
         result = floor_price._attach_sale_comparison({
             "neighborhood": "gardens",
-            "upx_listings": [{"price": 150, "address": "CHEAP MAIN"}],
+            "city": "Cape Town",
+            "total_for_sale": 2,
+            "coverage": "partial",
+            "floor_upx": 150,
+            "floor_upx_address": "CHEAP MAIN",
+            "floor_usd": None,
+            "upx_listings": [
+                {"price": 150, "address": "CHEAP MAIN", "prop_id": "cheap", "mint_price": 100, "markup_pct": 50, "owner_username": "seller"},
+                {"price": 300, "address": "EVEN MAIN", "prop_id": "even", "mint_price": 100, "markup_pct": 200, "owner_username": "seller"},
+            ],
+            "usd_listings": [],
         })
         self.assertEqual(result["sale_median_upx"], 300)
         self.assertEqual(result["upx_listings"][0]["vs_median_pct"], -50.0)
+        self.assertEqual(result["asks_compared"], 2)
+        self.assertEqual(result["asks_at_or_under"], 2)
 
     def test_deals_page_keeps_asks_at_least_10_percent_under(self):
         import listings_db as db
@@ -134,11 +146,36 @@ class ListingDealTests(unittest.TestCase):
             "owner_username": "seller",
             "last_seen": "2026-11-09T00:00:00Z",
         })
+        db.upsert_listing(self.listings, {
+            "property_id": "band",
+            "address": "band MAIN",
+            "city_id": 1,
+            "city": "Cape Town",
+            "neighborhood": "GARDENS",
+            "currency": "UPX",
+            "price": 375,
+            "mint_price": 100,
+            "owner_username": "seller",
+            "last_seen": "2026-11-09T00:00:00Z",
+        })
+        db.upsert_listing(self.listings, {
+            "property_id": "far",
+            "address": "far MAIN",
+            "city_id": 1,
+            "city": "Cape Town",
+            "neighborhood": "GARDENS",
+            "currency": "UPX",
+            "price": 390,
+            "mint_price": 100,
+            "owner_username": "seller",
+            "last_seen": "2026-11-09T00:00:00Z",
+        })
         self.listings.commit()
         page = build_deals(db_path=self.listings_path)
         self.assertEqual([row["id"] for row in page["deals"]], ["cheap"])
         self.assertEqual(page["at_median"], 1)
         self.assertEqual([row["id"] for row in page["matches"]], ["even"])
+        self.assertEqual([row["id"] for row in page["near"]], ["close", "band"])
         self.assertEqual(page["deals"][0]["vs_median_pct"], -50.0)
 
         import app as webapp
@@ -149,5 +186,8 @@ class ListingDealTests(unittest.TestCase):
         self.assertIn("-50%", html)
         self.assertIn("1 compared ask matches the recent median", html)
         self.assertIn("even MAIN", html)
-        self.assertNotIn("close MAIN", html)
+        self.assertIn("CLOSE MAIN", html)
+        self.assertIn("band MAIN", html)
+        self.assertIn("+25.0%", html)
+        self.assertNotIn("far MAIN", html)
         self.assertNotIn("rich MAIN", html)

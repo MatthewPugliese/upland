@@ -228,10 +228,17 @@ def _attach_sale_comparison(result: dict) -> dict:
     result["sale_median_upx"] = median
     result["sale_count"] = info.get("sales") if info else None
     result["sale_window_days"] = 90
+    compared = 0
+    at_or_under = 0
     for listing in result.get("upx_listings") or []:
         price = listing.get("price")
         if median and price:
             listing["vs_median_pct"] = round(100 * (price - median) / median, 1)
+            compared += 1
+            if listing["vs_median_pct"] <= 0:
+                at_or_under += 1
         else:
             listing["vs_median_pct"] = None
+    result["asks_compared"] = compared
+    result["asks_at_or_under"] = at_or_under
     return result

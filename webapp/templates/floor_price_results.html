@@ -64,7 +64,7 @@
 
     <div class="section-heading">
         UPX Listings
-        <span class="section-count">(sorted by price ascending{% if result.sale_median_upx is defined and result.sale_median_upx %} · recent sale median {{ "{:,}".format(result.sale_median_upx|round|int) }} UPX from {{ result.sale_count }} sales{% endif %})</span>
+        <span class="section-count">(sorted by price ascending{% if result.sale_median_upx is defined and result.sale_median_upx %} · recent sale median {{ "{:,}".format(result.sale_median_upx|round|int) }} UPX from {{ result.sale_count }} sales{% if result.asks_compared %} · {{ result.asks_at_or_under }} of {{ result.asks_compared }} at or under it{% endif %}{% endif %})</span>
     </div>
     {% if result.upx_listings %}
     <table class="full-table">
