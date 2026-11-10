@@ -56,7 +56,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             "listings": 0, "upx": 0, "usd": 0,
             "freshest_listing": None, "freshest_crawl": None, "targets": {},
         },
-        "deals": {"compared": 0, "under_median": 0, "window_days": 90},
+        "deals": {"compared": 0, "under_median": 0, "at_median": 0, "window_days": 90},
     }
     if not path.exists():
         return empty
@@ -94,7 +94,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
 
 def _annotate_deals(listings: list) -> dict:
     """Mark each UPX ask against the recent neighborhood sale median."""
-    deals = {"compared": 0, "under_median": 0, "window_days": 90}
+    deals = {"compared": 0, "under_median": 0, "at_median": 0, "window_days": 90}
     try:
         from economy import neighborhood_sale_medians
         medians = neighborhood_sale_medians([row.get("neighborhood") or "" for row in listings])
@@ -114,6 +114,8 @@ def _annotate_deals(listings: list) -> dict:
         row["sale_count"] = info["sales"]
         row["vs_median_pct"] = round(100 * (price - median) / median, 1)
         deals["compared"] += 1
-        if price < median:
+        if row["vs_median_pct"] < 0:
             deals["under_median"] += 1
+        elif row["vs_median_pct"] == 0:
+            deals["at_median"] += 1
     return deals
