@@ -38,7 +38,7 @@
 {% block content %}
 <div class="card">
     <h2>For-Sale Snapshot</h2>
-    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan. "vs sales" compares an UPX ask with the median property sale in that neighborhood over the last 90 days, when at least 5 sales are stored. <a href="/deals">Asks at least 10% under those sales &rarr;</a>
+    <p class="card-subtitle">Properties listed right now, from the local crawler. Lowest UPX markup over mint is the default sort. This is not a live scan. "vs sales" compares an UPX ask with the median property sale in that neighborhood over the last 90 days, when at least 5 sales are stored. "vs size" compares an UPX ask with a stored median UPX per UP². A thin neighborhood uses the city rate, and the cell says so. The page reads that rate from a file.{% if page.size_rates_at %} Rates as of {{ page.size_rates_at }}.{% endif %} <a href="/deals">Asks at least 10% under those sales &rarr;</a>
         <a href="/markets">Neighborhoods, compared the same way &rarr;</a></p>
     {% if page.summary.freshest_listing %}
     <p class="empty-note">Newest stored ask: {{ page.summary.freshest_listing }}.</p>
@@ -138,6 +138,7 @@
                 <th>Markup</th>
                 <th>Price</th>
                 <th>vs sales</th>
+                <th>vs size</th>
                 <th>Mint</th>
                 <th>Address</th>
                 <th>Neighborhood</th>
@@ -158,6 +159,9 @@
                 </td>
                 <td class="{% if row.vs_median_pct is defined and row.vs_median_pct is not none and row.vs_median_pct < 0 %}markup-neg{% elif row.vs_median_pct is defined and row.vs_median_pct is not none and row.vs_median_pct > 0 %}markup-pos{% endif %}">
                     {% if row.vs_median_pct is defined and row.vs_median_pct is not none %}{{ "%+.0f"|format(row.vs_median_pct) }}%{% else %}—{% endif %}
+                </td>
+                <td class="{% if row.vs_size_pct is defined and row.vs_size_pct is not none and row.vs_size_pct < 0 %}markup-neg{% elif row.vs_size_pct is defined and row.vs_size_pct is not none and row.vs_size_pct > 0 %}markup-pos{% endif %}">
+                    {% if row.vs_size_pct is defined and row.vs_size_pct is not none %}{{ "%+.0f"|format(row.vs_size_pct) }}%{% if row.size_scope == "city" %} city{% endif %}{% else %}—{% endif %}
                 </td>
                 <td>{{ "{:,}".format(row.mint_price|round|int) if row.mint_price else "—" }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>

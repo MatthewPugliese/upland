@@ -97,4 +97,5 @@ def build_deals(db_path: Path | None = None, limit: int = 500,
         "window_days": summary.get("window_days", 90),
         "min_discount_pct": min_discount_pct,
         "stored_upx": page["summary"]["upx"] if page["db_exists"] else 0,
+        "size_rates_at": page.get("size_rates_at"),
     }

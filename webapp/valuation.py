@@ -230,10 +230,162 @@ def _compute_size_rate(neighborhood: str, city: str) -> dict | None:
         conn.close()
 
 
+SIZE_RATES_PATH = SCRIPT_DIR.parent / "data" / "size_rates.json"
+_SIZE_TABLE_CACHE: dict = {"mtime": None, "table": None}
+
+
+def _window_rate(samples: list[tuple[str, float]], *, now: datetime, scope: str) -> dict | None:
+    for days in COMP_WINDOWS_DAYS:
+        since = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+        median = _median_rate(samples, since)
+        if median:
+            return {
+                "upx_per_up2": round(median, 2),
+                "sales": sum(1 for timestamp, rate in samples if timestamp >= since and rate > 0),
+                "window_days": days,
+                "scope": scope,
+            }
+    return None
+
+
+def _one_price_per_sale(sales: list[dict]) -> list[dict]:
+    """Keep the latest row for each property and price.
+
+    The sale feed repeats some lots at the same price every week. Those copies
+    are one comp, or the median becomes that repeated price.
+    """
+    latest: dict[tuple[str, float], dict] = {}
+    for sale in sales:
+        prop_id = str(sale.get("property_id") or "")
+        try:
+            upx = round(float(sale.get("upx_amount") or 0), 2)
+        except (TypeError, ValueError):
+            continue
+        if not prop_id or upx <= 0:
+            continue
+        key = (prop_id, upx)
+        previous = latest.get(key)
+        if previous is None or (sale.get("timestamp") or "") >= (previous.get("timestamp") or ""):
+            latest[key] = sale
+    return list(latest.values())
+
+
+def rates_from_sales(sales: list[dict], sized: dict, *, now: datetime | None = None) -> dict:
+    """Median UPX per UP² for neighborhoods and cities. No database and no Upland."""
+    clock = now or datetime.now(timezone.utc)
+    hoods: dict[str, list[tuple[str, float]]] = {}
+    cities: dict[str, list[tuple[str, float]]] = {}
+    for sale in _one_price_per_sale(sales):
+        meta = sized.get(str(sale.get("property_id") or ""))
+        if not meta:
+            continue
+        try:
+            area = float(meta.get("area") or 0)
+            upx = float(sale.get("upx_amount") or 0)
+        except (TypeError, ValueError):
+            continue
+        if area <= 0 or upx <= 0:
+            continue
+        sample = (sale.get("timestamp") or "", upx / area)
+        hood = (meta.get("neighborhood") or "").strip().casefold()
+        city = (meta.get("city") or "").strip().casefold()
+        if hood:
+            hoods.setdefault(hood, []).append(sample)
+        if city:
+            cities.setdefault(city, []).append(sample)
+    return {
+        "generated_at": clock.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "neighborhoods": {
+            key: rate
+            for key, samples in hoods.items()
+            for rate in [_window_rate(samples, now=clock, scope="neighborhood")]
+            if rate
+        },
+        "cities": {
+            key: rate
+            for key, samples in cities.items()
+            for rate in [_window_rate(samples, now=clock, scope="city")]
+            if rate
+        },
+    }
+
+
+def load_size_rate_table(path: Path | None = None) -> dict | None:
+    """Read the precomputed rate file. Missing or unreadable is an empty result."""
+    rate_path = path or SIZE_RATES_PATH
+    try:
+        mtime = rate_path.stat().st_mtime
+    except OSError:
+        _SIZE_TABLE_CACHE["mtime"] = None
+        _SIZE_TABLE_CACHE["table"] = None
+        return None
+    if _SIZE_TABLE_CACHE["mtime"] == mtime and _SIZE_TABLE_CACHE["table"] is not None:
+        return _SIZE_TABLE_CACHE["table"]
+    try:
+        table = json.loads(rate_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(table, dict):
+        return None
+    _SIZE_TABLE_CACHE["mtime"] = mtime
+    _SIZE_TABLE_CACHE["table"] = table
+    return table
+
+
+def annotate_stored_sizes(listings: list[dict], table: dict | None) -> None:
+    """Compare an UPX ask with a rate from the precomputed file.
+
+    This does not open the economy database and does not call Upland.
+    """
+    neighborhoods = (table or {}).get("neighborhoods") or {}
+    cities = (table or {}).get("cities") or {}
+    area_cache = _load_area_cache() if table else {}
+    dims_by_hood: dict = {}
+    for row in listings:
+        row["size_up2"] = None
+        row["size_fair_upx"] = None
+        row["vs_size_pct"] = None
+        row["size_sales"] = None
+        row["size_per_up2"] = None
+        row["size_scope"] = None
+        if not table or (row.get("currency") or "").upper() != "UPX":
+            continue
+        price = row.get("price_upx")
+        if price is None:
+            price = row.get("price")
+        try:
+            price = float(price)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+        hood = (row.get("neighborhood") or "").strip()
+        city = (row.get("city") or "").strip()
+        rate = neighborhoods.get(hood.casefold()) if hood else None
+        if not rate and city:
+            rate = cities.get(city.casefold())
+        if not rate:
+            continue
+        area = _cached_up2(str(row.get("id") or ""), row.get("address") or "", hood, area_cache, dims_by_hood)
+        if not area:
+            continue
+        fair = rate["upx_per_up2"] * area
+        if fair <= 0:
+            continue
+        row["size_up2"] = area
+        row["size_fair_upx"] = round(fair)
+        row["vs_size_pct"] = round(100 * (price - fair) / fair, 1)
+        row["size_sales"] = rate["sales"]
+        row["size_per_up2"] = rate["upx_per_up2"]
+        row["size_scope"] = rate["scope"]
+
+
 def annotate_size_estimates(listings: list[dict]) -> None:
     """Compare an UPX ask with cached UP² times the stored sale rate.
 
-    Missing sizes stay blank. This does not call the Upland API.
+    Missing sizes stay blank. This does not call the Upland API. The listings
+    page uses annotate_stored_sizes instead: opening the economy database here
+    took about a minute on the Pi.
     """
     for row in listings:
         row["size_up2"] = None

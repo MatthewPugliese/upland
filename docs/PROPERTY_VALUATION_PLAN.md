@@ -32,6 +32,7 @@ numeric property ID.
   each with their own confidence tier) rather than one blended estimate — the two markets don't mix.
 - If the property is currently listed, its listing price is compared against the matching-currency
   estimate and shown as a % over/under.
+- Listings and deals compare an UPX ask with median UPX per UP² from `data/size_rates.json`. The page does not open the economy database for that column. `webapp/build_size_rates.py` writes the file from an exported sale list. A price that repeats on the same property counts once. A neighborhood with fewer than 5 sized sales uses the city rate, and the cell says so.
 - If the public API does not answer, the page still estimates from stored data. UP² comes from the
   area cache or a neighborhood lot-size cache. The asking price comes from the local listings
   snapshot. The page says structures were not loaded. A missing size means there is no total

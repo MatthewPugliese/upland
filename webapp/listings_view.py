@@ -60,6 +60,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
         },
         "deals": {"compared": 0, "under_median": 0, "at_median": 0, "window_days": 90},
         "sale_context": None,
+        "size_rates_at": None,
     }
     if not path.exists():
         return empty
@@ -77,10 +78,12 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             limit=limit,
         )
         deals = _annotate_deals(listings)
-        # A size comparison joins recent sales to the property cache. On the Pi
-        # that join took about a minute, long enough to time out this page, so
-        # it stays off the request. valuation.annotate_size_estimates can run
-        # outside the web app.
+        # Rates come from data/size_rates.json. Do not call
+        # valuation.annotate_size_estimates here: that join took about a minute
+        # on the Pi and timed the page out.
+        from valuation import annotate_stored_sizes, load_size_rate_table
+        size_table = load_size_rate_table()
+        annotate_stored_sizes(listings, size_table)
         sale_context = None
         if neighborhood:
             for row in listings:
@@ -106,6 +109,7 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             "summary": info,
             "deals": deals,
             "sale_context": sale_context,
+            "size_rates_at": (size_table or {}).get("generated_at"),
         }
     finally:
         conn.close()
