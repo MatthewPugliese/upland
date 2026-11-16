@@ -563,10 +563,38 @@ def score():
     hood = request.args.get("neighborhood", "Dongan Hills").strip()
     cached = list_cached_neighborhoods()
     score = get_neighborhood_score(hood)
+    greenery = None
     if score:
-        from what_if import apply_known_builds
+        from what_if import apply_known_builds, greenery_report
         score = apply_known_builds(hood, score)
-    return render_template("score.html", score=score, neighborhood=hood, cached=cached)
+        greenery = greenery_report(hood)
+    return render_template(
+        "score.html", score=score, neighborhood=hood, cached=cached, greenery=greenery,
+    )
+
+
+@app.route("/report")
+def neighborhood_report():
+    get_neighborhood_score, list_cached_neighborhoods = _score()
+    hood = request.args.get("neighborhood", "Dongan Hills").strip()
+    cached = list_cached_neighborhoods()
+    score = get_neighborhood_score(hood)
+    best = None
+    greenery = None
+    if score:
+        from what_if import apply_known_builds, build_what_if, greenery_report
+        score = apply_known_builds(hood, score)
+        payload = build_what_if(hood)
+        best = payload.get("best") or {}
+        greenery = greenery_report(hood)
+    return render_template(
+        "report.html",
+        score=score,
+        neighborhood=hood,
+        cached=cached,
+        best=best,
+        greenery=greenery,
+    )
 
 
 @app.route("/api/score/what-if")

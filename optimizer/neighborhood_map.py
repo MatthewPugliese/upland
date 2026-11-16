@@ -1174,16 +1174,20 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
     cache: dict = {}
     if cache_path.exists():
         age = time.time() - cache_path.stat().st_mtime
-        if age < 86400:
-            try:
-                with open(cache_path) as f:
-                    cache = json.load(f)
-                has_structs = sum(1 for v in cache.values() if v)
-                print(f"[+] Structure cache: {len(cache)} properties, {has_structs} with structures")
-                return cache
-            except (json.JSONDecodeError, ValueError) as e:
-                print(f"[!] Corrupt structure cache ({e}) — will re-fetch")
-                cache_path.unlink(missing_ok=True)
+        try:
+            with open(cache_path) as f:
+                cache = json.load(f)
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"[!] Corrupt structure cache ({e}) — will re-fetch")
+            cache_path.unlink(missing_ok=True)
+            cache = {}
+            age = 86400
+        if isinstance(cache, dict) and age < 86400:
+            has_structs = sum(1 for v in cache.values() if v)
+            print(f"[+] Structure cache: {len(cache)} properties, {has_structs} with structures")
+            return cache
+        if not isinstance(cache, dict):
+            cache = {}
 
     print(f"[*] Fetching Upland structure data for {len(props)} properties …")
 
@@ -1230,37 +1234,45 @@ def get_upland_property_structures(props: list, cache_path: Path) -> dict:
 
     def fetch_one(prop):
         pid = str(prop["id"])
-        try:
-            r = requests.get(f"https://api.upland.me/properties/{prop['id']}",
-                             headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-            if r.status_code == 200:
-                data = r.json()
-                bldgs = data.get("buildings") or []
-                return pid, [
-                    {"buildingName": b.get("buildingName", ""),
-                     "buildingType": b.get("buildingType", ""),
-                     "constructionStatus": b.get("constructionStatus", ""),
-                     "buildingImage": b.get("buildingImage", ""),
-                     "residents": b.get("residents", 0),
-                     "stepSparks": (b.get("details") or {}).get("stepSparks"),
-                     "minStackedSparks": (b.get("details") or {}).get("minStackedSparks"),
-                     "maxStackedSparks": (b.get("details") or {}).get("maxStackedSparks"),
-                     "polygon": b.get("polygon"),
-                     "lat": b.get("lat"),
-                     "lng": b.get("lng"),
-                     "scale": b.get("scale"),
-                     "rotate": b.get("rotate")}
-                    for b in bldgs
-                ]
-        except Exception:
-            pass
-        return pid, []
+        # A failed request must not be stored as an empty lot. Empty is only
+        # real when the property answers and its buildings list is empty.
+        for attempt in range(4):
+            try:
+                r = requests.get(f"https://api.upland.me/properties/{prop['id']}",
+                                 headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+                if r.status_code == 200:
+                    data = r.json()
+                    bldgs = data.get("buildings") or []
+                    return pid, [
+                        {"buildingName": b.get("buildingName", ""),
+                         "buildingType": b.get("buildingType", ""),
+                         "constructionStatus": b.get("constructionStatus", ""),
+                         "buildingImage": b.get("buildingImage", ""),
+                         "residents": b.get("residents", 0),
+                         "stepSparks": (b.get("details") or {}).get("stepSparks"),
+                         "minStackedSparks": (b.get("details") or {}).get("minStackedSparks"),
+                         "maxStackedSparks": (b.get("details") or {}).get("maxStackedSparks"),
+                         "polygon": b.get("polygon"),
+                         "lat": b.get("lat"),
+                         "lng": b.get("lng"),
+                         "scale": b.get("scale"),
+                         "rotate": b.get("rotate")}
+                        for b in bldgs
+                    ], True
+                if r.status_code in (408, 409, 429, 500, 502, 503):
+                    time.sleep(1 + attempt)
+                    continue
+                return pid, [], False
+            except Exception:
+                time.sleep(1 + attempt)
+        return pid, [], False
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         futures = {executor.submit(fetch_one, p): p for p in props}
         for future in concurrent.futures.as_completed(futures):
-            pid, structs = future.result()
-            cache[pid] = structs
+            pid, structs, ok = future.result()
+            if ok:
+                cache[pid] = structs
             with lock:
                 done[0] += 1
                 has = sum(1 for v in cache.values() if v)

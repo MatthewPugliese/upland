@@ -24,7 +24,7 @@ Decisions that were open in the design below:
 - Listings that disappear are deleted, and only after the scope that contained them finished completely.
 - The 50k-property cutoff in the original design is tighter in code: 9,900, because the API will not serve a page past 99. `--include-large` pages up to that cap and stores the target as partial. It does not claim the city was covered.
 
-Still open: run the owned-city queue (smallest cities first), then time a real pass before picking a re-scan cadence. Pi deployment is unchanged from the design below and has not been done.
+2026-11-16: the developers API answered from this Mac again. A full page scan of the two owned cities under the 9,900 cap finished the same day. Park City is 4,859 properties, 49 pages, 452 listings. Rutherford is 6,812 properties, 69 pages. Together with the older partial reprice, the snapshot holds 1,457 listings. The other owned cities are still street searches and have not been crawled. A rescan cadence is still unset. The crawler is not running on the Pi.
 
 2026-11-09: a live page scan from this machine was blocked by Cloudflare on `api.prod.upland.me` (403 challenge page, before auth could matter). The public property endpoint still works. `listings_snapshot.py --reprice-caches` rechecked 359 for-sale ids already sitting in local property caches and stored 344 that are still listed (294 UPX, 50 USD). That target stays `partial`. The collection finder reads those rows and labels them as a partial snapshot. It does not treat the reprice as a finished city crawl, and it does not fall through to a live scan for a neighborhood or street requirement. Lowest UPX markups in that partial set were about +15% in Gardens, Cape Town.
 

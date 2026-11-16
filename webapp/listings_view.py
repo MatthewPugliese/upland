@@ -77,6 +77,12 @@ def build_listings_page(args, db_path: Path | None = None) -> dict:
             limit=limit,
         )
         deals = _annotate_deals(listings)
+        try:
+            from valuation import annotate_size_estimates
+            annotate_size_estimates(listings)
+        except Exception:
+            for row in listings:
+                row.setdefault("vs_size_pct", None)
         sale_context = None
         if neighborhood:
             for row in listings:

@@ -468,6 +468,9 @@ def _pick_label(row: dict) -> str:
     if row["spark_hours"] is not None:
         est = " est" if row["spark_estimated"] else ""
         spark = f" · {row['spark_hours']:g} spark hrs{est}"
+        through = row.get("spark_hours_through")
+        if through is not None and through != row["spark_hours"]:
+            spark += f" · {through:g} so far"
     if row.get("catalog"):
         spark += f" · {row['catalog']}"
     if row.get("close_fit"):
@@ -613,10 +616,19 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8,
         if not pool:
             break
         take(pool)
+    through = 0.0
+    counted_hours = False
     for step, row in enumerate(picks):
         row.pop("_waste", None)
         row.pop("_tight", None)
         row["step"] = step
+        hours = row.get("spark_hours")
+        if hours is not None:
+            through += hours
+            counted_hours = True
+            row["spark_hours_through"] = through
+        else:
+            row["spark_hours_through"] = None
         row["label"] = _pick_label(row)
 
     outcome = []
@@ -677,12 +689,20 @@ def best_builds(score: dict, lots: list[dict], counts: dict, limit: int = 8,
             for row in outcome
         )
         note += f" The whole order takes {moved}."
-    if any(row["spark_estimated"] for row in picks):
-        note += " Spark hours are at the minimum stack. Ones marked est are not from a live construction timer."
+    if counted_hours:
+        missing = sum(1 for row in picks if row.get("spark_hours") is None)
+        note += f" The order adds up to {through:g} spark hours at the minimum stack."
+        if any(row.get("spark_estimated") for row in picks):
+            note += " Ones marked est are not from a live construction timer."
+        if missing:
+            noun = "row" if missing == 1 else "rows"
+            verb = "has" if missing == 1 else "have"
+            note += f" {missing} {noun} in the order {verb} no spark estimate."
     return {
         "worst": {"key": worst["key"], "label": worst["label"], "pct_of_target": worst["pct_of_target"]},
         "picks": picks,
         "outcome": outcome,
+        "spark_hours": through if counted_hours else None,
         "note": note,
     }
 
@@ -891,4 +911,84 @@ def for_sale_builds(hood_name: str) -> dict:
     )
     if not listings:
         note = best.get("note") or note
+    elif best.get("spark_hours"):
+        note += f" The order adds up to {best['spark_hours']:g} spark hours at the minimum stack."
     return {"neighborhood": hood_name, "listings": listings, "note": note}
+
+
+# Cold-zone plants from the neighborhood plan. The public property payload
+# stores placed models on `buildings`. A separate plant list is not on that
+# object, so a home with none of these names has no plant model stored.
+_COLD_PLANTS = ("Maple", "Pine", "Weeping Willow", "Roses", "Tulips")
+_PLANT_NAMES = {
+    "maple", "maple tree",
+    "pine", "pine tree",
+    "weeping willow", "weeping willow tree",
+    "roses", "rose", "rose bush",
+    "tulips", "tulip",
+}
+
+
+def _is_plant(building: dict) -> bool:
+    name = (building.get("buildingName") or "").strip().casefold()
+    kind = (building.get("buildingType") or "").strip().casefold()
+    return kind in {"plant", "greenery", "stem"} or name in _PLANT_NAMES
+
+
+def _is_home(building: dict) -> bool:
+    if (building.get("buildingType") or "").strip().casefold() == "residential":
+        return True
+    info = STRUCTURES.get(building.get("buildingName") or "") or {}
+    return info.get("type") == "residential"
+
+
+def greenery_report(hood_name: str) -> dict:
+    """Owned homes whose stored models include no cold-zone plant."""
+    plants = list(_COLD_PLANTS)
+    structs = get_cached_structures(hood_name)
+    if structs is None:
+        return {
+            "gaps": [], "shown": [], "plants": plants, "checked": 0, "planted": 0,
+            "note": "No structures cache for this neighborhood.",
+        }
+    props = get_cached_props(hood_name) or []
+    address = {str(prop.get("id") or ""): (prop.get("address") or "").strip() for prop in props}
+    owned = load_owned_ids()
+    if not owned:
+        return {
+            "gaps": [], "shown": [], "plants": plants, "checked": 0, "planted": 0,
+            "note": "No owned-property cache, so greenery is not listed.",
+        }
+    gaps = []
+    checked = 0
+    planted = 0
+    for prop_id, buildings in structs.items():
+        if str(prop_id) not in owned:
+            continue
+        buildings = buildings or []
+        homes = [building for building in buildings if _is_home(building)]
+        if not homes:
+            continue
+        checked += 1
+        if any(_is_plant(building) for building in buildings):
+            planted += 1
+            continue
+        gaps.append({
+            "prop_id": str(prop_id),
+            "address": address.get(str(prop_id)) or str(prop_id),
+            "home": homes[0].get("buildingName") or "home",
+        })
+    gaps.sort(key=lambda row: row["address"])
+    note = (
+        f"{len(gaps)} of {checked} owned homes have no plant model stored. "
+        f"Cold-zone plants for New York are {', '.join(plants)}. "
+        "This reads the structures cache. A plant that is not stored as a placed model is not counted."
+    )
+    return {
+        "gaps": gaps,
+        "shown": gaps[:40],
+        "plants": plants,
+        "checked": checked,
+        "planted": planted,
+        "note": note,
+    }

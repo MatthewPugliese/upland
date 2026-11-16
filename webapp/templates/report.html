@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ neighborhood }} report — UplandScope{% endblock %}
+
+{% block head %}
+<style>
+    main { max-width: 800px; }
+    .full-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .full-table th, .full-table td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+    .full-table td.num, .full-table th.num { text-align: right; }
+    .note { color: #555; font-size: 14px; line-height: 1.5; }
+    .pick { margin: 0 0 8px; }
+    @media print {
+        header, footer, .no-print { display: none; }
+        main { max-width: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{{ neighborhood }}</h2>
+    <p class="note no-print">
+        <a href="/score?neighborhood={{ neighborhood|urlencode }}">Score page</a>
+        {% if cached|length > 1 %}
+        ·
+        {% for hood in cached %}
+        {% if hood != neighborhood %}<a href="/report?neighborhood={{ hood|urlencode }}">{{ hood }}</a> {% endif %}
+        {% endfor %}
+        {% endif %}
+    </p>
+    {% if not score %}
+    <p class="note">No structures cache for this neighborhood.</p>
+    {% else %}
+    <table class="full-table">
+        <tbody>
+            <tr><td>Living units</td><td class="num">{{ score.total_lu }}</td></tr>
+            <tr><td>Service units</td><td class="num">{{ "%.1f"|format(score.total_su) }}</td></tr>
+            <tr><td>SU / LU</td><td class="num">{{ "%.3f"|format(score.su_per_lu) }}</td></tr>
+        </tbody>
+    </table>
+    <table class="full-table">
+        <thead>
+            <tr><th>Category</th><th class="num">SU</th><th class="num">Of target</th><th class="num">Types</th></tr>
+        </thead>
+        <tbody>
+        {% for row in score.categories %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td class="num">{{ row.su }}</td>
+                <td class="num">{{ row.pct_of_target }}%</td>
+                <td class="num">{{ row.variety }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <h3>Build order</h3>
+    {% if best and best.picks %}
+    <p class="note">{{ best.note }}</p>
+    <ol>
+        {% for pick in best.picks %}
+        <li class="pick">{{ pick.label }}</li>
+        {% endfor %}
+    </ol>
+    {% elif best %}
+    <p class="note">{{ best.note }}</p>
+    {% else %}
+    <p class="note">No build order for this neighborhood.</p>
+    {% endif %}
+    {% if greenery %}
+    <h3>Greenery</h3>
+    <p class="note">{{ greenery.note }}</p>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

@@ -252,20 +252,14 @@ dongan_hills_zone_map.py
   - `score_calculator` tracks `office_count` / `office_types` separately from Resident SU
   - Note: offices grant 0 Resident SU; Commerce feeds Resident Score over time
 
-- [ ] **Greenery recommendations**
-  - After residential structure is placed, recommend STEM plants based on city climate zone
-  - NYC = cold zone: Maple, Pine, Weeping Willow, Roses, Tulips
-  - Flag residential properties with 0 greenery
+- [x] **Greenery recommendations** — `/score` and `/report` list owned homes whose structures cache has no plant model. New York suggestions are Maple, Pine, Weeping Willow, Roses, and Tulips. The public property payload has no separate plant list, so only placed models count.
 
 - [x] **Plan completion tracker** — shipped 2026-07-27
   - `recommender.compute_plan_progress()` — BUILD/DEMOLISH done when recommended structure is already on the lot
   - Score dashboard panel: % complete, remaining by action, SU + spark hours still on the table, next-up list
   - DH baseline after v3 regen: 0% (50 actions remaining, ~42.7 SU / ~592 spark hrs)
 
-- [ ] **Build cost planner**
-  - For every recommended structure in the action queue, surface its real-money cost (from structure DB) and spark hours estimate
-  - Show total plan cost: "$142 USD + 4,200 spark hours remaining"
-  - Sortable by cost-efficiency: SU gained per dollar spent
+- [x] **Build cost planner** — the structure database has no USD or UPX build price. The build order sums spark hours at the minimum stack, marks estimates, and shows the running total on later rows.
 
 - [x] **"What if" build simulator** — shipped 2026-11-09 on `/score`
   - Empty lots with a cached size, yours first. The page opens on the first lot something fits. Structure dropdown is only what fits the lot (area, effective width, depth)
@@ -285,9 +279,7 @@ dongan_hills_zone_map.py
   - Surface which residential properties have 0 ornaments/decorations
   - Flag seasonal ornament opportunities (ornaments get scoring bonuses during events)
 
-- [ ] **Shareable neighborhood report**
-  - One-page HTML summary of the neighborhood state: score breakdown, top 5 recommended actions, zone map thumbnail
-  - Shareable URL or exportable as PNG — useful for Discord/community posts
+- [x] **Shareable neighborhood report** — `/report?neighborhood=` is one page with the score, the stacked build order, and the greenery note. It prints without the site header.
 
 - [ ] **Fix technical debt**
   - `_RESIDENTIAL_ZONES` threshold (`best_su < 5`) for preferring residential is arbitrary — tune

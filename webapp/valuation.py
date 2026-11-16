@@ -23,6 +23,7 @@ import concurrent.futures
 import json
 import os
 import sqlite3
+import statistics
 import sys
 import time
 import urllib.request
@@ -107,6 +108,176 @@ def cached_area(prop_id: str, address: str, neighborhood: str) -> float | None:
     if not up2:
         return None
     return float(up2)
+
+
+_SIZE_RATE_CACHE: dict[str, tuple[float, dict | None]] = {}
+_SIZE_RATE_TTL = 900
+_SIZE_MIN_SALES = 5
+
+
+def _dims_for(neighborhood: str) -> dict:
+    path = _hood_dims_path(neighborhood)
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text())
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _cached_up2(prop_id: str, address: str, neighborhood: str,
+                area_cache: dict, dims_by_hood: dict) -> float | None:
+    entry = area_cache.get(str(prop_id)) or {}
+    if entry.get("area"):
+        return float(entry["area"])
+    hood = neighborhood or ""
+    if hood not in dims_by_hood:
+        dims_by_hood[hood] = _dims_for(hood)
+    row = dims_by_hood[hood].get((address or "").upper().strip()) or {}
+    up2 = row.get("up2")
+    if not up2:
+        return None
+    return float(up2)
+
+
+def _sized_sale_rates(conn, where: str, params: tuple, area_cache: dict) -> list[tuple[str, float]]:
+    """(timestamp, upx per UP²) for sales whose size is already cached."""
+    rows = conn.execute(f"""
+        SELECT t.property_id, t.timestamp, t.upx_amount, p.address, p.neighborhood
+        FROM transactions t
+        JOIN pc.properties p ON t.property_id = p.prop_id
+        WHERE t.asset_type = 'property'
+          AND t.action = 'n5'
+          AND t.upx_amount > 0
+          AND t.timestamp >= ?
+          AND {where}
+        ORDER BY t.timestamp DESC
+        LIMIT 300
+    """, params).fetchall()
+    dims_by_hood: dict = {}
+    found = []
+    for row in rows:
+        area = _cached_up2(
+            row["property_id"], row["address"] or "", row["neighborhood"] or "",
+            area_cache, dims_by_hood,
+        )
+        if not area:
+            continue
+        found.append((row["timestamp"] or "", float(row["upx_amount"]) / area))
+    return found
+
+
+def _median_rate(samples: list[tuple[str, float]], since: str) -> float | None:
+    rates = [rate for timestamp, rate in samples if timestamp >= since and rate > 0]
+    if len(rates) < _SIZE_MIN_SALES:
+        return None
+    return float(statistics.median(rates))
+
+
+def size_rate(neighborhood: str, city: str) -> dict | None:
+    """Median UPX per UP² from stored sales with a cached size. No Upland API."""
+    hood = (neighborhood or "").strip()
+    if not hood or not ECONOMY_DB.exists() or not PROP_CACHE_DB.exists():
+        return None
+    key = hood.casefold()
+    now = time.time()
+    hit = _SIZE_RATE_CACHE.get(key)
+    if hit and now - hit[0] < _SIZE_RATE_TTL:
+        return hit[1]
+    rate = _compute_size_rate(hood, (city or "").strip())
+    _SIZE_RATE_CACHE[key] = (now, rate)
+    return rate
+
+
+def _compute_size_rate(neighborhood: str, city: str) -> dict | None:
+    conn = sqlite3.connect(str(ECONOMY_DB), timeout=5)
+    conn.row_factory = sqlite3.Row
+    conn.execute(f"ATTACH DATABASE '{PROP_CACHE_DB}' AS pc")
+    try:
+        area_cache = _load_area_cache()
+        since_year = _days_ago(365)
+        neighborhood_sales = _sized_sale_rates(
+            conn, "p.neighborhood = ? COLLATE NOCASE", (since_year, neighborhood), area_cache,
+        )
+        for days in COMP_WINDOWS_DAYS:
+            median = _median_rate(neighborhood_sales, _days_ago(days))
+            if median:
+                return {
+                    "upx_per_up2": round(median, 2),
+                    "sales": sum(1 for ts, _rate in neighborhood_sales if ts >= _days_ago(days)),
+                    "window_days": days,
+                    "scope": "neighborhood",
+                }
+        if not city:
+            return None
+        city_sales = _sized_sale_rates(
+            conn, "p.city = ? COLLATE NOCASE", (since_year, city), area_cache,
+        )
+        for days in COMP_WINDOWS_DAYS:
+            median = _median_rate(city_sales, _days_ago(days))
+            if median:
+                return {
+                    "upx_per_up2": round(median, 2),
+                    "sales": sum(1 for ts, _rate in city_sales if ts >= _days_ago(days)),
+                    "window_days": days,
+                    "scope": "city",
+                }
+        return None
+    finally:
+        conn.close()
+
+
+def annotate_size_estimates(listings: list[dict]) -> None:
+    """Compare an UPX ask with cached UP² times the stored sale rate.
+
+    Missing sizes stay blank. This does not call the Upland API.
+    """
+    for row in listings:
+        row["size_up2"] = None
+        row["size_fair_upx"] = None
+        row["vs_size_pct"] = None
+        row["size_sales"] = None
+        row["size_per_up2"] = None
+    area_cache = _load_area_cache()
+    dims_by_hood: dict = {}
+    rates: dict[str, dict | None] = {}
+    for row in listings:
+        if (row.get("currency") or "").upper() != "UPX":
+            continue
+        price = row.get("price_upx")
+        if price is None:
+            price = row.get("price")
+        try:
+            price = float(price)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+        hood = (row.get("neighborhood") or "").strip()
+        if not hood:
+            continue
+        key = hood.casefold()
+        if key not in rates:
+            try:
+                rates[key] = size_rate(hood, row.get("city") or "")
+            except Exception:
+                rates[key] = None
+        rate = rates[key]
+        if not rate:
+            continue
+        area = _cached_up2(str(row.get("id") or ""), row.get("address") or "", hood, area_cache, dims_by_hood)
+        if not area:
+            continue
+        fair = rate["upx_per_up2"] * area
+        if fair <= 0:
+            continue
+        row["size_up2"] = area
+        row["size_fair_upx"] = round(fair)
+        row["vs_size_pct"] = round(100 * (price - fair) / fair, 1)
+        row["size_sales"] = rate["sales"]
+        row["size_per_up2"] = rate["upx_per_up2"]
+        row["size_scope"] = rate["scope"]
 
 
 def snapshot_listing(prop_id: str) -> dict | None:

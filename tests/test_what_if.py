@@ -190,6 +190,9 @@ class BestBuildTests(unittest.TestCase):
         self.assertNotIn("2 Their St", [row["address"] for row in best["picks"]])
         self.assertIn("est", best["picks"][0]["label"])
         self.assertFalse(any(row["catalog"] for row in best["picks"]))
+        self.assertEqual(best["spark_hours"], 3 * len(best["picks"]))
+        self.assertIn("spark hours", best["note"])
+        self.assertIn("so far", best["picks"][-1]["label"])
 
     def test_half_up_of_slack_beats_a_tighter_lot(self):
         lots = [

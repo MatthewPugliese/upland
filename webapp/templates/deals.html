@@ -17,6 +17,11 @@
 {% endblock %}
 
 {% block content %}
+{% macro size_note(row) %}
+{% if row.vs_size_pct is defined and row.vs_size_pct is not none %}
+<div class="{{ 'markup-neg' if row.vs_size_pct < 0 else 'markup-pos' }}">size {{ "%+.0f"|format(row.vs_size_pct) }}%{% if row.size_scope == "city" %} city{% endif %}</div>
+{% endif %}
+{% endmacro %}
 <div class="card">
     <h2>Asks under recent sales</h2>
     <p class="card-subtitle">
@@ -25,6 +30,7 @@
         A neighborhood needs at least 5 stored sales. This is not a live city scan.
         Asks over {{ page.near_pct }}% and up to double that median are listed further down.
         Asks more than double are counted.
+        Where a cached lot size exists, the ask line also shows how that price compares with median UPX per UP².
         <a href="/listings?sort=deal">All listings, sorted by the same comparison &rarr;</a>
         <a href="/markets">Neighborhoods, compared the same way &rarr;</a>
     </p>
@@ -47,7 +53,7 @@
         <tbody>
         {% for row in page.matches %}
             <tr>
-                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX{{ size_note(row) }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
@@ -76,7 +82,7 @@
         {% for row in page.near %}
             <tr>
                 <td class="{{ 'markup-neg' if row.vs_median_pct < 0 else 'markup-pos' }}">{{ "%+.1f"|format(row.vs_median_pct) }}%</td>
-                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX{{ size_note(row) }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
@@ -109,7 +115,7 @@
         {% for row in page.wider %}
             <tr>
                 <td class="markup-pos">{{ "%+.1f"|format(row.vs_median_pct) }}%</td>
-                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX{{ size_note(row) }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
@@ -148,7 +154,7 @@
         {% for row in page.just_over %}
             <tr>
                 <td class="markup-pos">{{ "%+.1f"|format(row.vs_median_pct) }}%</td>
-                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX{{ size_note(row) }}</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
                 <td>{% if row.city %}<a href="/listings?city={{ row.city|urlencode }}&amp;currency=UPX&amp;sort=deal">{{ row.city }}</a>{% else %}—{% endif %}</td>
@@ -220,7 +226,7 @@
         {% for row in page.deals %}
             <tr>
                 <td class="markup-neg">{{ "%+.0f"|format(row.vs_median_pct) }}%</td>
-                <td>{{ "{:,}".format(row.price|round|int) }} UPX</td>
+                <td>{{ "{:,}".format(row.price|round|int) }} UPX{{ size_note(row) }}</td>
                 <td>{{ "{:,}".format(row.sale_median_upx|round|int) }} UPX</td>
                 <td>{% if row.id %}<a href="/valuation?query={{ row.id|urlencode }}">{{ row.address }}</a>{% else %}{{ row.address }}{% endif %}</td>
                 <td><a href="/floor?neighborhood={{ row.neighborhood|urlencode }}">{{ row.neighborhood }}</a></td>
