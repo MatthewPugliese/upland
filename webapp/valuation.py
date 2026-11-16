@@ -143,14 +143,16 @@ def _cached_up2(prop_id: str, address: str, neighborhood: str,
 
 def _sized_sale_rates(conn, where: str, params: tuple, area_cache: dict) -> list[tuple[str, float]]:
     """(timestamp, upx per UP²) for sales whose size is already cached."""
+    # idx_tx_ts keeps this to the requested window. The action index walks every
+    # property sale in the table and makes a listings page time out.
     rows = conn.execute(f"""
         SELECT t.property_id, t.timestamp, t.upx_amount, p.address, p.neighborhood
-        FROM transactions t
+        FROM transactions t INDEXED BY idx_tx_ts
         JOIN pc.properties p ON t.property_id = p.prop_id
-        WHERE t.asset_type = 'property'
+        WHERE t.timestamp >= ?
+          AND t.asset_type = 'property'
           AND t.action = 'n5'
           AND t.upx_amount > 0
-          AND t.timestamp >= ?
           AND {where}
         ORDER BY t.timestamp DESC
         LIMIT 300
